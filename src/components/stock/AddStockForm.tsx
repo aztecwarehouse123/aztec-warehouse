@@ -115,7 +115,7 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
         ...formData,
         quantity: Number(formData.quantity),
         price: Number(formData.price),
-        shelfNumber: Number(formData.shelfNumber),
+        shelfNumber: formData.shelfNumber,
         threshold: Number(formData.threshold),
         lastUpdated: new Date()
       });
