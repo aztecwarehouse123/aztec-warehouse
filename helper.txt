@@ -1,0 +1,16 @@
+git remote -v //get your ssh
+//if shows others then do this:
+git remote set-url origin git@github.com:aztecwarehouse123/aztec-warehouse.git
+or
+git remote set-url origin git@github.com-client:aztecwarehouse123/aztec-warehouse.git
+
+eval "$(ssh-agent -s)"
+ssh-add ~/.ssh/id_ed25519
+
+
+//to check:
+git config user.name
+git config user.email
+//if not then:
+git config user.name "aztecwarehouse123"
+git config user.email "clientemail@gmail.com"
