@@ -7,5 +7,5 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['lucide-react'],
   },
-  base: '/Warehouse-mgt-sys/',
+  base: '/aztec-warehouse/',
 });
