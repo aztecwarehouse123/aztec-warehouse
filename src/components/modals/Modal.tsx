@@ -73,16 +73,16 @@ const Modal: React.FC<ModalProps> = ({
             <h3 className={`text-lg font-medium ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
               {title}
             </h3>
-            <button
-              onClick={onClose}
+          <button
+            onClick={onClose}
               className={`rounded-md p-1.5 ${isDarkMode ? 'text-slate-400 hover:text-slate-300 hover:bg-slate-700' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'} transition-colors`}
-            >
-              <X size={20} />
-            </button>
-          </div>
+          >
+            <X size={20} />
+          </button>
+        </div>
           
           <div className={`${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>
-            {children}
+          {children}
           </div>
         </div>
       </div>

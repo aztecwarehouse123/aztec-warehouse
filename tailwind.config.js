@@ -26,7 +26,10 @@ export default {
         'slide-out': 'slide-out 0.3s ease-in forwards',
         'fade-in': 'fade-in 0.2s ease-out forwards',
         'fade-out': 'fade-out 0.2s ease-in forwards'
-      }
+      },
+      fontFamily: {
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+      },
     },
   },
   plugins: [],

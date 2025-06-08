@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { User } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { User, Moon, Sun, Edit2 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -7,14 +7,17 @@ import Input from '../../components/ui/Input';
 import PasswordInput from '../../components/ui/PasswordInput';
 import Button from '../../components/ui/Button';
 import { db } from '../../config/firebase';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, collection, addDoc, getDocs } from 'firebase/firestore';
+import { User as UserType } from '../../types';
 
 const Settings: React.FC = () => {
   const { user, setUser } = useAuth();
   const { showToast } = useToast();
-  const { isDarkMode } = useTheme();
+  const { isDarkMode, toggleDarkMode } = useTheme();
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [users, setUsers] = useState<UserType[]>([]);
+  const [editingUser, setEditingUser] = useState<UserType | null>(null);
   const [formData, setFormData] = useState({
     username: user?.username || '',
     email: user?.email || '',
@@ -23,6 +26,34 @@ const Settings: React.FC = () => {
     newPassword: '',
     confirmPassword: ''
   });
+  const [userEditForm, setUserEditForm] = useState({
+    username: '',
+    email: '',
+    name: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
+
+  // Fetch all users when component mounts
+  useEffect(() => {
+    const fetchUsers = async () => {
+      if (user?.role === 'admin') {
+        try {
+          const usersSnapshot = await getDocs(collection(db, 'users'));
+          const usersData = usersSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          })) as UserType[];
+          setUsers(usersData);
+        } catch (error) {
+          console.error('Error fetching users:', error);
+          showToast('Error fetching users', 'error');
+        }
+      }
+    };
+
+    fetchUsers();
+  }, [user?.role, showToast]);
 
   // Function to get initials from name
   const getInitials = (name: string) => {
@@ -108,9 +139,36 @@ const Settings: React.FC = () => {
           password: (formData.currentPassword!= '' && formData.confirmPassword!='' && formData.newPassword!='')? formData.newPassword : user.password,
         };
 
+        // Track changes for activity log
+        const changes = [];
+        if (user.username !== formData.username) {
+          changes.push(`changed username from "${user.username}" to "${formData.username}"`);
+        }
+        if (user.email !== formData.email) {
+          changes.push(`changed email from "${user.email}" to "${formData.email}"`);
+        }
+        if (user.name !== formData.name) {
+          changes.push(`changed full name from "${user.name}" to "${formData.name}"`);
+        }
+        if (formData.currentPassword && formData.newPassword) {
+          changes.push('changed their password');
+        }
+
         // Update user data in Firestore
         const userRef = doc(db, 'users', user.id);
         await updateDoc(userRef, updateData);
+        
+        // Add activity log if there were changes
+        if (changes.length > 0) {
+          await addDoc(collection(db, 'activityLogs'), {
+            user: user.name,
+            role: user.role,
+            detail: changes.length === 1 
+              ? changes[0] 
+              : `made multiple profile changes: ${changes.join('; ')}`,
+            time: new Date().toISOString()
+          });
+        }
         
         // Update local user context
         setUser({
@@ -141,12 +199,165 @@ const Settings: React.FC = () => {
     }
   };
 
+  const handleEditUser = (user: UserType) => {
+    setEditingUser(user);
+    setUserEditForm({
+      username: user.username,
+      email: user.email,
+      name: user.name,
+      newPassword: '',
+      confirmPassword: ''
+    });
+  };
+
+  const handleUserEditChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setUserEditForm(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleUpdateUser = async () => {
+    if (!editingUser) return;
+
+    try {
+      setIsLoading(true);
+      setErrors({});
+
+      // Validate passwords match if either is filled
+      if (userEditForm.newPassword || userEditForm.confirmPassword) {
+        if (userEditForm.newPassword !== userEditForm.confirmPassword) {
+          setErrors({ confirmPassword: 'Passwords do not match' });
+          return;
+        }
+        if (userEditForm.newPassword.length < 6) {
+          setErrors({ newPassword: 'Password must be at least 6 characters' });
+          return;
+        }
+      }
+
+      const userRef = doc(db, 'users', editingUser.id);
+      const updateData: Partial<UserType> = {
+        username: userEditForm.username,
+        email: userEditForm.email,
+        name: userEditForm.name
+      };
+
+      if (userEditForm.newPassword) {
+        updateData.password = userEditForm.newPassword;
+      }
+
+      await updateDoc(userRef, updateData);
+
+      // Log the activity
+      await addDoc(collection(db, 'activityLogs'), {
+        userId: user?.id,
+        action: 'update_user',
+        details: `Updated user ${editingUser.username}`,
+        timestamp: new Date()
+      });
+
+      // Update local state
+      setUsers(prevUsers => 
+        prevUsers.map(u => 
+          u.id === editingUser.id 
+            ? { ...u, ...updateData }
+            : u
+        )
+      );
+
+      showToast('User updated successfully', 'success');
+      setEditingUser(null);
+    } catch (error) {
+      console.error('Error updating user:', error);
+      showToast('Failed to update user', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
-    <div className="max-w-2xl mx-auto">
-      <div className="mb-6">
-        <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>Settings</h1>
-        <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} mt-1`}>Update your profile information</p>
+    <div className="max-w-4xl mx-auto">
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>Settings</h1>
+          <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} mt-1`}>Update your profile information</p>
+        </div>
+        <button
+          onClick={toggleDarkMode}
+          className={`p-2 rounded-lg transition-colors ${
+            isDarkMode 
+              ? 'text-yellow-400 hover:bg-slate-700' 
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+          aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
+        </button>
       </div>
+
+      {/* Edit User Modal */}
+      {editingUser && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className={`rounded-lg p-6 w-full max-w-md relative ${isDarkMode ? 'bg-slate-800' : 'bg-white'}`}>
+            <h3 className={`text-lg font-semibold mb-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Edit User</h3>
+            <div className="space-y-4">
+              <Input
+                label="Username"
+                name="username"
+                value={userEditForm.username}
+                onChange={handleUserEditChange}
+                error={errors.username}
+              />
+              <Input
+                label="Email"
+                name="email"
+                type="email"
+                value={userEditForm.email}
+                onChange={handleUserEditChange}
+                error={errors.email}
+              />
+              <Input
+                label="Name"
+                name="name"
+                value={userEditForm.name}
+                onChange={handleUserEditChange}
+                error={errors.name}
+              />
+              <PasswordInput
+                label="New Password"
+                name="newPassword"
+                value={userEditForm.newPassword}
+                onChange={handleUserEditChange}
+                error={errors.newPassword}
+              />
+              <PasswordInput
+                label="Confirm Password"
+                name="confirmPassword"
+                value={userEditForm.confirmPassword}
+                onChange={handleUserEditChange}
+                error={errors.confirmPassword}
+              />
+            </div>
+            <div className="mt-6 flex justify-end space-x-3">
+              <Button
+                variant="secondary"
+                onClick={() => setEditingUser(null)}
+                disabled={isLoading}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleUpdateUser}
+                disabled={isLoading}
+              >
+                {isLoading ? 'Updating...' : 'Update User'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Profile Picture */}
@@ -260,6 +471,48 @@ const Settings: React.FC = () => {
           </Button>
         </div>
       </form>
+
+      {/* User Management Section */}
+      {user?.role === 'admin' && (
+        <div className="mt-8">
+          <h2 className={`text-2xl font-bold mb-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>User Management</h2>
+          <div className={`rounded-lg shadow overflow-hidden ${isDarkMode ? 'bg-slate-800' : 'bg-white'}`}>
+            <div className="overflow-x-auto">
+              <table className={`min-w-full divide-y ${isDarkMode ? 'divide-slate-700' : 'divide-gray-200'}`}>
+                <thead className={isDarkMode ? 'bg-slate-700' : 'bg-gray-50'}>
+                  <tr>
+                    <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${isDarkMode ? 'text-slate-300' : 'text-gray-500'}`}>Username</th>
+                    <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${isDarkMode ? 'text-slate-300' : 'text-gray-500'}`}>Email</th>
+                    <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${isDarkMode ? 'text-slate-300' : 'text-gray-500'}`}>Name</th>
+                    <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${isDarkMode ? 'text-slate-300' : 'text-gray-500'}`}>Role</th>
+                    <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${isDarkMode ? 'text-slate-300' : 'text-gray-500'}`}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody className={`divide-y ${isDarkMode ? 'divide-slate-700 bg-slate-800' : 'divide-gray-200 bg-white'}`}>
+                  {users
+                    .filter(user => user.role!== 'admin') // Filter out current user
+                    .map((user) => (
+                    <tr key={user.id} className={isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-gray-50'}>
+                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>{user.username}</td>
+                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>{user.email}</td>
+                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>{user.name}</td>
+                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>{user.role}</td>
+                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>
+                        <button
+                          onClick={() => handleEditUser(user)}
+                          className={isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-800'}
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

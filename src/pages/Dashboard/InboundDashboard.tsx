@@ -190,43 +190,40 @@ const InboundDashboard: React.FC = () => {
         <StatsCard 
           title="Products Received Today" 
               value={todayEntries.length}
-          icon={<Package size={24} />}
+          icon={<Package size={24} className="text-blue-600" />}
               change={{ 
                 value: yesterdayEntries.length,
                 isPositive: true,
                 customIcon: <Plus size={16} className="text-green-500 mr-1" />,
                 label: 'products received yesterday'
               }}
-              darkMode={isDarkMode}
         />
         <StatsCard 
           title="Critical Low Items" 
               value={criticalLowItems.length}
-          icon={<AlertTriangle size={24} />}
+          icon={<AlertTriangle size={24} className="text-blue-600" />}
               change={{ 
                 value: criticalLowItems.filter(item => item.quantity === 0).length,
                 isPositive: false,
                 label: 'items out of stock',
                 customIcon: <AlertCircle size={16} className="text-red-500 mr-1" />
               }}
-              darkMode={isDarkMode}
         />
         <StatsCard 
               title="Low Stock Items" 
               value={lowStockItems.length}
-              icon={<AlertTriangle size={24} />}
+              icon={<AlertTriangle size={24} className="text-blue-600" />}
               change={{ 
                 value: lowStockItems.filter(item => item.quantity <= (item.threshold * 0.6)).length,
                 isPositive: false,
                 label: 'items near critical threshold',
                 customIcon: <AlertTriangle size={16} className="text-orange-500 mr-1" />
               }}
-              darkMode={isDarkMode}
         />
         <StatsCard 
               title="Total Products" 
               value={stockItems.length}
-              icon={<Package size={24} />}
+              icon={<Package size={24} className="text-blue-600" />}
               change={{ 
                 value: stockItems.filter(item => {
                   const itemDate = new Date(item.lastUpdated);
@@ -238,7 +235,6 @@ const InboundDashboard: React.FC = () => {
                 label: 'products added this month',
                 customIcon: <Plus size={16} className="text-green-500 mr-1" />
               }}
-              darkMode={isDarkMode}
             />
           </>
         )}

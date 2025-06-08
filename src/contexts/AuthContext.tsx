@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { User } from '../types';
 import { db } from '../config/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, addDoc } from 'firebase/firestore';
 
 type AuthContextType = {
   user: User | null;
@@ -45,14 +45,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   
           // Check if username and password match
           if (userData.username === username && userData.password === password) {
-            setUser({
+            const user = {
               id: docId,
               username: userData.username,
               email: userData.email,
               name: userData.name,
               role: userData.role,
               password: userData.password
-            });
+            };
+            setUser(user);
+
+            // Add activity log
+            try {
+              await addDoc(collection(db, 'activityLogs'), {
+                user: user.name,
+                role: user.role,
+                detail: 'logged in',
+                time: new Date().toISOString()
+              });
+            } catch (logError) {
+              console.error('Error logging activity:', logError);
+              // Don't fail the login if activity logging fails
+            }
+
             return true;
           }
         }
@@ -69,7 +84,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const logout = () => {
+    if (user) {
+      // Store user data for logging before clearing
+      const userData = { ...user };
+      // Clear user immediately
     setUser(null);
+      
+      // Handle activity logging in the background
+      addDoc(collection(db, 'activityLogs'), {
+        user: userData.name,
+        role: userData.role,
+        detail: 'logged out',
+        time: new Date().toISOString()
+      }).catch(logError => {
+        console.error('Error logging activity:', logError);
+        // Don't fail the logout if activity logging fails
+      });
+    }
   };
 
   const value = {

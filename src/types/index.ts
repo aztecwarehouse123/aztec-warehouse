@@ -20,7 +20,7 @@ export interface StockItem {
   barcode?: string;
 }
 
-export type OrderStatus = 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'completed';
+export type OrderStatus = 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'returned' | 'completed';
 
 export type Order = {
   id: string;
@@ -35,6 +35,7 @@ export type Order = {
   paymentMethod: string;
   totalAmount: number;
   notes?: string;
+  shippedTime?: Date | null; // Optional field for shipped date/time, can be null to signal deletion
 };
 
 export type OrderItem = {

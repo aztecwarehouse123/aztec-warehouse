@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { PackageOpen, LayoutDashboard, Package, ShoppingCart, LogOut, Menu, X, Warehouse, BarChart, Settings } from 'lucide-react';
+import { LayoutDashboard, Package, ShoppingCart, LogOut, Menu, X, Warehouse, BarChart, Settings } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const Navbar: React.FC = () => {
   const { user, logout } = useAuth();
@@ -20,9 +21,11 @@ const Navbar: React.FC = () => {
       .slice(0, 2);
   };
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    // Navigate immediately
     navigate('/login');
+    // Handle logout and activity logging in the background
+    logout();
   };
 
   const toggleMobileMenu = () => {
@@ -52,115 +55,185 @@ const Navbar: React.FC = () => {
           : 'bg-blue-100 text-blue-700'
         : isDarkMode
           ? 'text-slate-300 hover:bg-slate-700 hover:text-white'
-          : 'text-slate-700 hover:bg-slate-100'
+        : 'text-slate-700 hover:bg-slate-100'
     }`;
 
   return (
-    <header className={`${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border-b sticky top-0 z-10`}>
+    <motion.header 
+      initial={{ y: -100 }}
+      animate={{ y: 0 }}
+      transition={{ type: "spring", stiffness: 100 }}
+      className={`${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border-b sticky top-0 z-10`}
+    >
       <div className="container mx-auto px-4 md:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <div className="flex items-center">
-            <NavLink to="/" className="flex items-center gap-2 text-blue-600 font-semibold text-lg">
-              <PackageOpen size={24} />
-              <span className={`hidden sm:inline ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>AZTEC</span>
+          <motion.div 
+            className="flex items-center"
+            whileHover={{ scale: 1.02 }}
+            transition={{ type: "spring", stiffness: 400, damping: 10 }}
+          >
+            <NavLink to="/" className="flex items-center gap-2 font-semibold text-lg">
+              <motion.span 
+                className={`font-bold ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}
+                whileHover={{ scale: 1.05 }}
+                transition={{ type: "spring", stiffness: 400, damping: 10 }}
+              >
+                AZTEC WAREHOUSE
+              </motion.span>
             </NavLink>
-          </div>
+          </motion.div>
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center justify-center flex-1 space-x-1">
-            {navItems.map(item => (
-              <NavLink 
-                key={item.to} 
-                to={item.to} 
-                className={navLinkClasses}
-                end={item.to === "/"}
+            {navItems.map((item, index) => (
+              <motion.div
+                key={item.to}
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.1 }}
               >
-                {item.icon}
-                <span>{item.label}</span>
-              </NavLink>
+                <NavLink 
+                  to={item.to} 
+                  className={navLinkClasses}
+                  end={item.to === "/"}
+                >
+                  <motion.div
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="flex items-center gap-2"
+                  >
+                    {item.icon}
+                    <span>{item.label}</span>
+                  </motion.div>
+                </NavLink>
+              </motion.div>
             ))}
           </nav>
 
           {/* User Menu */}
           <div className="flex items-center gap-4">
             {user && (
-              <div className="hidden md:flex items-center gap-3">
+              <motion.div 
+                className="hidden md:flex items-center gap-3"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.2 }}
+              >
                 <div className="text-right">
                   <p className={`text-sm font-medium ${isDarkMode ? 'text-white' : 'text-slate-700'}`}>{user.name}</p>
                   <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} capitalize`}>{user.role}</p>
                 </div>
-                <div className={`h-8 w-8 rounded-full overflow-hidden ${isDarkMode ? 'bg-blue-900/50' : 'bg-blue-100'} flex items-center justify-center`}>
+                <motion.div 
+                  className={`h-8 w-8 rounded-full overflow-hidden ${isDarkMode ? 'bg-blue-900/50' : 'bg-blue-100'} flex items-center justify-center`}
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                >
                   <span className={`text-sm font-semibold ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
                     {getInitials(user.name)}
                   </span>
-                </div>
-                <button 
+                </motion.div>
+                <motion.button 
                   onClick={handleLogout}
                   className={`p-2 ${isDarkMode ? 'text-slate-300 hover:text-red-400 hover:bg-slate-700' : 'text-slate-600 hover:text-red-600 hover:bg-slate-100'} rounded-full transition-colors`}
                   aria-label="Logout"
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
                 >
                   <LogOut size={20} />
-                </button>
-              </div>
+                </motion.button>
+              </motion.div>
             )}
 
             {/* Mobile Menu Button */}
-            <button 
+            <motion.button 
               onClick={toggleMobileMenu} 
               className={`md:hidden p-2 ${isDarkMode ? 'text-slate-300 hover:bg-slate-700' : 'text-slate-600 hover:bg-slate-100'} rounded-lg`}
               aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
             >
               {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-            </button>
+            </motion.button>
           </div>
         </div>
+      </div>
 
-        {/* Mobile Menu */}
+      {/* Mobile Menu */}
+      <AnimatePresence>
         {mobileMenuOpen && (
-          <div className={`md:hidden ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border-t`}>
+          <motion.div 
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2 }}
+            className={`md:hidden ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border-t`}
+          >
             <div className="container mx-auto px-4 py-3 space-y-1">
-              {navItems.map(item => (
-                <NavLink 
-                  key={item.to} 
-                  to={item.to} 
-                  className={navLinkClasses}
-                  onClick={closeMobileMenu}
-                  end={item.to === "/"}
+              {navItems.map((item, index) => (
+                <motion.div
+                  key={item.to}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.1 }}
                 >
-                  {item.icon}
-                  <span>{item.label}</span>
-                </NavLink>
+                  <NavLink 
+                    to={item.to} 
+                    className={navLinkClasses}
+                    onClick={closeMobileMenu}
+                    end={item.to === "/"}
+                  >
+                    <motion.div
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className="flex items-center gap-2"
+                    >
+                      {item.icon}
+                      <span>{item.label}</span>
+                    </motion.div>
+                  </NavLink>
+                </motion.div>
               ))}
-              <div className={`border-t ${isDarkMode ? 'border-slate-700' : 'border-slate-200'} mt-2 pt-2`}>
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.3 }}
+                className={`border-t ${isDarkMode ? 'border-slate-700' : 'border-slate-200'} mt-2 pt-2`}
+              >
                 {user && (
                   <div className="flex items-center justify-between py-2">
                     <div className="flex items-center gap-3">
-                      <div className={`h-8 w-8 rounded-full overflow-hidden ${isDarkMode ? 'bg-blue-900/50' : 'bg-blue-100'} flex items-center justify-center`}>
+                      <motion.div 
+                        className={`h-8 w-8 rounded-full overflow-hidden ${isDarkMode ? 'bg-blue-900/50' : 'bg-blue-100'} flex items-center justify-center`}
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                      >
                         <span className={`text-sm font-semibold ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
                           {getInitials(user.name)}
                         </span>
-                      </div>
+                      </motion.div>
                       <div>
                         <p className={`text-sm font-medium ${isDarkMode ? 'text-white' : 'text-slate-700'}`}>{user.name}</p>
                         <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} capitalize`}>{user.role}</p>
                       </div>
                     </div>
-                    <button 
+                    <motion.button 
                       onClick={handleLogout}
                       className={`flex items-center gap-2 px-3 py-2 ${isDarkMode ? 'text-red-400 hover:bg-slate-700' : 'text-red-600 hover:bg-red-50'} rounded-lg transition-colors`}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
                     >
                       <LogOut size={18} />
                       <span>Logout</span>
-                    </button>
+                    </motion.button>
                   </div>
                 )}
-              </div>
+              </motion.div>
             </div>
-          </div>
+          </motion.div>
         )}
-      </div>
-    </header>
+      </AnimatePresence>
+    </motion.header>
   );
 };
 

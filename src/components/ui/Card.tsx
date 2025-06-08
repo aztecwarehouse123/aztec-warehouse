@@ -1,20 +1,23 @@
-import React, { ReactNode } from 'react';
+import React from 'react';
+import { useTheme } from '../../contexts/ThemeContext';
 
 interface CardProps {
   title?: string;
-  children: ReactNode;
+  children: React.ReactNode;
   className?: string;
 }
 
 const Card: React.FC<CardProps> = ({ title, children, className = '' }) => {
+  const { isDarkMode } = useTheme();
+
   return (
-    <div className={`bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden ${className}`}>
+    <div className={`rounded-lg shadow-sm border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} ${className}`}>
       {title && (
-        <div className="border-b border-slate-200 px-5 py-4">
-          <h3 className="font-medium text-slate-700">{title}</h3>
+        <div className={`px-6 py-4 border-b ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+          <h3 className={`text-lg font-medium ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>{title}</h3>
         </div>
       )}
-      <div className="p-5">{children}</div>
+      <div className="p-6">{children}</div>
     </div>
   );
 };

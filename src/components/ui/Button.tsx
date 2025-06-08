@@ -16,9 +16,9 @@ const Button: React.FC<ButtonProps> = ({
   className = '',
   ...props
 }) => {
-  const variantClasses = {
-    primary: 'bg-blue-600 hover:bg-blue-700 text-white',
-    secondary: 'bg-slate-700 hover:bg-slate-800 text-white',
+  const variants = {
+    primary: 'bg-blue-700 hover:bg-blue-800 text-white',
+    secondary: 'bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-200',
     outline: 'bg-white border border-slate-300 hover:bg-slate-50 text-slate-700',
     danger: 'bg-red-600 hover:bg-red-700 text-white'
   };
@@ -32,7 +32,7 @@ const Button: React.FC<ButtonProps> = ({
   return (
     <button
       className={`
-        ${variantClasses[variant]} 
+        ${variants[variant]} 
         ${sizeClasses[size]} 
         rounded-lg font-medium transition-colors 
         flex items-center justify-center gap-2

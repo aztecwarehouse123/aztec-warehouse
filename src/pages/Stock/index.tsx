@@ -12,6 +12,7 @@ import DeleteConfirmationModal from '../../components/modals/DeleteConfirmationM
 import { StockItem } from '../../types';
 import { useToast } from '../../contexts/ToastContext';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../config/firebase';
 import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, Timestamp } from 'firebase/firestore';
 import { format } from 'date-fns';
@@ -29,6 +30,7 @@ const Stock: React.FC = () => {
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const { showToast } = useToast();
   const { isDarkMode } = useTheme();
+  const { user } = useAuth();
 
   // Fetch stock items from Firestore
     const fetchStockItems = async () => {
@@ -82,23 +84,31 @@ const Stock: React.FC = () => {
     setIsLoading(true);
     
     try {
-      const now = new Date();
       // Add document to Firestore
       const docRef = await addDoc(collection(db, 'inventory'), {
         ...data,
-        lastUpdated: Timestamp.fromDate(now)
+        lastUpdated: Timestamp.fromDate(new Date())
       });
       
-      // Update local state with the new item
-      const newItem: StockItem = {
-        id: docRef.id,
+      // Add activity log
+      if (user) {
+        await addDoc(collection(db, 'activityLogs'), {
+          user: user.name,
+          role: user.role,
+          detail: `added new product "${data.name}" with quantity ${data.quantity} at location ${data.locationCode}-${data.shelfNumber}`,
+          time: new Date().toISOString()
+        });
+      }
+
+      // Update local state
+      const newItem = {
         ...data,
-        lastUpdated: now
+        id: docRef.id,
+        lastUpdated: new Date()
       };
-      
-      setItems([newItem, ...items]);
+      setItems(prev => [...prev, newItem]);
       setIsAddModalOpen(false);
-      showToast('Stock added successfully', 'success');
+      showToast('Stock item added successfully', 'success');
     } catch (error) {
       console.error('Error adding stock:', error);
       showToast('Failed to add stock item', 'error');
@@ -112,13 +122,38 @@ const Stock: React.FC = () => {
     
     try {
       const now = new Date();
+      // Get the original item to compare changes
+      const originalItem = items.find(item => item.id === data.id);
+      
       // Update document in Firestore
       const stockRef = doc(db, 'inventory', data.id);
-      const { id, ...updateData } = data; // eslint-disable-line @typescript-eslint/no-unused-vars
+      const updateData = { ...data } as Partial<StockItem>;
+      delete updateData.id; // Remove id from the update data
       await updateDoc(stockRef, {
         ...updateData,
         lastUpdated: Timestamp.fromDate(now)
       });
+      
+      // Add activity log
+      if (user && originalItem) {
+        const changes = [];
+        if (originalItem.name !== data.name) changes.push(`name from "${originalItem.name}" to "${data.name}"`);
+        if (originalItem.quantity !== data.quantity) changes.push(`quantity from ${originalItem.quantity} to ${data.quantity}`);
+        if (originalItem.price !== data.price) changes.push(`price from $${originalItem.price} to $${data.price}`);
+        if (originalItem.locationCode !== data.locationCode || originalItem.shelfNumber !== data.shelfNumber) {
+          changes.push(`location from ${originalItem.locationCode}-${originalItem.shelfNumber} to ${data.locationCode}-${data.shelfNumber}`);
+        }
+        if (originalItem.supplier !== data.supplier) changes.push(`supplier from "${originalItem.supplier}" to "${data.supplier}"`);
+        
+        if (changes.length > 0) {
+          await addDoc(collection(db, 'activityLogs'), {
+            user: user.name,
+            role: user.role,
+            detail: `edited product "${data.name}": ${changes.join(', ')}`,
+            time: now.toISOString()
+          });
+        }
+      }
       
       // Update local state
       const updatedItems = items.map(item => 
@@ -140,8 +175,21 @@ const Stock: React.FC = () => {
     setIsLoading(true);
     
     try {
+      // Get the item details before deleting
+      const itemToDelete = items.find(item => item.id === id);
+      
       // Delete document from Firestore
       await deleteDoc(doc(db, 'inventory', id));
+      
+      // Add activity log
+      if (user && itemToDelete) {
+        await addDoc(collection(db, 'activityLogs'), {
+          user: user.name,
+          role: user.role,
+          detail: `deleted product "${itemToDelete.name}" (${itemToDelete.quantity} units) from location ${itemToDelete.locationCode}-${itemToDelete.shelfNumber}`,
+          time: new Date().toISOString()
+        });
+      }
       
       // Update local state
       setItems(items.filter(item => item.id !== id));
@@ -195,11 +243,28 @@ const Stock: React.FC = () => {
     
     setIsLoading(true);
     try {
+      // Get details of items to be deleted
+      const itemsToDelete = items.filter(item => selectedItems.has(item.id));
+      
       // Delete all selected items from Firestore
       const deletePromises = Array.from(selectedItems).map(id => 
         deleteDoc(doc(db, 'inventory', id))
       );
       await Promise.all(deletePromises);
+      
+      // Add activity log
+      if (user) {
+        const itemsList = itemsToDelete.map(item => 
+          `"${item.name}" (${item.quantity} units) from ${item.locationCode}-${item.shelfNumber}`
+        ).join(', ');
+        
+        await addDoc(collection(db, 'activityLogs'), {
+          user: user.name,
+          role: user.role,
+          detail: `Bulk deleted ${selectedItems.size} products: ${itemsList}`,
+          time: new Date().toISOString()
+        });
+      }
       
       // Update local state
       setItems(items.filter(item => !selectedItems.has(item.id)));

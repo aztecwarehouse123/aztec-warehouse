@@ -37,7 +37,7 @@ const StockDetailsModal: React.FC<StockDetailsModalProps> = ({
                   ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
                   : item.quantity <= item.threshold
                     ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
-                    : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                    : 'bg-green-100 text-green-700 dark:bg-green-900/5 dark:text-green-400'
               }`}>
                 {item.quantity <= item.threshold * 0.4
                   ? 'Critical Low Stock'

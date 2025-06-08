@@ -15,6 +15,7 @@ const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, onAdd })
   const [shelfNumber, setShelfNumber] = useState('1');
   const [supplier, setSupplier] = useState('');
   const [barcode, setBarcode] = useState('');
+  const [threshold, setThreshold] = useState('10');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,9 +24,10 @@ const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, onAdd })
       quantity: parseInt(quantity),
       price: parseFloat(price),
       locationCode,
-      shelfNumber: parseInt(shelfNumber),
+      shelfNumber: shelfNumber,
       supplier,
-      barcode: barcode || undefined
+      barcode: barcode || undefined,
+      threshold: parseInt(threshold),
     });
     handleClose();
   };
@@ -38,6 +40,7 @@ const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, onAdd })
     setShelfNumber('1');
     setSupplier('');
     setBarcode('');
+    setThreshold('10');
     onClose();
   };
 
@@ -134,6 +137,18 @@ const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, onAdd })
                 className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
               />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700">Threshold</label>
+              <input
+                type="number"
+                value={threshold}
+                onChange={(e) => setThreshold(e.target.value)}
+                className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                required
+                min="0"
+                placeholder="Minimum stock level"
+              />
+            </div>
           </div>
           <div className="mt-6 flex justify-end space-x-3">
             <button
@@ -145,7 +160,7 @@ const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, onAdd })
             </button>
             <button
               type="submit"
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-700 rounded-md hover:bg-blue-800"
             >
               Add Item
             </button>

@@ -17,6 +17,10 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 }) => {
   if (!order) return null;
   
+  console.log('Order in OrderDetailsModal:', order);
+  console.log('Order status in modal:', order.status);
+  console.log('Shipped Time in modal (before conditional):', order.shippedTime, typeof order.shippedTime);
+
   return (
     <Modal
       isOpen={isOpen}
@@ -25,7 +29,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
       size="xl"
     >
       <div className="space-y-2">
-        {/* Status and Customer Info */}
+        {/* Status, Customer Info, Dates */}
         <div className="flex flex-wrap justify-between gap-4 pb-4 border-b border-slate-200">
           <div>
             <h4 className="text-sm font-medium text-slate-500">Status</h4>
@@ -42,16 +46,26 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
           <div>
             <h4 className="text-sm font-medium text-slate-500">Order Date</h4>
             <p className="text-slate-800">
-              {format(order.createdAt, 'MMM d, yyyy')}
+              {order.createdAt ? format(order.createdAt, 'MMM d, yyyy h:mm a') : 'N/A'}
             </p>
           </div>
           
           <div>
             <h4 className="text-sm font-medium text-slate-500">Last Updated</h4>
             <p className="text-slate-800">
-              {format(order.updatedAt, 'MMM d, yyyy')}
+              {order.updatedAt ? format(order.updatedAt, 'MMM d, yyyy h:mm a') : 'N/A'}
             </p>
           </div>
+
+          {/* Shipped Time (conditional) */}
+          {order.status === 'shipped' && order.shippedTime && (
+            <div>
+              <h4 className="text-sm font-medium text-slate-500">Shipped Time</h4>
+              <p className="text-slate-800">
+                {order.shippedTime ? format(order.shippedTime as Date, 'MMM d, yyyy h:mm a') : 'N/A'}
+              </p>
+            </div>
+          )}
         </div>
         
         {/* Order Items */}

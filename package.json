@@ -10,13 +10,19 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@types/react-simple-maps": "^3.0.6",
+    "chart.js": "^4.4.9",
     "date-fns": "^2.30.0",
     "firebase": "^11.7.3",
     "framer-motion": "^12.12.1",
+    "jspdf": "^3.0.1",
+    "jspdf-autotable": "^5.0.2",
     "lucide-react": "^0.344.0",
     "react": "^18.3.1",
+    "react-chartjs-2": "^5.3.0",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.22.3",
+    "react-simple-maps": "^3.0.0",
     "recharts": "^2.12.2"
   },
   "devDependencies": {
