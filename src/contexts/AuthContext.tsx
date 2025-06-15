@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { User } from '../types';
 import { db } from '../config/firebase';
-import { doc, getDoc, collection, addDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, addDoc, getDocs } from 'firebase/firestore';
 
 type AuthContextType = {
   user: User | null;
@@ -32,44 +32,40 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const login = async (username: string, password: string): Promise<boolean> => {
     setIsLoading(true);
-
-    const userDocIds = ['admin', 'inbound_staff', 'outbound_staff'];
     
     try {
-      for (const docId of userDocIds) {
-        const userDocRef = doc(db, 'users', docId);
-        const userDocSnap = await getDoc(userDocRef);
-  
-        if (userDocSnap.exists()) {
-          const userData = userDocSnap.data();
-  
-          // Check if username and password match
-          if (userData.username === username && userData.password === password) {
-            const user = {
-              id: docId,
-              username: userData.username,
-              email: userData.email,
-              name: userData.name,
-              role: userData.role,
-              password: userData.password
-            };
-            setUser(user);
+      // Get all users from the collection
+      const usersSnapshot = await getDocs(collection(db, 'users'));
+      
+      // Find the user with matching username and password
+      for (const doc of usersSnapshot.docs) {
+        const userData = doc.data();
+        
+        if (userData.username === username && userData.password === password) {
+          const user = {
+            id: doc.id,
+            username: userData.username,
+            email: userData.email,
+            name: userData.name,
+            role: userData.role,
+            password: userData.password
+          };
+          setUser(user);
 
-            // Add activity log
-            try {
-              await addDoc(collection(db, 'activityLogs'), {
-                user: user.name,
-                role: user.role,
-                detail: 'logged in',
-                time: new Date().toISOString()
-              });
-            } catch (logError) {
-              console.error('Error logging activity:', logError);
-              // Don't fail the login if activity logging fails
-            }
-
-            return true;
+          // Add activity log
+          try {
+            await addDoc(collection(db, 'activityLogs'), {
+              user: user.name,
+              role: user.role,
+              detail: 'logged in',
+              time: new Date().toISOString()
+            });
+          } catch (logError) {
+            console.error('Error logging activity:', logError);
+            // Don't fail the login if activity logging fails
           }
+
+          return true;
         }
       }
   

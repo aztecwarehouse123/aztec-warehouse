@@ -7,27 +7,79 @@ interface AddStockModalProps {
   onAdd: (item: Omit<StockItem, 'id' | 'lastUpdated'>) => void;
 }
 
+const locationOptions = [
+  { value: 'AA', label: 'AA' },
+  { value: 'AB', label: 'AB' },
+  { value: 'AC', label: 'AC' },
+  { value: 'AD', label: 'AD' },
+  { value: 'AE', label: 'AE' },
+  { value: 'AF', label: 'AF' },
+  { value: 'AG', label: 'AG' },
+  { value: 'BA', label: 'BA' },
+  { value: 'BB', label: 'BB' },
+  { value: 'BC', label: 'BC' },
+  { value: 'BD', label: 'BD' },
+  { value: 'BE', label: 'BE' },
+  { value: 'BF', label: 'BF' },
+  { value: 'BG', label: 'BG' },
+  { value: 'CA', label: 'CA' },
+  { value: 'CB', label: 'CB' },
+  { value: 'CC', label: 'CC' },
+  { value: 'CD', label: 'CD' },
+  { value: 'CE', label: 'CE' },
+  { value: 'CF', label: 'CF' },
+  { value: 'CG', label: 'CG' },
+  { value: 'DA', label: 'DA' },
+  { value: 'DB', label: 'DB' },
+  { value: 'DC', label: 'DC' },
+  { value: 'DD', label: 'DD' },
+  { value: 'DE', label: 'DE' },
+  { value: 'DF', label: 'DF' },
+  { value: 'DG', label: 'DG' },
+  { value: 'EA', label: 'EA' },
+  { value: 'EB', label: 'EB' },
+  { value: 'EC', label: 'EC' },
+  { value: 'ED', label: 'ED' },
+  { value: 'EE', label: 'EE' },
+  { value: 'EF', label: 'EF' },
+  { value: 'EG', label: 'EG' },
+  { value: 'FA', label: 'FA' },
+  { value: 'FB', label: 'FB' },
+  { value: 'FC', label: 'FC' },
+  { value: 'FD', label: 'FD' },
+  { value: 'FE', label: 'FE' },
+  { value: 'FF', label: 'FF' },
+  { value: 'FG', label: 'FG' }
+];
+
+const shelfOptions = Array.from({ length: 6 }, (_, i) => ({
+  value: (i + 1).toString(),
+  label: `${i + 1}`
+}));
+
 const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, onAdd }) => {
   const [name, setName] = useState('');
   const [quantity, setQuantity] = useState('');
   const [price, setPrice] = useState('');
-  const [locationCode, setLocationCode] = useState('AB');
+  const [locationCode, setLocationCode] = useState('AA');
   const [shelfNumber, setShelfNumber] = useState('1');
   const [supplier, setSupplier] = useState('');
   const [barcode, setBarcode] = useState('');
-  const [threshold, setThreshold] = useState('10');
+  const [asin, setAsin] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onAdd({
       name,
       quantity: parseInt(quantity),
-      price: parseFloat(price),
+      price: price ? parseFloat(price) : 0,
       locationCode,
       shelfNumber: shelfNumber,
-      supplier,
-      barcode: barcode || undefined,
-      threshold: parseInt(threshold),
+      supplier: supplier || '',
+      barcode: barcode || '',
+      asin: asin || '',
+      status: 'pending',
+      damagedItems: 0
     });
     handleClose();
   };
@@ -36,11 +88,11 @@ const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, onAdd })
     setName('');
     setQuantity('');
     setPrice('');
-    setLocationCode('AB');
+    setLocationCode('AA');
     setShelfNumber('1');
     setSupplier('');
     setBarcode('');
-    setThreshold('10');
+    setAsin('');
     onClose();
   };
 
@@ -69,7 +121,6 @@ const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, onAdd })
                 value={supplier}
                 onChange={(e) => setSupplier(e.target.value)}
                 className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                required
               />
             </div>
             <div>
@@ -90,7 +141,6 @@ const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, onAdd })
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
                 className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                required
                 min="0"
                 step="0.01"
               />
@@ -103,14 +153,11 @@ const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, onAdd })
                 className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 required
               >
-                <option value="AA">AA</option>
-                <option value="AB">AB</option>
-                <option value="AC">AC</option>
-                <option value="AD">AD</option>
-                <option value="BA">BA</option>
-                <option value="BB">BB</option>
-                <option value="BC">BC</option>
-                <option value="BD">BD</option>
+                {locationOptions.map(option => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
             </div>
             <div>
@@ -121,9 +168,9 @@ const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, onAdd })
                 className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 required
               >
-                {Array.from({ length: 16 }, (_, i) => i + 1).map((num) => (
-                  <option key={num} value={num.toString()}>
-                    {num}
+                {shelfOptions.map(option => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
                   </option>
                 ))}
               </select>
@@ -137,16 +184,15 @@ const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, onAdd })
                 className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
               />
             </div>
+            
             <div>
-              <label className="block text-sm font-medium text-slate-700">Threshold</label>
+              <label className="block text-sm font-medium text-slate-700">ASIN (optional)</label>
               <input
-                type="number"
-                value={threshold}
-                onChange={(e) => setThreshold(e.target.value)}
+                type="text"
+                value={asin}
+                onChange={(e) => setAsin(e.target.value)}
                 className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                required
-                min="0"
-                placeholder="Minimum stock level"
+                placeholder="Enter Amazon ASIN"
               />
             </div>
           </div>

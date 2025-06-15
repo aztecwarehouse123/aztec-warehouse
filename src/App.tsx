@@ -9,6 +9,8 @@ import WarehouseOperations from './pages/WarehouseOperations';
 import ReportsAnalytics from './pages/ReportsAnalytics';
 import Settings from './pages/Settings';
 import { useAuth } from './contexts/AuthContext';
+import OutboundStock from './pages/OutboundStock';
+import WarehouseLocations from './pages/WarehouseLocations';
 
 const ProtectedRoute: React.FC<{
   children: React.ReactNode;
@@ -32,7 +34,7 @@ function App() {
       
       <Route path="/" element={<AppLayout />}>
         <Route index element={
-          <ProtectedRoute allowedRoles={['admin', 'inbound', 'outbound']}>
+          <ProtectedRoute allowedRoles={['admin', 'inbound','outbound']}>
             <Dashboard />
           </ProtectedRoute>
         } />
@@ -43,8 +45,19 @@ function App() {
           </ProtectedRoute>
         } />
         <Route path="orders" element={
-          <ProtectedRoute allowedRoles={['admin','outbound']}>
+          <ProtectedRoute allowedRoles={['']}>
             <Orders />
+          </ProtectedRoute>
+        } />
+        <Route path="outbound-stock" element={
+          <ProtectedRoute allowedRoles={['admin','outbound']}>
+            <OutboundStock />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="warehouse-locations" element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <WarehouseLocations />
           </ProtectedRoute>
         } />
         <Route path="warehouse-operations" element={

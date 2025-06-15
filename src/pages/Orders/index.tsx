@@ -308,7 +308,7 @@ const Orders: React.FC = () => {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <div>
+      <div>
           <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>Current Orders</h1>
           <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} mt-1`}>Track and manage your active orders</p>
         </div>
@@ -347,7 +347,7 @@ const Orders: React.FC = () => {
       {/* Toggle View Button */}
       <div className="flex justify-end mb-4">
         <div className="relative inline-block">
-          <button
+        <button
             className={
               `px-4 py-2 text-sm font-medium rounded-l-md focus:outline-none transition-colors 
               ${viewMode === 'grid'
@@ -357,11 +357,11 @@ const Orders: React.FC = () => {
                   : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-300'
               }`
             }
-            onClick={() => setViewMode('grid')}
-          >
+          onClick={() => setViewMode('grid')}
+        >
             <LayoutGrid size={18} className="inline mr-1" /> Grid
-          </button>
-          <button
+        </button>
+        <button
             className={
               `px-4 py-2 text-sm font-medium rounded-r-md focus:outline-none transition-colors 
               ${viewMode === 'table'
@@ -371,10 +371,10 @@ const Orders: React.FC = () => {
                   : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-300'
               }`
             }
-            onClick={() => setViewMode('table')}
-          >
+          onClick={() => setViewMode('table')}
+        >
             <Table size={18} className="inline mr-1" /> Table
-          </button>
+        </button>
         </div>
       </div>
       
@@ -387,13 +387,13 @@ const Orders: React.FC = () => {
       ) : (
         /* Orders Display */
         viewMode === 'grid' ? (
-          filteredOrders.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredOrders.map((order) => (
+        filteredOrders.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredOrders.map((order) => (
                 <div key={order.id} className="flex flex-col">
-                  <OrderCard
-                    order={order}
-                    onClick={() => handleOrderClick(order)}
+              <OrderCard 
+                order={order}
+                onClick={() => handleOrderClick(order)}
                     editButton={
                       <button
                         onClick={(e) => handleEditClick(e, order)}
@@ -402,31 +402,31 @@ const Orders: React.FC = () => {
                         <Edit2 className={`w-4 h-4 ${isDarkMode ? 'text-blue-400' : 'text-blue-500'}`} />
                       </button>
                     }
-                  />
+              />
                 </div>
-              ))}
-            </div>
-          ) : (
+            ))}
+          </div>
+        ) : (
             <div className={`text-center py-12 ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} rounded-lg border`}>
               <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>No orders found. Try adjusting your filters.</p>
-            </div>
-          )
-        ) : (
-          filteredOrders.length > 0 ? (
-            <div className="overflow-x-auto">
+          </div>
+        )
+      ) : (
+        filteredOrders.length > 0 ? (
+          <div className="overflow-x-auto">
               <table className={`min-w-full divide-y ${isDarkMode ? 'divide-slate-700 bg-slate-800 border-slate-700' : 'divide-slate-200 bg-white border-slate-200'} rounded-lg border`}>
                 <thead className={isDarkMode ? 'bg-slate-900' : 'bg-slate-100'}>
-                  <tr>
+                <tr>
                     <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} uppercase tracking-wider`}>Order #</th>
                     <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} uppercase tracking-wider`}>Customer</th>
                     <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} uppercase tracking-wider`}>Status</th>
                     <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} uppercase tracking-wider`}>Date</th>
                     <th className={`px-4 py-3 text-right text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} uppercase tracking-wider`}>Total</th>
                     <th className={`px-4 py-3 text-center text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} uppercase tracking-wider`}>Actions</th>
-                  </tr>
-                </thead>
+                </tr>
+              </thead>
                 <tbody className={`${isDarkMode ? 'divide-slate-700' : 'divide-slate-200'}`}>
-                  {filteredOrders.map((order) => (
+                {filteredOrders.map((order) => (
                     <tr key={order.id} className={`${isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-slate-50'} cursor-pointer`} onClick={() => handleOrderClick(order)}>
                       <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-blue-400' : 'text-blue-700'} font-medium`}>{order.orderNumber}</td>
                       <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-300' : 'text-slate-800'}`}>{order.customerName}</td>
@@ -452,15 +452,15 @@ const Orders: React.FC = () => {
                           </button>
                         </div>
                       </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
             <div className={`text-center py-12 ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} rounded-lg border`}>
               <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>No orders found. Try adjusting your filters.</p>
-            </div>
+          </div>
           )
         )
       )}

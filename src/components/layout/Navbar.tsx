@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Package, ShoppingCart, LogOut, Menu, X, Warehouse, BarChart, Settings } from 'lucide-react';
+import { LayoutDashboard, Package, ShoppingCart, LogOut, Menu, X, BarChart, Settings, MapPin, Activity } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -37,11 +37,13 @@ const Navbar: React.FC = () => {
   };
 
   const allNavItems = [
-    { to: "/", icon: <LayoutDashboard size={20} />, label: "Dashboard", roles: ['admin', 'inbound', 'outbound'] },
-    { to: "/stock", icon: <Package size={20} />, label: "Inventory", roles: ['admin', 'inbound'] },
-    { to: "/orders", icon: <ShoppingCart size={20} />, label: "Orders", roles: ['admin', 'outbound'] },
-    { to: "/reports-analytics", icon: <BarChart size={20} />, label: "Reports", roles: ['admin'] },
-    { to: "/warehouse-operations", icon: <Warehouse size={20} />, label: "Operations Log", roles: ['admin'] },
+    { to: "/", icon: <LayoutDashboard size={20} />, label: "Dashboard", roles: ['admin', 'inbound','outbound'] },
+    { to: "/stock", icon: <Package size={20} />, label: "Inbound", roles: ['admin', 'inbound'] },
+    { to: "/outbound-stock", icon: <Package size={20} />, label: "Outbound", roles: ['admin', 'outbound'] },
+    { to: "/warehouse-locations", icon: <MapPin size={20} />, label: "Locations", roles: ['admin'] },
+    { to: "/orders", icon: <ShoppingCart size={20} />, label: "Orders", roles: [''] },
+    { to: "/reports-analytics", icon: <BarChart size={20} />, label: "Reports", roles: [''] },
+    { to: "/warehouse-operations", icon: <Activity size={20} />, label: "Operations", roles: ['admin'] },
     { to: "/settings", icon: <Settings size={20} />, label: "Settings", roles: ['admin', 'inbound', 'outbound'] },
   ];
 
@@ -79,7 +81,7 @@ const Navbar: React.FC = () => {
                 whileHover={{ scale: 1.05 }}
                 transition={{ type: "spring", stiffness: 400, damping: 10 }}
               >
-                AZTEC WAREHOUSE
+                AZTEC
               </motion.span>
             </NavLink>
           </motion.div>
@@ -93,20 +95,20 @@ const Navbar: React.FC = () => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1 }}
               >
-                <NavLink 
-                  to={item.to} 
-                  className={navLinkClasses}
-                  end={item.to === "/"}
+              <NavLink 
+                to={item.to} 
+                className={navLinkClasses}
+                end={item.to === "/"}
                 >
                   <motion.div
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     className="flex items-center gap-2"
-                  >
-                    {item.icon}
-                    <span>{item.label}</span>
+              >
+                {item.icon}
+                <span>{item.label}</span>
                   </motion.div>
-                </NavLink>
+              </NavLink>
               </motion.div>
             ))}
           </nav>
@@ -161,7 +163,7 @@ const Navbar: React.FC = () => {
 
       {/* Mobile Menu */}
       <AnimatePresence>
-        {mobileMenuOpen && (
+      {mobileMenuOpen && (
           <motion.div 
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
@@ -169,7 +171,7 @@ const Navbar: React.FC = () => {
             transition={{ duration: 0.2 }}
             className={`md:hidden ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border-t`}
           >
-            <div className="container mx-auto px-4 py-3 space-y-1">
+          <div className="container mx-auto px-4 py-3 space-y-1">
               {navItems.map((item, index) => (
                 <motion.div
                   key={item.to}
@@ -177,61 +179,61 @@ const Navbar: React.FC = () => {
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: index * 0.1 }}
                 >
-                  <NavLink 
-                    to={item.to} 
-                    className={navLinkClasses}
-                    onClick={closeMobileMenu}
-                    end={item.to === "/"}
+              <NavLink 
+                to={item.to} 
+                className={navLinkClasses}
+                onClick={closeMobileMenu}
+                end={item.to === "/"}
                   >
                     <motion.div
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       className="flex items-center gap-2"
-                    >
-                      {item.icon}
-                      <span>{item.label}</span>
+              >
+                {item.icon}
+                <span>{item.label}</span>
                     </motion.div>
-                  </NavLink>
+              </NavLink>
                 </motion.div>
-              ))}
+            ))}
               <motion.div 
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.3 }}
                 className={`border-t ${isDarkMode ? 'border-slate-700' : 'border-slate-200'} mt-2 pt-2`}
               >
-                {user && (
-                  <div className="flex items-center justify-between py-2">
-                    <div className="flex items-center gap-3">
+              {user && (
+                <div className="flex items-center justify-between py-2">
+                  <div className="flex items-center gap-3">
                       <motion.div 
                         className={`h-8 w-8 rounded-full overflow-hidden ${isDarkMode ? 'bg-blue-900/50' : 'bg-blue-100'} flex items-center justify-center`}
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
                       >
                         <span className={`text-sm font-semibold ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
-                          {getInitials(user.name)}
-                        </span>
+                        {getInitials(user.name)}
+                      </span>
                       </motion.div>
-                      <div>
+                    <div>
                         <p className={`text-sm font-medium ${isDarkMode ? 'text-white' : 'text-slate-700'}`}>{user.name}</p>
                         <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} capitalize`}>{user.role}</p>
-                      </div>
                     </div>
+                  </div>
                     <motion.button 
-                      onClick={handleLogout}
+                    onClick={handleLogout}
                       className={`flex items-center gap-2 px-3 py-2 ${isDarkMode ? 'text-red-400 hover:bg-slate-700' : 'text-red-600 hover:bg-red-50'} rounded-lg transition-colors`}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                    >
-                      <LogOut size={18} />
-                      <span>Logout</span>
+                  >
+                    <LogOut size={18} />
+                    <span>Logout</span>
                     </motion.button>
-                  </div>
-                )}
+                </div>
+              )}
               </motion.div>
             </div>
           </motion.div>
-        )}
+      )}
       </AnimatePresence>
     </motion.header>
   );

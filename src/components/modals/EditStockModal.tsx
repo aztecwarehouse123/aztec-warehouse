@@ -119,7 +119,7 @@ const EditStockModal: React.FC<EditStockModalProps> = ({ isOpen, onClose, onSave
                 className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 required
               >
-                {Array.from({ length: 16 }, (_, i) => i + 1).map((num) => (
+                {Array.from({ length: 6 }, (_, i) => i + 1).map((num) => (
                   <option key={num} value={num.toString()}>
                     {num}
                   </option>

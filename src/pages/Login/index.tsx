@@ -10,8 +10,8 @@ import Button from '../../components/ui/Button';
 import { motion } from 'framer-motion';
 
 const Login: React.FC = () => {
-  const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('password');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const { login, isAuthenticated, isLoading, user } = useAuth();
   const { showToast } = useToast();

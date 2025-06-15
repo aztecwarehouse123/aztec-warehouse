@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Moon, Sun, Edit2 } from 'lucide-react';
+import { User, Moon, Sun, Edit2, Trash2 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -7,8 +7,10 @@ import Input from '../../components/ui/Input';
 import PasswordInput from '../../components/ui/PasswordInput';
 import Button from '../../components/ui/Button';
 import { db } from '../../config/firebase';
-import { doc, updateDoc, collection, addDoc, getDocs } from 'firebase/firestore';
+import { doc, updateDoc, collection, addDoc, getDocs, query, where, deleteDoc } from 'firebase/firestore';
 import { User as UserType } from '../../types';
+import Modal from '../../components/modals/Modal';
+import Select from '../../components/ui/Select';
 
 const Settings: React.FC = () => {
   const { user, setUser } = useAuth();
@@ -18,6 +20,18 @@ const Settings: React.FC = () => {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [users, setUsers] = useState<UserType[]>([]);
   const [editingUser, setEditingUser] = useState<UserType | null>(null);
+  const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
+  const [addUserFormData, setAddUserFormData] = useState({
+    username: '',
+    email: '',
+    name: '',
+    password: '',
+    confirmPassword: '',
+    role: 'inbound'
+  });
+  const [addUserErrors, setAddUserErrors] = useState<Record<string, string>>({});
+  const [showConfirmDeleteModal, setShowConfirmDeleteModal] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<{ username: string; name: string } | null>(null);
   const [formData, setFormData] = useState({
     username: user?.username || '',
     email: user?.email || '',
@@ -86,9 +100,8 @@ const Settings: React.FC = () => {
       newErrors.username = 'Username is required';
     }
     
-    if (!formData.email.trim()) {
-      newErrors.email = 'Email is required';
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+    // Only validate email format if an email is provided
+    if (formData.email.trim() && !/\S+@\S+\.\S+/.test(formData.email)) {
       newErrors.email = 'Invalid email format';
     }
     
@@ -277,6 +290,170 @@ const Settings: React.FC = () => {
     }
   };
 
+  const handleAddUserChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setAddUserFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    
+    // Clear error when field is edited
+    if (addUserErrors[name]) {
+      setAddUserErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[name];
+        return newErrors;
+      });
+    }
+  };
+
+  const validateAddUser = () => {
+    const newErrors: Record<string, string> = {};
+    
+    if (!addUserFormData.username.trim()) {
+      newErrors.username = 'Username is required';
+    }
+    
+    if (addUserFormData.email.trim() && !/\S+@\S+\.\S+/.test(addUserFormData.email)) {
+      newErrors.email = 'Invalid email format';
+    }
+    
+    if (!addUserFormData.name.trim()) {
+      newErrors.name = 'Name is required';
+    }
+
+    if (!addUserFormData.password) {
+      newErrors.password = 'Password is required';
+    } else if (addUserFormData.password.length < 6) {
+      newErrors.password = 'Password must be at least 6 characters';
+    }
+
+    if (addUserFormData.password !== addUserFormData.confirmPassword) {
+      newErrors.confirmPassword = 'Passwords do not match';
+    }
+
+    setAddUserErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleAddUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!validateAddUser()) return;
+    
+    setIsLoading(true);
+    
+    try {
+      // Check if username or email already exists
+      const usersSnapshot = await getDocs(collection(db, 'users'));
+      const existingUsers = usersSnapshot.docs.map(doc => doc.data());
+      
+      if (existingUsers.some(u => u.username === addUserFormData.username)) {
+        setAddUserErrors({ username: 'Username already exists' });
+        return;
+      }
+      
+      if (existingUsers.some(u => u.email === addUserFormData.email)) {
+        setAddUserErrors({ email: 'Email already exists' });
+        return;
+      }
+
+      // Add new user to Firestore
+      const newUserRef = await addDoc(collection(db, 'users'), {
+        username: addUserFormData.username,
+        email: addUserFormData.email,
+        name: addUserFormData.name,
+        password: addUserFormData.password,
+        role: addUserFormData.role,
+      });
+
+      // Add activity log
+      await addDoc(collection(db, 'activityLogs'), {
+        user: user?.name,
+        role: user?.role,
+        detail: `added new user "${addUserFormData.name}" with role "${addUserFormData.role}"`,
+        time: new Date().toISOString()
+      });
+
+      // Update local state
+      setUsers(prev => [...prev, {
+        id: newUserRef.id,
+        username: addUserFormData.username,
+        email: addUserFormData.email,
+        name: addUserFormData.name,
+        role: addUserFormData.role as UserType['role'],
+        password: addUserFormData.password
+      }]);
+
+      // Reset form and close modal
+      setAddUserFormData({
+        username: '',
+        email: '',
+        name: '',
+        password: '',
+        confirmPassword: '',
+        role: 'inbound'
+      });
+      setIsAddUserModalOpen(false);
+      
+      showToast('User added successfully!', 'success');
+    } catch (error) {
+      console.error('Error adding user:', error);
+      showToast('Failed to add user. Please try again.', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteUser = async (userName: string, username: string) => {
+    setUserToDelete({ username: username, name: userName });
+    setShowConfirmDeleteModal(true);
+  };
+
+  const confirmDeleteUser = async () => {
+    if (!userToDelete) return;
+
+    try {
+      setIsLoading(true);
+      
+      // Find the user by username
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('username', '==', userToDelete.username));
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) {
+        showToast('User not found.', 'error');
+        return;
+      }
+
+      const userDoc = querySnapshot.docs[0];
+      const userRef = doc(db, 'users', userDoc.id);
+
+      // Delete user from Firestore
+      await deleteDoc(userRef);
+
+      // Add activity log
+      await addDoc(collection(db, 'activityLogs'), {
+        user: user?.name,
+        role: user?.role,
+        detail: `deleted user "${userToDelete.name}" (username: ${userToDelete.username})`,
+        time: new Date().toISOString()
+      });
+
+      // Update local state
+      setUsers(prev => prev.filter(u => u.username !== userToDelete.username));
+      
+      showToast('User deleted successfully!', 'success');
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      showToast('Failed to delete user. Please try again.', 'error');
+    } finally {
+      setIsLoading(false);
+      setShowConfirmDeleteModal(false);
+      setUserToDelete(null);
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto">
       <div className="flex justify-between items-center mb-6">
@@ -299,65 +476,97 @@ const Settings: React.FC = () => {
 
       {/* Edit User Modal */}
       {editingUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className={`rounded-lg p-6 w-full max-w-md relative ${isDarkMode ? 'bg-slate-800' : 'bg-white'}`}>
-            <h3 className={`text-lg font-semibold mb-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Edit User</h3>
-            <div className="space-y-4">
-              <Input
-                label="Username"
-                name="username"
-                value={userEditForm.username}
-                onChange={handleUserEditChange}
-                error={errors.username}
-              />
-              <Input
-                label="Email"
-                name="email"
-                type="email"
-                value={userEditForm.email}
-                onChange={handleUserEditChange}
-                error={errors.email}
-              />
-              <Input
-                label="Name"
-                name="name"
-                value={userEditForm.name}
-                onChange={handleUserEditChange}
-                error={errors.name}
-              />
-              <PasswordInput
-                label="New Password"
-                name="newPassword"
-                value={userEditForm.newPassword}
-                onChange={handleUserEditChange}
-                error={errors.newPassword}
-              />
-              <PasswordInput
-                label="Confirm Password"
-                name="confirmPassword"
-                value={userEditForm.confirmPassword}
-                onChange={handleUserEditChange}
-                error={errors.confirmPassword}
-              />
-            </div>
-            <div className="mt-6 flex justify-end space-x-3">
-              <Button
-                variant="secondary"
-                onClick={() => setEditingUser(null)}
-                disabled={isLoading}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleUpdateUser}
-                disabled={isLoading}
-              >
-                {isLoading ? 'Updating...' : 'Update User'}
-              </Button>
-            </div>
+        <Modal
+          isOpen={!!editingUser}
+          onClose={() => setEditingUser(null)}
+          title="Edit User"
+          size="md"
+        >
+          <div className="space-y-4">
+            <Input
+              label="Username"
+              name="username"
+              value={userEditForm.username}
+              onChange={handleUserEditChange}
+              error={errors.username}
+            />
+            <Input
+              label="Email"
+              name="email"
+              type="email"
+              value={userEditForm.email}
+              onChange={handleUserEditChange}
+              error={errors.email}
+            />
+            <Input
+              label="Name"
+              name="name"
+              value={userEditForm.name}
+              onChange={handleUserEditChange}
+              error={errors.name}
+            />
+            <PasswordInput
+              label="New Password"
+              name="newPassword"
+              value={userEditForm.newPassword}
+              onChange={handleUserEditChange}
+              error={errors.newPassword}
+            />
+            <PasswordInput
+              label="Confirm Password"
+              name="confirmPassword"
+              value={userEditForm.confirmPassword}
+              onChange={handleUserEditChange}
+              error={errors.confirmPassword}
+            />
           </div>
-        </div>
+          <div className="mt-6 flex justify-end space-x-3">
+            <Button
+              variant="secondary"
+              onClick={() => setEditingUser(null)}
+              disabled={isLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleUpdateUser}
+              disabled={isLoading}
+            >
+              {isLoading ? 'Updating...' : 'Update User'}
+            </Button>
+          </div>
+        </Modal>
       )}
+
+      {/* Confirm Delete User Modal */}
+      <Modal
+        isOpen={showConfirmDeleteModal}
+        onClose={() => setShowConfirmDeleteModal(false)}
+        title="Confirm Deletion"
+        size="sm"
+      >
+        <p className={`${isDarkMode ? 'text-slate-300' : 'text-slate-700'} mb-6`}>
+          Are you sure you want to delete user &quot;{userToDelete?.name}&quot; (username: {userToDelete?.username})?
+          This action cannot be undone.
+        </p>
+        <div className="flex justify-end gap-3">
+          <Button
+            variant="secondary"
+            onClick={() => setShowConfirmDeleteModal(false)}
+            disabled={isLoading}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="danger"
+            onClick={confirmDeleteUser}
+            isLoading={isLoading}
+            disabled={isLoading}
+          >
+            {isLoading ? 'Deleting...' : 'Delete'}
+          </Button>
+        </div>
+      </Modal>
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Profile Picture */}
@@ -398,8 +607,7 @@ const Settings: React.FC = () => {
               value={formData.email}
               onChange={handleChange}
               error={errors.email}
-              placeholder={user?.email}
-              required
+              placeholder={user?.email || "Enter email (optional)"}
               fullWidth
               darkMode={isDarkMode}
             />
@@ -474,9 +682,22 @@ const Settings: React.FC = () => {
 
       {/* User Management Section */}
       {user?.role === 'admin' && (
-        <div className="mt-8">
-          <h2 className={`text-2xl font-bold mb-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>User Management</h2>
-          <div className={`rounded-lg shadow overflow-hidden ${isDarkMode ? 'bg-slate-800' : 'bg-white'}`}>
+        <div className={`mt-8 p-6 rounded-lg ${isDarkMode ? 'bg-slate-1000' : 'bg-white'}`}>
+          <h2 className={`text-xl font-semibold mb-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+            User Management
+          </h2>
+          
+          <div className="flex justify-end mb-4">
+            <Button
+              onClick={() => setIsAddUserModalOpen(true)}
+              className="flex items-center gap-2"
+            >
+              <User size={16} />
+              Add New User
+            </Button>
+          </div>
+
+          <div className={`rounded-lg shadow overflow-hidden ${isDarkMode ? 'bg-slate-700' : 'bg-gray-50'}`}>
             <div className="overflow-x-auto">
               <table className={`min-w-full divide-y ${isDarkMode ? 'divide-slate-700' : 'divide-gray-200'}`}>
                 <thead className={isDarkMode ? 'bg-slate-700' : 'bg-gray-50'}>
@@ -494,16 +715,28 @@ const Settings: React.FC = () => {
                     .map((user) => (
                     <tr key={user.id} className={isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-gray-50'}>
                       <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>{user.username}</td>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>{user.email}</td>
+                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>{user.email || '-'}</td>
                       <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>{user.name}</td>
                       <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>{user.role}</td>
                       <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>
-                        <button
-                          onClick={() => handleEditUser(user)}
-                          className={isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-800'}
-                        >
-                          <Edit2 size={16} />
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => handleEditUser(user)}
+                            className={`${isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'}`}
+                          >
+                            <Edit2 size={16} />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => handleDeleteUser(user.name, user.username)}
+                            className={`${isDarkMode ? 'text-red-400 hover:text-red-300' : 'text-red-600 hover:text-red-700'}`}
+                          >
+                            <Trash2 size={16} />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -511,6 +744,91 @@ const Settings: React.FC = () => {
               </table>
             </div>
           </div>
+
+          {/* Add User Modal */}
+          <Modal
+            isOpen={isAddUserModalOpen}
+            onClose={() => setIsAddUserModalOpen(false)}
+            title="Add New User"
+            size="xl"
+          >
+            <form onSubmit={handleAddUser} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input
+                  label="Username"
+                  name="username"
+                  value={addUserFormData.username}
+                  onChange={handleAddUserChange}
+                  error={addUserErrors.username}
+                  required
+                  fullWidth
+                  placeholder="Enter username (e.g., john.doe)"
+                />
+                <Input
+                  label="Email"
+                  name="email"
+                  type="email"
+                  value={addUserFormData.email}
+                  onChange={handleAddUserChange}
+                  error={addUserErrors.email}
+                  fullWidth
+                  placeholder="Enter email address (optional)"
+                />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input
+                  label="Full Name"
+                  name="name"
+                  value={addUserFormData.name}
+                  onChange={handleAddUserChange}
+                  error={addUserErrors.name}
+                  required
+                  fullWidth
+                  placeholder="Enter full name (e.g., John Doe)"
+                />
+                <Select
+                  label="Role"
+                  name="role"
+                  value={addUserFormData.role}
+                  onChange={handleAddUserChange}
+                  options={[
+                    { value: 'inbound', label: 'Inbound' },
+                    { value: 'outbound', label: 'Outbound' },
+                  ]}
+                  fullWidth
+                />
+              </div>
+              <PasswordInput
+                label="Password"
+                name="password"
+                value={addUserFormData.password}
+                onChange={handleAddUserChange}
+                error={addUserErrors.password}
+                required
+                fullWidth
+                placeholder="Enter password (min. 6 characters)"
+              />
+              <PasswordInput
+                label="Confirm Password"
+                name="confirmPassword"
+                value={addUserFormData.confirmPassword}
+                onChange={handleAddUserChange}
+                error={addUserErrors.confirmPassword}
+                required
+                fullWidth
+                placeholder="Confirm your password"
+              />
+              <div className="flex justify-end">
+                <Button
+                  type="submit"
+                  isLoading={isLoading}
+                  disabled={isLoading}
+                >
+                  Add User
+                </Button>
+              </div>
+            </form>
+          </Modal>
         </div>
       )}
     </div>

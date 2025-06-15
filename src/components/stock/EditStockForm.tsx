@@ -1,14 +1,29 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Plus } from 'lucide-react';
-import Input from '../ui/Input';
 import Button from '../ui/Button';
+import Input from '../ui/Input';
 import Select from '../ui/Select';
 import { StockItem } from '../../types';
 import { useTheme } from '../../contexts/ThemeContext';
 
+interface FormData {
+  name: string;
+  quantity: string;
+  price: string;
+  supplier?: string;
+  locationCode: string;
+  shelfNumber: string;
+  asin?: string;
+  status: 'pending' | 'active';
+  damagedItems: string;
+  fulfillmentType: 'fba' | 'mf';
+  storeName: string;
+}
+
 interface EditStockFormProps {
   item: StockItem;
-  onSubmit: (data: StockItem) => void;
+  onSubmit: (data: StockItem) => Promise<void>;
+  onCancel: () => void;
   isLoading?: boolean;
 }
 
@@ -17,25 +32,78 @@ const locationOptions = [
   { value: 'AB', label: 'AB' },
   { value: 'AC', label: 'AC' },
   { value: 'AD', label: 'AD' },
+  { value: 'AE', label: 'AE' },
+  { value: 'AF', label: 'AF' },
+  { value: 'AG', label: 'AG' },
   { value: 'BA', label: 'BA' },
   { value: 'BB', label: 'BB' },
   { value: 'BC', label: 'BC' },
   { value: 'BD', label: 'BD' },
+  { value: 'BE', label: 'BE' },
+  { value: 'BF', label: 'BF' },
+  { value: 'BG', label: 'BG' },
+  { value: 'CA', label: 'CA' },
+  { value: 'CB', label: 'CB' },
+  { value: 'CC', label: 'CC' },
+  { value: 'CD', label: 'CD' },
+  { value: 'CE', label: 'CE' },
+  { value: 'CF', label: 'CF' },
+  { value: 'CG', label: 'CG' },
+  { value: 'DA', label: 'DA' },
+  { value: 'DB', label: 'DB' },
+  { value: 'DC', label: 'DC' },
+  { value: 'DD', label: 'DD' },
+  { value: 'DE', label: 'DE' },
+  { value: 'DF', label: 'DF' },
+  { value: 'DG', label: 'DG' },
+  { value: 'EA', label: 'EA' },
+  { value: 'EB', label: 'EB' },
+  { value: 'EC', label: 'EC' },
+  { value: 'ED', label: 'ED' },
+  { value: 'EE', label: 'EE' },
+  { value: 'EF', label: 'EF' },
+  { value: 'EG', label: 'EG' },
+  { value: 'FA', label: 'FA' },
+  { value: 'FB', label: 'FB' },
+  { value: 'FC', label: 'FC' },
+  { value: 'FD', label: 'FD' },
+  { value: 'FE', label: 'FE' },
+  { value: 'FF', label: 'FF' },
+  { value: 'FG', label: 'FG' }
 ];
 
-const shelfOptions = Array.from({ length: 16 }, (_, i) => ({
+const shelfOptions = Array.from({ length: 6 }, (_, i) => ({
   value: (i + 1).toString(),
   label: `${i + 1}`
 }));
 
-const EditStockForm: React.FC<EditStockFormProps> = ({ item, onSubmit, isLoading = false }) => {
-  const { isDarkMode } = useTheme();
-  const [formData, setFormData] = useState<StockItem>(item);
-  const [errors, setErrors] = useState<Record<string, string>>({});
+const predefinedStores = ['supply & serve', 'APHY', 'AZTEC'];
 
-  useEffect(() => {
-    setFormData(item);
-  }, [item]);
+const EditStockForm: React.FC<EditStockFormProps> = ({ 
+  item, 
+  onSubmit, 
+  isLoading = false 
+}) => {
+  const { isDarkMode } = useTheme();
+
+  const initialStoreName = item.storeName;
+  const isCustomStore = initialStoreName && !predefinedStores.includes(initialStoreName);
+
+  const [formData, setFormData] = useState<FormData>({
+    name: item.name,
+    quantity: item.quantity.toString(),
+    price: item.price.toString(),
+    supplier: item.supplier || '',
+    locationCode: item.locationCode,
+    shelfNumber: item.shelfNumber,
+    asin: item.asin || '',
+    status: item.status,
+    damagedItems: item.damagedItems.toString(),
+    fulfillmentType: item.fulfillmentType,
+    storeName: isCustomStore ? 'other' : (item.storeName || 'supply & serve')
+  });
+  const [showOtherStoreInput, setShowOtherStoreInput] = useState(isCustomStore);
+  const [otherStoreName, setOtherStoreName] = useState(isCustomStore ? initialStoreName : '');
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -43,55 +111,30 @@ const EditStockForm: React.FC<EditStockFormProps> = ({ item, onSubmit, isLoading
       ...prev,
       [name]: value
     }));
-    // Clear error when field is edited
-    if (errors[name]) {
-      setErrors(prev => ({
-        ...prev,
-        [name]: ''
-      }));
-    }
   };
 
-  const validate = () => {
-    const newErrors: Record<string, string> = {};
-    
-    if (!formData.name.trim()) {
-      newErrors.name = 'Product name is required';
-    }
-    if (!formData.quantity || formData.quantity < 0) {
-      newErrors.quantity = 'Valid quantity is required';
-    }
-    if (!formData.price || formData.price <= 0) {
-      newErrors.price = 'Valid price is required';
-    }
-    if (!formData.supplier.trim()) {
-      newErrors.supplier = 'Supplier is required';
-    }
-    if (!formData.locationCode) {
-      newErrors.locationCode = 'Location code is required';
-    }
-    if (!formData.shelfNumber) {
-      newErrors.shelfNumber = 'Shelf number is required';
-    }
-    if (!formData.threshold || formData.threshold < 0) {
-      newErrors.threshold = 'Valid threshold is required';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (validate()) {
-      onSubmit({
-        ...formData,
+    try {
+      const data: StockItem = {
+        ...item,
+        name: formData.name,
         quantity: Number(formData.quantity),
-        price: Number(formData.price),
-        threshold: Number(formData.threshold),
-        lastUpdated: new Date()
-      });
+        price: Number(formData.price) || 0,
+        supplier: formData.supplier || null,
+        locationCode: formData.locationCode,
+        shelfNumber: formData.shelfNumber,
+        asin: formData.asin || null,
+        status: formData.status,
+        damagedItems: Number(formData.damagedItems),
+        fulfillmentType: formData.fulfillmentType,
+        storeName: formData.storeName === 'other' ? otherStoreName : formData.storeName
+      };
+
+      await onSubmit(data);
+    } catch (error) {
+      console.error('Error updating stock:', error);
     }
   };
 
@@ -103,7 +146,6 @@ const EditStockForm: React.FC<EditStockFormProps> = ({ item, onSubmit, isLoading
           name="name"
           value={formData.name}
           onChange={handleChange}
-          error={errors.name}
           placeholder="Enter product name"
           required
           fullWidth
@@ -114,9 +156,7 @@ const EditStockForm: React.FC<EditStockFormProps> = ({ item, onSubmit, isLoading
           name="supplier"
           value={formData.supplier}
           onChange={handleChange}
-          error={errors.supplier}
           placeholder="Enter supplier name"
-          required
           fullWidth
         />
       </div>
@@ -128,7 +168,6 @@ const EditStockForm: React.FC<EditStockFormProps> = ({ item, onSubmit, isLoading
           type="number"
           value={formData.quantity}
           onChange={handleChange}
-          error={errors.quantity}
           placeholder="Enter quantity"
           min="0"
           required
@@ -136,16 +175,14 @@ const EditStockForm: React.FC<EditStockFormProps> = ({ item, onSubmit, isLoading
         />
         
         <Input
-          label="Price ($)"
+          label="Price"
           name="price"
           type="number"
           value={formData.price}
           onChange={handleChange}
-          error={errors.price}
           placeholder="Enter price"
-          min="0.01"
+          min="0"
           step="0.01"
-          required
           fullWidth
         />
       </div>
@@ -156,7 +193,6 @@ const EditStockForm: React.FC<EditStockFormProps> = ({ item, onSubmit, isLoading
           name="locationCode"
           value={formData.locationCode}
           onChange={handleChange}
-          error={errors.locationCode}
           options={locationOptions}
           required
           fullWidth
@@ -165,9 +201,8 @@ const EditStockForm: React.FC<EditStockFormProps> = ({ item, onSubmit, isLoading
         <Select
           label="Shelf Number"
           name="shelfNumber"
-          value={formData.shelfNumber.toString()}
+          value={formData.shelfNumber}
           onChange={handleChange}
-          error={errors.shelfNumber}
           options={shelfOptions}
           required
           fullWidth
@@ -176,18 +211,95 @@ const EditStockForm: React.FC<EditStockFormProps> = ({ item, onSubmit, isLoading
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Input
-          label="Threshold"
-          name="threshold"
-          type="number"
-          value={formData.threshold}
+          label="ASIN"
+          name="asin"
+          value={formData.asin}
           onChange={handleChange}
-          error={errors.threshold}
-          placeholder="Enter minimum stock threshold"
+          placeholder="Enter Amazon ASIN"
+          fullWidth
+        />
+        <Input
+          label="Damaged Items"
+          name="damagedItems"
+          type="number"
+          value={formData.damagedItems}
+          onChange={handleChange}
+          placeholder="Enter number of damaged items"
           min="0"
-          required
+          max={formData.quantity}
           fullWidth
         />
       </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Select
+          label="Status"
+          name="status"
+          value={formData.status}
+          onChange={handleChange}
+          options={[
+            { value: 'pending', label: 'Pending' },
+            { value: 'active', label: 'Active' }
+          ]}
+          fullWidth
+        />
+
+        <Select
+          label="Fulfillment Type"
+          name="fulfillmentType"
+          value={formData.fulfillmentType}
+          onChange={handleChange}
+          options={[
+            { value: 'fba', label: 'Fba' },
+            { value: 'mf', label: 'Mf' }
+          ]}
+          fullWidth
+        />
+
+        
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+          <label className={`block text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'} mb-1`}>
+            Store Name
+          </label>
+          <Select
+            value={formData.storeName}
+            onChange={(e) => {
+              const value = e.target.value;
+              setFormData(prev => ({ ...prev, storeName: value }));
+              setShowOtherStoreInput(value === 'other');
+              if (value !== 'other') {
+                setOtherStoreName('');
+              }
+            }}
+            options={[
+              { value: 'supply & serve', label: 'Supply & Serve' },
+              { value: 'APHY', label: 'APHY' },
+              { value: 'AZTEC', label: 'AZTEC' },
+              { value: 'other', label: 'Other' }
+            ]}
+          />
+          
+        </div>
+        {showOtherStoreInput && (
+          <div>
+            <label className={`block text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'} mb-1`}>
+              Other Store Name
+            </label>
+            <Input
+              type="text"
+              value={otherStoreName}
+              onChange={(e) => setOtherStoreName(e.target.value)}
+              placeholder="Enter store name"
+              required={showOtherStoreInput}
+            />
+          </div>
+        )}
+        
+      </div>
+      
       
       <div className="flex justify-end">
         <Button 

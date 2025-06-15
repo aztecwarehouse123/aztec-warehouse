@@ -18,8 +18,12 @@ const StockCard: React.FC<StockCardProps> = ({ item, onClick }) => {
       <div className="p-4">
         <div className="flex items-start justify-between mb-2">
           <h3 className="font-medium text-slate-800">{item.name}</h3>
-          <span className="text-sm font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700">
-            In Stock
+          <span className={`text-sm font-medium px-2 py-0.5 rounded-full ${
+            item.status === 'active' 
+              ? 'bg-green-100 text-green-700'
+              : 'bg-yellow-100 text-yellow-700'
+          }`}>
+            {item.status === 'active' ? 'Active' : 'Pending'}
           </span>
         </div>
         

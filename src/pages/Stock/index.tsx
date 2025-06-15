@@ -61,12 +61,26 @@ const Stock: React.FC = () => {
     fetchStockItems();
   }, [showToast]);
 
+  const sortOptions = [
+    { value: 'name', label: 'Name (A-Z)' },
+    { value: 'quantity', label: 'Quantity (High-Low)' },
+    { value: 'price', label: 'Price (High-Low)' },
+    { value: 'date', label: 'Date Updated' },
+    { value: 'status', label: 'Status (Pending - Active)' }
+  ];
+
   // Filter and sort items
   const filteredItems = items.filter(item => {
     const searchLower = searchQuery.toLowerCase();
     const matchesName = item.name.toLowerCase().includes(searchLower);
     const matchesLocation = `${item.locationCode} - ${item.shelfNumber}`.toLowerCase().includes(searchLower);
-    return matchesName || matchesLocation;
+    
+    // Handle comma-separated ASINs
+    const matchesAsin = item.asin ? item.asin.split(',').some(asin => 
+      asin.trim().toLowerCase().includes(searchLower)
+    ) : false;
+    
+    return matchesName || matchesLocation || matchesAsin;
   }).sort((a, b) => {
     if (sortBy === 'name') {
       return a.name.localeCompare(b.name);
@@ -76,42 +90,57 @@ const Stock: React.FC = () => {
       return b.price - a.price;
     } else if (sortBy === 'date') {
       return new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime();
+    } else if (sortBy === 'status') {
+      // Sort by status: active first, then pending
+      if (a.status === 'pending' && b.status === 'active') return -1;
+      if (a.status === 'active' && b.status === 'pending') return 1;
+      return 0;
     }
     return 0;
   });
 
-  const handleAddStock = async (data: Omit<StockItem, 'id'>) => {
+  const handleAddStock = async (data: Omit<StockItem, 'id'>[]) => {
     setIsLoading(true);
     
     try {
-      // Add document to Firestore
-      const docRef = await addDoc(collection(db, 'inventory'), {
-        ...data,
-        lastUpdated: Timestamp.fromDate(new Date())
-      });
+      const newItems: StockItem[] = [];
+      
+      // Add documents to Firestore
+      for (const item of data) {
+        const docRef = await addDoc(collection(db, 'inventory'), {
+          ...item,
+          lastUpdated: Timestamp.fromDate(new Date())
+        });
+        
+        newItems.push({
+          ...item,
+          id: docRef.id,
+          lastUpdated: new Date()
+        });
+      }
       
       // Add activity log
       if (user) {
+        const totalQuantity = data.reduce((sum, item) => sum + item.quantity, 0);
+        const locationDetails = data.map(item => 
+          `${item.quantity} at ${item.locationCode}-${item.shelfNumber}`
+        ).join(', ');
+        
         await addDoc(collection(db, 'activityLogs'), {
           user: user.name,
           role: user.role,
-          detail: `added new product "${data.name}" with quantity ${data.quantity} at location ${data.locationCode}-${data.shelfNumber}`,
+          detail: `added new product "${data[0].name}" with total quantity ${totalQuantity} (${locationDetails})`,
           time: new Date().toISOString()
         });
       }
-
+      
       // Update local state
-      const newItem = {
-        ...data,
-        id: docRef.id,
-        lastUpdated: new Date()
-      };
-      setItems(prev => [...prev, newItem]);
+      setItems(prev => [...prev, ...newItems]);
       setIsAddModalOpen(false);
-      showToast('Stock item added successfully', 'success');
+      showToast('Stock items added successfully', 'success');
     } catch (error) {
       console.error('Error adding stock:', error);
-      showToast('Failed to add stock item', 'error');
+      showToast('Failed to add stock items', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -127,23 +156,54 @@ const Stock: React.FC = () => {
       
       // Update document in Firestore
       const stockRef = doc(db, 'inventory', data.id);
-      const updateData = { ...data } as Partial<StockItem>;
-      delete updateData.id; // Remove id from the update data
-      await updateDoc(stockRef, {
-        ...updateData,
+      const updateData = {
+        name: data.name,
+        quantity: data.quantity,
+        price: data.price,
+        supplier: data.supplier,
+        locationCode: data.locationCode,
+        shelfNumber: data.shelfNumber,
+        asin: data.asin,
+        status: data.status,
+        damagedItems: data.damagedItems,
+        barcode: data.barcode,
+        fulfillmentType: data.fulfillmentType,
+        storeName: data.storeName,
         lastUpdated: Timestamp.fromDate(now)
-      });
+      };
+      
+      await updateDoc(stockRef, updateData);
       
       // Add activity log
       if (user && originalItem) {
         const changes = [];
         if (originalItem.name !== data.name) changes.push(`name from "${originalItem.name}" to "${data.name}"`);
         if (originalItem.quantity !== data.quantity) changes.push(`quantity from ${originalItem.quantity} to ${data.quantity}`);
-        if (originalItem.price !== data.price) changes.push(`price from $${originalItem.price} to $${data.price}`);
+        if (originalItem.price !== data.price) changes.push(`price from £${originalItem.price} to £${data.price}`);
         if (originalItem.locationCode !== data.locationCode || originalItem.shelfNumber !== data.shelfNumber) {
           changes.push(`location from ${originalItem.locationCode}-${originalItem.shelfNumber} to ${data.locationCode}-${data.shelfNumber}`);
         }
-        if (originalItem.supplier !== data.supplier) changes.push(`supplier from "${originalItem.supplier}" to "${data.supplier}"`);
+        if (originalItem.supplier !== data.supplier && (originalItem.supplier || data.supplier)) {
+          changes.push(`supplier from "${originalItem.supplier || 'none'}" to "${data.supplier || 'none'}"`);
+        }
+        if (originalItem.asin !== data.asin && (originalItem.asin || data.asin)) {
+          changes.push(`ASIN from "${originalItem.asin || 'none'}" to "${data.asin || 'none'}"`);
+        }
+        if (originalItem.fulfillmentType !== data.fulfillmentType) {
+          changes.push(`fulfillment type from "${originalItem.fulfillmentType.toUpperCase()}" to "${data.fulfillmentType.toUpperCase()}"`);
+        }
+        if (originalItem.status !== data.status) {
+          changes.push(`status from "${originalItem.status}" to "${data.status}"`);
+        }
+        if (originalItem.damagedItems !== data.damagedItems) {
+          changes.push(`damaged items from ${originalItem.damagedItems} to ${data.damagedItems}`);
+        }
+        if (originalItem.barcode !== data.barcode && (originalItem.barcode || data.barcode)) {
+          changes.push(`barcode from "${originalItem.barcode || 'none'}" to "${data.barcode || 'none'}"`);
+        }
+        if (originalItem.storeName !== data.storeName) {
+          changes.push(`store name from "${originalItem.storeName}" to "${data.storeName}"`);
+        }
         
         if (changes.length > 0) {
           await addDoc(collection(db, 'activityLogs'), {
@@ -286,17 +346,15 @@ const Stock: React.FC = () => {
     }
   };
 
-  const sortOptions = [
-    { value: 'name', label: 'Name (A-Z)' },
-    { value: 'quantity', label: 'Quantity (High-Low)' },
-    { value: 'price', label: 'Price (High-Low)' },
-    { value: 'date', label: 'Date Updated' }
-  ];
-
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className={`text-2xl font-semibold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Inventory</h1>
+        <div>
+          <h1 className={`text-2xl font-semibold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Inbound</h1>
+          <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} mt-1`}>
+            Manage your inbound stock, track quantities, and monitor product status
+          </p>
+        </div>
         <div className="flex items-center gap-4">
           {isSelectionMode ? (
             <>
@@ -345,7 +403,7 @@ const Stock: React.FC = () => {
             <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 ${isDarkMode ? 'text-slate-400' : 'text-slate-400'}`} size={16} />
             <Input
               type="text"
-              placeholder="Search by name or location (e.g., 'AA - 1')"
+              placeholder="Search by name, location or asin"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"
@@ -389,7 +447,10 @@ const Stock: React.FC = () => {
                 <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Name</th>
                 <th className={`px-4 py-3 text-right text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Quantity</th>
                 <th className={`px-4 py-3 text-right text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Price</th>
+                <th className={`px-4 py-3 text-right text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Total Price</th>
                 <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Location</th>
+                <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>ASIN</th>
+                <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Status</th>
                 <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Last Updated</th>
                 <th className={`px-4 py-3 text-right text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Actions</th>
               </tr>
@@ -421,12 +482,12 @@ const Stock: React.FC = () => {
                   <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-blue-400' : 'text-blue-700'} font-medium`}>{item.name}</td>
                   <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'} text-right`}>
                     <div className="flex items-center justify-end gap-2">
-                      {item.quantity <= item.threshold * 0.4 && (
+                      {item.quantity <= 10 && (
                         <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-red-100 text-red-700">
                           Critical Low
                         </span>
                       )}
-                      {item.quantity > item.threshold * 0.4 && item.quantity <= item.threshold && (
+                      {item.quantity > 10 && item.quantity <= 25 && (
                         <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-yellow-100 text-yellow-700">
                           Low Stock
                         </span>
@@ -434,8 +495,31 @@ const Stock: React.FC = () => {
                       <span>{item.quantity}</span>
                     </div>
                   </td>
-                  <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'} text-right`}>${item.price.toFixed(2)}</td>
+                  <td className={`px-4 py-3 text-right text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>
+                    {Number(item.price) > 0 ? `£${Number(item.price).toFixed(2)}` : '(Not set)'}
+                  </td>
+                  <td className={`px-4 py-3 text-right text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>
+                    {Number(item.quantity * item.price) > 0 ? `£${Number(item.quantity * item.price).toFixed(2)}` : '(Not set)'}
+                  </td>
                   <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{item.locationCode} - {item.shelfNumber}</td>
+                  <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                    {item.asin ? (
+                      item.asin.split(',').length > 3
+                        ? item.asin.split(',').slice(0, 3).map(a => a.trim()).join(', ') + '...'
+                        : item.asin.split(',').map(a => a.trim()).join(', ')
+                    ) : (
+                      '-'
+                    )}
+                  </td>
+                  <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                      item.status === 'active' 
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-yellow-100 text-yellow-700'
+                    }`}>
+                      {item.status === 'active' ? 'Active' : 'Pending'}
+                    </span>
+                  </td>
                   <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
                     {format(new Date(item.lastUpdated), 'MMM d, yyyy')}
                   </td>
@@ -480,23 +564,21 @@ const Stock: React.FC = () => {
       </Modal>
       
       {/* Edit Stock Modal */}
-      {selectedItem && (
-        <Modal
-          isOpen={isEditModalOpen}
-          onClose={() => {
-            setIsEditModalOpen(false);
-            setSelectedItem(null);
-          }}
-          title="Edit Stock Item"
-          size="xl"
-        >
+      <Modal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        title="Edit Stock"
+        size='xl'
+      >
+        {selectedItem && (
           <EditStockForm
             item={selectedItem}
             onSubmit={handleEditStock}
+            onCancel={() => setIsEditModalOpen(false)}
             isLoading={isLoading}
           />
-        </Modal>
-      )}
+        )}
+      </Modal>
       
       {/* Delete Confirmation Modal */}
       {selectedItem && (

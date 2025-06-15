@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Package, AlertTriangle, Plus, AlertCircle, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import { collection, query, getDocs, Timestamp } from 'firebase/firestore';
+import { collection, query, getDocs, Timestamp, where } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { StockItem } from '../../types';
 import StatsCard from '../../components/dashboard/StatsCard';
@@ -39,13 +39,46 @@ const InboundDashboard: React.FC = () => {
 
         setStockItems(items);
 
-        // Filter today's entries
+        // Get today's entries from activity logs
         const today = new Date();
-        const todayItems = items.filter(item => {
-          const itemDate = new Date(item.lastUpdated);
-          return itemDate >= startOfDay(today) && itemDate <= endOfDay(today);
-        });
-        setTodayEntries(todayItems);
+        const startOfToday = startOfDay(today);
+        const endOfToday = endOfDay(today);
+        
+        const logsQuery = query(
+          collection(db, 'activityLogs'),
+          where('time', '>=', startOfToday.toISOString()),
+          where('time', '<=', endOfToday.toISOString())
+        );
+        
+        const logsSnapshot = await getDocs(logsQuery);
+        const todayLogs = logsSnapshot.docs.map(doc => doc.data());
+        
+        // Filter logs for product additions and extract data
+        const todayEntries = todayLogs
+          .filter(log => log.detail.startsWith('added new product'))
+          .map(log => {
+            const match = log.detail.match(/added new product "([^"]+)" with total quantity (\d+) \(([^)]+)\)/);
+            if (match) {
+              const [, name, totalQuantity] = match;
+              // Get the first location for display
+              const firstLocation = match[3].split(', ')[0];
+              const locationMatch = firstLocation.match(/(\d+) at ([A-Z]+)-(\d+)/);
+              if (locationMatch) {
+                return {
+                  id: log.id,
+                  name: name,
+                  quantity: parseInt(totalQuantity),
+                  locationCode: locationMatch[2],
+                  shelfNumber: locationMatch[3],
+                  lastUpdated: new Date(log.time)
+                };
+              }
+            }
+            return null;
+          })
+          .filter((entry): entry is StockItem => entry !== null);
+        
+        setTodayEntries(todayEntries);
 
         // Filter yesterday's entries
         const yesterday = subDays(today, 1);
@@ -55,14 +88,14 @@ const InboundDashboard: React.FC = () => {
         });
         setYesterdayEntries(yesterdayItems);
 
-        // Filter critical low items (less than 50% of threshold)
-        const criticalItems = items.filter(item => item.quantity <= (item.threshold * 0.5));
+        // Filter critical low items (less than or equal to 10)
+        const criticalItems = items.filter(item => item.quantity <= 10);
         setCriticalLowItems(criticalItems);
 
-        // Filter low stock items (less than threshold but more than 50% of threshold)
+        // Filter low stock items (more than 10 but less than or equal to 25)
         const lowItems = items.filter(item => 
-          item.quantity <= item.threshold && 
-          item.quantity > (item.threshold * 0.5)
+          item.quantity > 10 && 
+          item.quantity <= 25
         );
         setLowStockItems(lowItems);
 
@@ -214,9 +247,9 @@ const InboundDashboard: React.FC = () => {
               value={lowStockItems.length}
               icon={<AlertTriangle size={24} className="text-blue-600" />}
               change={{ 
-                value: lowStockItems.filter(item => item.quantity <= (item.threshold * 0.6)).length,
+                value: lowStockItems.length,
                 isPositive: false,
-                label: 'items near critical threshold',
+                label: 'items need attention',
                 customIcon: <AlertTriangle size={16} className="text-orange-500 mr-1" />
               }}
         />

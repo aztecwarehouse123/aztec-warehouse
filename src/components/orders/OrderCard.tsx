@@ -32,7 +32,7 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onClick, editButton }) => 
           <h3 className={`font-medium ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>{order.orderNumber}</h3>
           <div className="flex items-center gap-2">
             {editButton}
-            <StatusBadge status={order.status} />
+          <StatusBadge status={order.status} />
           </div>
         </div>
         
@@ -42,7 +42,7 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onClick, editButton }) => 
           <div className="flex justify-between text-sm">
             <span className={`${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Total Products: {order.items.length}</span>
             <span className={`${isDarkMode ? 'text-slate-200' : 'text-slate-800'} font-medium`}>Total Quantity: {order.items.reduce((sum, item) => sum + item.quantity, 0)}</span>
-          </div>
+            </div>
         </div>
         
         <div className={`pt-2 border-t ${isDarkMode ? 'border-slate-700' : 'border-slate-200'} flex items-center justify-between`}>

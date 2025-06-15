@@ -4,7 +4,7 @@ export type User = {
   email: string;
   name: string;
   role: 'admin' | 'inbound' | 'outbound';
-  password: string;
+  password?: string;
 };
 
 export interface StockItem {
@@ -12,12 +12,16 @@ export interface StockItem {
   name: string;
   quantity: number;
   price: number;
-  supplier: string;
+  supplier: string | null;
   lastUpdated: Date;
   locationCode: string;
   shelfNumber: string;
-  threshold: number; // Minimum quantity threshold for low stock alerts
-  barcode?: string;
+  barcode: string | null;
+  asin: string | null; // Amazon Standard Identification Number
+  status: 'pending' | 'active'; // Status of the stock item
+  damagedItems: number; // Number of damaged items
+  fulfillmentType: 'fba' | 'mf'; // Fulfillment type: FBA (Fulfilled by Amazon) or MF (Merchant Fulfilled)
+  storeName: string; // Store name where the item is from
 }
 
 export type OrderStatus = 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'returned' | 'completed';

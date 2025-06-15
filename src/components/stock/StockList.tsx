@@ -29,6 +29,9 @@ const StockList: React.FC<StockListProps> = ({ items, onItemClick }) => {
               Location
             </th>
             <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+              Status
+            </th>
+            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
               Last Updated
             </th>
           </tr>
@@ -40,8 +43,12 @@ const StockList: React.FC<StockListProps> = ({ items, onItemClick }) => {
               onClick={() => onItemClick?.(item)}
               className="hover:bg-slate-50 cursor-pointer"
             >
-              
-              
+              <td className="px-6 py-4 whitespace-nowrap">
+                <div className="text-sm text-slate-900">{item.name}</div>
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap">
+                <div className="text-sm text-slate-900">{item.supplier}</div>
+              </td>
               <td className="px-6 py-4 whitespace-nowrap">
                 <div className="text-sm text-slate-900">{item.quantity}</div>
               </td>
@@ -50,6 +57,15 @@ const StockList: React.FC<StockListProps> = ({ items, onItemClick }) => {
               </td>
               <td className="px-6 py-4 whitespace-nowrap">
                 <div className="text-sm text-slate-900">{item.locationCode} - {item.shelfNumber}</div>
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap">
+                <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                  item.status === 'active' 
+                    ? 'bg-green-100 text-green-700'
+                    : 'bg-yellow-100 text-yellow-700'
+                }`}>
+                  {item.status === 'active' ? 'Active' : 'Pending'}
+                </span>
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
                 {format(item.lastUpdated, 'MMM d, yyyy')}
