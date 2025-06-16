@@ -98,7 +98,7 @@ const OutboundDashboard2: React.FC = () => {
         item.quantity <= 25
       ).length;
       const totalDeductions = todayLogs.reduce((sum, log) => {
-        const match = log.detail.match(/(\d+) units deducted/);
+        const match = log.detail.match(/(\d+) units deducted from stock/);
         return sum + (match ? parseInt(match[1]) : 0);
       }, 0);
 

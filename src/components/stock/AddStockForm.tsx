@@ -237,7 +237,7 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
             <Button
               type="button"
               onClick={addLocationEntry}
-              variant="outline"
+              variant="primary"
               icon={<Plus size={18} />}
             >
               Add Location
@@ -328,9 +328,9 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
             fullWidth
           />
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-slate-700">Barcode</label>
             <div className="flex gap-2">
               <Input
+                label="Barcode"
                 name="barcode"
                 value={formData.barcode || ''}
                 onChange={handleChange}
@@ -340,7 +340,7 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
               <Button
                 type="button"
                 onClick={handleScan}
-                variant="secondary"
+                variant="primary"
                 icon={<Barcode size={18} />}
                 className="whitespace-nowrap"
               >
@@ -359,10 +359,8 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Store Name
-            </label>
             <Select
+            label="Store Name"
               value={formData.storeName}
               onChange={(e) => {
                 const value = e.target.value;

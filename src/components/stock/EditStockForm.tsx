@@ -85,6 +85,7 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
   isLoading = false 
 }) => {
   const { isDarkMode } = useTheme();
+  const [validationMessage, setValidationMessage] = useState<string | null>(null);
 
   const initialStoreName = item.storeName;
   const isCustomStore = initialStoreName && !predefinedStores.includes(initialStoreName);
@@ -107,6 +108,27 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
+    
+    if (name === 'damagedItems') {
+      const damagedValue = Number(value);
+      const currentQuantity = Number(formData.quantity);
+      
+      if (damagedValue < 0) {
+        setValidationMessage("Damaged items cannot be negative");
+        return;
+      }
+      
+      setValidationMessage(null);
+      
+      // Update both damaged items and quantity
+      setFormData(prev => ({
+        ...prev,
+        damagedItems: value,
+        quantity: (currentQuantity - (damagedValue - Number(prev.damagedItems))).toString()
+      }));
+      return;
+    }
+    
     setFormData(prev => ({
       ...prev,
       [name]: value
@@ -115,6 +137,10 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (validationMessage) {
+      return;
+    }
     
     try {
       const data: StockItem = {
@@ -218,17 +244,22 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
           placeholder="Enter Amazon ASIN"
           fullWidth
         />
-        <Input
-          label="Damaged Items"
-          name="damagedItems"
-          type="number"
-          value={formData.damagedItems}
-          onChange={handleChange}
-          placeholder="Enter number of damaged items"
-          min="0"
-          max={formData.quantity}
-          fullWidth
-        />
+        <div>
+          <Input
+            label="Damaged Items"
+            name="damagedItems"
+            type="number"
+            value={formData.damagedItems}
+            onChange={handleChange}
+            placeholder="Enter number of damaged items"
+            min="0"
+            fullWidth
+            className={validationMessage ? 'border-red-500 focus:border-red-500' : ''}
+          />
+          {validationMessage && (
+            <p className="mt-1 text-sm text-red-500">{validationMessage}</p>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

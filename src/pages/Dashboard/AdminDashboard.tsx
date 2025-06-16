@@ -431,13 +431,13 @@ const AdminDashboard: React.FC = () => {
               value={stats.totalInventoryValue}
               icon={<PoundSterling size={24} className="text-blue-600" />}
               animateValue={true}
-              formatValue={(value) => `£${value.toLocaleString()}`}
+              formatValue={(value) => `£${value.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
               change={{ 
                 value: stats.todayInventoryValueAdditions,
                 isPositive: true,
                 customIcon: <Plus size={16} className="text-green-500 mr-1" />,
                 label: stats.todayInventoryValueAdditions === 0 ? 'no value added today' : 
-                       `£${stats.todayInventoryValueAdditions.toLocaleString()} added today`
+                       `£${stats.todayInventoryValueAdditions.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} added today`
               }}
         />
         <StatsCard 

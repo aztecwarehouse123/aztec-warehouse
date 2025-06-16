@@ -482,59 +482,59 @@ const Settings: React.FC = () => {
           title="Edit User"
           size="md"
         >
-          <div className="space-y-4">
-            <Input
-              label="Username"
-              name="username"
-              value={userEditForm.username}
-              onChange={handleUserEditChange}
-              error={errors.username}
-            />
-            <Input
-              label="Email"
-              name="email"
-              type="email"
-              value={userEditForm.email}
-              onChange={handleUserEditChange}
-              error={errors.email}
-            />
-            <Input
-              label="Name"
-              name="name"
-              value={userEditForm.name}
-              onChange={handleUserEditChange}
-              error={errors.name}
-            />
-            <PasswordInput
-              label="New Password"
-              name="newPassword"
-              value={userEditForm.newPassword}
-              onChange={handleUserEditChange}
-              error={errors.newPassword}
-            />
-            <PasswordInput
-              label="Confirm Password"
-              name="confirmPassword"
-              value={userEditForm.confirmPassword}
-              onChange={handleUserEditChange}
-              error={errors.confirmPassword}
-            />
-          </div>
-          <div className="mt-6 flex justify-end space-x-3">
-            <Button
-              variant="secondary"
-              onClick={() => setEditingUser(null)}
-              disabled={isLoading}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleUpdateUser}
-              disabled={isLoading}
-            >
-              {isLoading ? 'Updating...' : 'Update User'}
-            </Button>
-          </div>
+            <div className="space-y-4">
+              <Input
+                label="Username"
+                name="username"
+                value={userEditForm.username}
+                onChange={handleUserEditChange}
+                error={errors.username}
+              />
+              <Input
+                label="Email"
+                name="email"
+                type="email"
+                value={userEditForm.email}
+                onChange={handleUserEditChange}
+                error={errors.email}
+              />
+              <Input
+                label="Name"
+                name="name"
+                value={userEditForm.name}
+                onChange={handleUserEditChange}
+                error={errors.name}
+              />
+              <PasswordInput
+                label="New Password"
+                name="newPassword"
+                value={userEditForm.newPassword}
+                onChange={handleUserEditChange}
+                error={errors.newPassword}
+              />
+              <PasswordInput
+                label="Confirm Password"
+                name="confirmPassword"
+                value={userEditForm.confirmPassword}
+                onChange={handleUserEditChange}
+                error={errors.confirmPassword}
+              />
+            </div>
+            <div className="mt-6 flex justify-end space-x-3">
+              <Button
+                variant="secondary"
+                onClick={() => setEditingUser(null)}
+                disabled={isLoading}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleUpdateUser}
+                disabled={isLoading}
+              >
+                {isLoading ? 'Updating...' : 'Update User'}
+              </Button>
+            </div>
         </Modal>
       )}
 
@@ -723,10 +723,10 @@ const Settings: React.FC = () => {
                           <Button 
                             variant="ghost" 
                             size="sm" 
-                            onClick={() => handleEditUser(user)}
+                          onClick={() => handleEditUser(user)}
                             className={`${isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'}`}
-                          >
-                            <Edit2 size={16} />
+                        >
+                          <Edit2 size={16} />
                           </Button>
                           <Button 
                             variant="ghost" 

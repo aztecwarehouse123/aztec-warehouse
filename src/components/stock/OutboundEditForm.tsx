@@ -8,7 +8,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 
 interface OutboundEditFormProps {
   item: StockItem;
-  onSubmit: (data: { id: string; quantity: number; reason: string }) => Promise<void>;
+  onSubmit: (data: { id: string; quantity: number; reason: string; storeName: string }) => Promise<void>;
   isLoading: boolean;
 }
 
@@ -16,13 +16,19 @@ const OutboundEditForm: React.FC<OutboundEditFormProps> = ({ item, onSubmit, isL
   const [deductQuantity, setDeductQuantity] = useState<number>(0);
   const [reason, setReason] = useState<string>('');
   const [otherReason, setOtherReason] = useState<string>('');
+  const [storeName, setStoreName] = useState<string>(item.storeName || '');
   const { isDarkMode } = useTheme();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (deductQuantity <= 0 || deductQuantity > item.quantity) return;
     const finalReason = reason === 'other' ? otherReason : reason;
-    await onSubmit({ id: item.id, quantity: item.quantity - deductQuantity, reason: finalReason });
+    await onSubmit({ 
+      id: item.id, 
+      quantity: item.quantity - deductQuantity, 
+      reason: finalReason,
+      storeName: storeName.trim()
+    });
   };
 
   const getValidationMessage = () => {
@@ -37,6 +43,9 @@ const OutboundEditForm: React.FC<OutboundEditFormProps> = ({ item, onSubmit, isL
     }
     if (reason === 'other' && !otherReason.trim()) {
       return "Please specify the reason";
+    }
+    if (!storeName.trim()) {
+      return "Please enter the store name";
     }
     return null;
   };
@@ -124,6 +133,26 @@ const OutboundEditForm: React.FC<OutboundEditFormProps> = ({ item, onSubmit, isL
             />
           </div>
         )}
+
+        <div className="space-y-2">
+          <label 
+            htmlFor="storeName" 
+            className={`block text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}
+          >
+            Store Name
+          </label>
+          <Input
+            id="storeName"
+            type="text"
+            value={storeName}
+            onChange={(e) => setStoreName(e.target.value)}
+            placeholder="Enter store name"
+            required
+            className={`${isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-300 text-gray-900'} ${
+              validationMessage ? 'border-red-500 focus:border-red-500' : ''
+            }`}
+          />
+        </div>
 
           {validationMessage ? (
             <div className={`flex items-center space-x-2 text-sm ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>

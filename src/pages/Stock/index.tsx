@@ -79,8 +79,11 @@ const Stock: React.FC = () => {
     const matchesAsin = item.asin ? item.asin.split(',').some(asin => 
       asin.trim().toLowerCase().includes(searchLower)
     ) : false;
+
+    // Handle barcode search
+    const matchesBarcode = item.barcode ? item.barcode.toLowerCase().includes(searchLower) : false;
     
-    return matchesName || matchesLocation || matchesAsin;
+    return matchesName || matchesLocation || matchesAsin || matchesBarcode;
   }).sort((a, b) => {
     if (sortBy === 'name') {
       return a.name.localeCompare(b.name);
@@ -403,7 +406,7 @@ const Stock: React.FC = () => {
             <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 ${isDarkMode ? 'text-slate-400' : 'text-slate-400'}`} size={16} />
             <Input
               type="text"
-              placeholder="Search by name, location or asin"
+              placeholder="Search by name, location, ASIN or barcode"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"
@@ -445,12 +448,12 @@ const Stock: React.FC = () => {
                   </th>
                 )}
                 <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Name</th>
-                <th className={`px-4 py-3 text-right text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Quantity</th>
-                <th className={`px-4 py-3 text-right text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Price</th>
-                <th className={`px-4 py-3 text-right text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Total Price</th>
+                <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Status</th>
                 <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Location</th>
                 <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>ASIN</th>
-                <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Status</th>
+                <th className={`px-4 py-3 text-right text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Price</th>
+                <th className={`px-4 py-3 text-right text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Quantity</th>
+                <th className={`px-4 py-3 text-right text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Total Price</th>
                 <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Last Updated</th>
                 <th className={`px-4 py-3 text-right text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Actions</th>
               </tr>
@@ -480,6 +483,29 @@ const Stock: React.FC = () => {
                     </td>
                   )}
                   <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-blue-400' : 'text-blue-700'} font-medium`}>{item.name}</td>
+                  
+                  <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                      item.status === 'active' 
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-yellow-100 text-yellow-700'
+                    }`}>
+                      {item.status === 'active' ? 'Active' : 'Pending'}
+                    </span>
+                  </td>
+                  <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{item.locationCode} - {item.shelfNumber}</td>
+                  <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                    {item.asin ? (
+                      item.asin.split(',').length > 3
+                        ? item.asin.split(',').slice(0, 3).map(a => a.trim()).join(', ') + '...'
+                        : item.asin.split(',').map(a => a.trim()).join(', ')
+                    ) : (
+                      '-'
+                    )}
+                  </td>
+                  <td className={`px-4 py-3 text-right text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>
+                    {Number(item.price) > 0 ? `£${Number(item.price).toFixed(2)}` : '(Not set)'}
+                  </td>
                   <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'} text-right`}>
                     <div className="flex items-center justify-end gap-2">
                       {item.quantity <= 10 && (
@@ -496,30 +522,10 @@ const Stock: React.FC = () => {
                     </div>
                   </td>
                   <td className={`px-4 py-3 text-right text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>
-                    {Number(item.price) > 0 ? `£${Number(item.price).toFixed(2)}` : '(Not set)'}
-                  </td>
-                  <td className={`px-4 py-3 text-right text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>
                     {Number(item.quantity * item.price) > 0 ? `£${Number(item.quantity * item.price).toFixed(2)}` : '(Not set)'}
                   </td>
-                  <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{item.locationCode} - {item.shelfNumber}</td>
-                  <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
-                    {item.asin ? (
-                      item.asin.split(',').length > 3
-                        ? item.asin.split(',').slice(0, 3).map(a => a.trim()).join(', ') + '...'
-                        : item.asin.split(',').map(a => a.trim()).join(', ')
-                    ) : (
-                      '-'
-                    )}
-                  </td>
-                  <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                      item.status === 'active' 
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-yellow-100 text-yellow-700'
-                    }`}>
-                      {item.status === 'active' ? 'Active' : 'Pending'}
-                    </span>
-                  </td>
+                  
+                  
                   <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
                     {format(new Date(item.lastUpdated), 'MMM d, yyyy')}
                   </td>

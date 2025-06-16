@@ -14,6 +14,8 @@ interface StockLocation {
   locationCode: string;
   shelfNumber: string;
   lastUpdated: Date;
+  asin?: string;
+  barcode?: string;
 }
 
 interface LocationSummary {
@@ -44,7 +46,9 @@ const WarehouseLocations: React.FC = () => {
           quantity: data.quantity || 0,
           locationCode: data.locationCode || '',
           shelfNumber: data.shelfNumber || '',
-          lastUpdated: data.lastUpdated instanceof Timestamp ? data.lastUpdated.toDate() : new Date()
+          lastUpdated: data.lastUpdated instanceof Timestamp ? data.lastUpdated.toDate() : new Date(),
+          asin: data.asin || undefined,
+          barcode: data.barcode || undefined
         } as StockLocation;
       });
       setLocations(locationsData);
@@ -77,7 +81,11 @@ const WarehouseLocations: React.FC = () => {
     .filter(summary => {
       const searchLower = searchQuery.toLowerCase();
       const matchesLocationCode = summary.locationCode.toLowerCase().includes(searchLower);
-      const matchesProductName = summary.products.some(product => product.name.toLowerCase().includes(searchLower));
+      const matchesProductName = summary.products.some(product => 
+        product.name.toLowerCase().includes(searchLower) ||
+        (product.asin && product.asin.split(',').some(asin => asin.trim().toLowerCase().includes(searchLower))) ||
+        (product.barcode && product.barcode.toLowerCase().includes(searchLower))
+      );
       return matchesLocationCode || matchesProductName;
     })
     .sort((a, b) => {
@@ -112,7 +120,7 @@ const WarehouseLocations: React.FC = () => {
         <div className="flex-1">
           <Input
             type="text"
-            placeholder="Search by location or product..."
+            placeholder="Search by location, product name, ASIN or barcode..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             icon={<Search size={16} />}
@@ -185,12 +193,26 @@ const WarehouseLocations: React.FC = () => {
                     <div className="space-y-4">
                       {summary.products.map(location => {
                         const percentageOfTotal = summary.totalStock === 0 ? 0 : (location.quantity / summary.totalStock) * 100;
+                        const searchLower = searchQuery.toLowerCase();
+                        const isMatch = 
+                          location.name.toLowerCase().includes(searchLower) ||
+                          (location.asin && location.asin.split(',').some(asin => asin.trim().toLowerCase().includes(searchLower))) ||
+                          (location.barcode && location.barcode.toLowerCase().includes(searchLower));
 
                         return (
-                          <div key={location.id} className="space-y-2">
+                          <div 
+                            key={location.id} 
+                            className={`space-y-2 p-2 rounded-md transition-colors ${
+                              isMatch 
+                                ? isDarkMode 
+                                  ? 'bg-blue-900/30 border border-blue-500/50' 
+                                  : 'bg-blue-50 border border-blue-200'
+                                : ''
+                            }`}
+                          >
                             <div className="flex justify-between items-start">
                               <div>
-                                <h4 className={`font-medium ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
+                                <h4 className={`font-medium ${isMatch ? 'text-blue-600' : isDarkMode ? 'text-white' : 'text-slate-800'}`}>
                                   {location.name}
                                 </h4>
                                 <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
