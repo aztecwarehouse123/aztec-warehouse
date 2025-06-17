@@ -3,6 +3,7 @@ import { StockItem } from '../../types';
 import Modal from './Modal';
 import { format } from 'date-fns';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface StockDetailsModalProps {
   isOpen: boolean;
@@ -16,6 +17,7 @@ const StockDetailsModal: React.FC<StockDetailsModalProps> = ({
   item,
 }) => {
   const { isDarkMode } = useTheme();
+  const { user } = useAuth();
   
   if (!item) return null;
   
@@ -53,12 +55,14 @@ const StockDetailsModal: React.FC<StockDetailsModalProps> = ({
                 <p className={`font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{item.quantity}</p>
               </div>
               
-              <div>
-                <h3 className={`text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'}`}>Price</h3>
-                <p className={`mt-1 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>
-                  {Number(item.price) > 0 ? `£${Number(item.price).toFixed(2)}` : 'Not set yet'}
-                </p>
-              </div>
+              {user?.role === 'admin' && (
+                <div>
+                  <h3 className={`text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'}`}>Price</h3>
+                  <p className={`mt-1 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>
+                    {Number(item.price) > 0 ? `£${Number(item.price).toFixed(2)}` : 'Not set yet'}
+                  </p>
+                </div>
+              )}
               
               <div>
                 <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Supplier</p>

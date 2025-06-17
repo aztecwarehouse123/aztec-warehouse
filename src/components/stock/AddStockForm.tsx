@@ -5,6 +5,9 @@ import Button from '../ui/Button';
 import Select from '../ui/Select';
 import { StockItem } from '../../types';
 import BarcodeScanModal from '../modals/BarcodeScanModal';
+import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
+
 
 interface AddStockFormProps {
   onSubmit: (data: Omit<StockItem, 'id'>[]) => Promise<void>;
@@ -80,6 +83,7 @@ const shelfOptions = Array.from({ length: 6 }, (_, i) => ({
 }));
 
 const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false }) => {
+  const { user } = useAuth();
   const [formData, setFormData] = useState<FormData>({
     name: '',
     price: '',
@@ -99,6 +103,7 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
   const [isScanModalOpen, setIsScanModalOpen] = useState(false);
   const [showOtherStoreInput, setShowOtherStoreInput] = useState(false);
   const [otherStoreName, setOtherStoreName] = useState('');
+  const { isDarkMode } = useTheme();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -169,7 +174,7 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
         const stockData = locationEntries.map(entry => ({
           name: formData.name,
           quantity: parseInt(entry.quantity),
-          price: parseFloat(formData.price),
+          price: user?.role === 'admin' ? parseFloat(formData.price) : 0,
           supplier: formData.supplier || null,
           locationCode: entry.locationCode,
           shelfNumber: entry.shelfNumber,
@@ -216,17 +221,19 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Input
-            label="Price"
-            name="price"
-            type="number"
-            value={formData.price}
-            onChange={handleChange}
-            placeholder="Enter price"
-            min="0"
-            step="0.01"
-            fullWidth
-          />
+          {user?.role === 'admin' && (
+            <Input
+              label="Price"
+              name="price"
+              type="number"
+              value={formData.price}
+              onChange={handleChange}
+              placeholder="Enter price"
+              min="0"
+              step="0.01"
+              fullWidth
+            />
+          )}
         </div>
 
         
@@ -299,23 +306,31 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
             options={[
               { value: 'fba', label: 'FBA' },
               { value: 'mf', label: 'MF' }
-              
             ]}
             fullWidth
           />
-          <Select
-            label="Status"
-            name="status"
-            value={formData.status}
-            onChange={handleChange}
-            options={[
-              { value: 'pending', label: 'Pending' },
-              { value: 'active', label: 'Active' }
-            ]}
-            fullWidth
-            required
-          />
-          
+          {user?.role === 'admin' ? (
+            <Select
+              label="Status"
+              name="status"
+              value={formData.status}
+              onChange={handleChange}
+              options={[
+                { value: 'pending', label: 'Pending' },
+                { value: 'active', label: 'Active' }
+              ]}
+              fullWidth
+              required
+            />
+          ) : (
+            <Input
+              label="Status"
+              name="status"
+              value="pending"
+              disabled
+              fullWidth
+            />
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -337,15 +352,7 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
                 placeholder="Enter barcode manually"
                 fullWidth
               />
-              <Button
-                type="button"
-                onClick={handleScan}
-                variant="primary"
-                icon={<Barcode size={18} />}
-                className="whitespace-nowrap"
-              >
-                Scan
-              </Button>
+              
             </div>
             {formData.barcode && (
               <div className="flex items-center gap-1 text-green-600 text-sm">
@@ -374,13 +381,14 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
                 { value: 'supply & serve', label: 'Supply & Serve' },
                 { value: 'APHY', label: 'APHY' },
                 { value: 'AZTEC', label: 'AZTEC' },
+                { value: 'ZK', label: 'ZK' },
                 { value: 'other', label: 'Other' }
               ]}
             />
           </div>
           {showOtherStoreInput && (
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
+              <label className={`block text-sm font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-700'} mb-1`}>
                 Other Store Name
               </label>
               <Input
@@ -403,6 +411,15 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
             >
               Add Product
             </Button>
+            <Button
+                type="button"
+                onClick={handleScan}
+                variant="primary"
+                icon={<Barcode size={18} />}
+                className="whitespace-nowrap"
+              >
+                Scan
+              </Button>
           </div>
         </div>
       </form>

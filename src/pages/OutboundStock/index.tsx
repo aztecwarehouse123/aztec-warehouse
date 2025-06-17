@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Edit2, Loader2 } from 'lucide-react';
+import { Search, Edit2, Loader2, RefreshCw } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
@@ -11,7 +11,7 @@ import { useToast } from '../../contexts/ToastContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../config/firebase';
-import { collection, addDoc, getDocs, doc, updateDoc, query, orderBy, Timestamp, getDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, updateDoc, query, orderBy, Timestamp, getDoc} from 'firebase/firestore';
 import { format } from 'date-fns';
 
 const OutboundStock: React.FC = () => {
@@ -103,19 +103,20 @@ const OutboundStock: React.FC = () => {
       const newDamagedItems = data.reason === 'damaged' 
         ? originalItem.damagedItems + (originalItem.quantity - data.quantity)
         : originalItem.damagedItems;
+        const now = new Date();
 
       // Update stock
       await updateDoc(stockRef, {
         quantity: data.quantity,
         damagedItems: newDamagedItems,
-        lastUpdated: serverTimestamp()
+        lastUpdated: Timestamp.fromDate(now)
       });
 
       // Add activity log
       await addDoc(collection(db, 'activityLogs'), {
         
         detail: `${originalItem.quantity - data.quantity} units deducted from stock "${originalItem.name}" (Reason: ${data.reason}, Store: ${data.storeName}) by ${user.role}`,
-        timestamp: serverTimestamp(),
+        time: new Date().toISOString(),
         user: user.name,
         role: user.role
       });
@@ -165,6 +166,7 @@ const OutboundStock: React.FC = () => {
             Manage and track inventory deductions
           </p>
         </div>
+        
       </div>
 
       {/* Search and Filter Bar */}
@@ -190,6 +192,15 @@ const OutboundStock: React.FC = () => {
             ]}
           />
         </div>
+        <Button
+            variant="secondary"
+            onClick={fetchStockItems}
+            className={`flex items-center gap-2 ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+            disabled={isLoading}
+          >
+            <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
+            
+          </Button>
       </div>
 
       {/* Table View */}
@@ -203,7 +214,9 @@ const OutboundStock: React.FC = () => {
                 <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Location</th>
                 <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>ASIN</th>
                 <th className={`px-4 py-3 text-right text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Quantity</th>
-                <th className={`px-4 py-3 text-right text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Price</th>
+                {user?.role === 'admin' && (
+                  <th className={`px-4 py-3 text-right text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Price</th>
+                )}
                 <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Last Updated</th>
                 <th className={`px-4 py-3 text-right text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Actions</th>
               </tr>
@@ -211,7 +224,7 @@ const OutboundStock: React.FC = () => {
             <tbody className={`divide-y ${isDarkMode ? 'divide-slate-700' : 'divide-slate-200'}`}>
               {isLoading ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-4 text-center">
+                  <td colSpan={8} className="px-6 py-4 text-center">
                     <div className="flex justify-center items-center">
                       <Loader2 className="animate-spin h-5 w-5 text-blue-500" />
                     </div>
@@ -219,7 +232,7 @@ const OutboundStock: React.FC = () => {
                 </tr>
               ) : filteredItems.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className={`px-6 py-4 text-center ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                  <td colSpan={8} className={`px-6 py-4 text-center ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                     No items found
                   </td>
                 </tr>
@@ -265,9 +278,11 @@ const OutboundStock: React.FC = () => {
                         <span>{item.quantity}</span>
                       </div>
                     </td>
-                    <td className={`px-4 py-3 text-right text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>
-                      {Number(item.price) > 0 ? `£${Number(item.price).toFixed(2)}` : '(Not set)'}
-                    </td>
+                    {user?.role === 'admin' && (
+                      <td className={`px-4 py-3 text-right text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>
+                        {Number(item.price) > 0 ? `£${Number(item.price).toFixed(2)}` : '(Not set)'}
+                      </td>
+                    )}
                     <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
                       {format(new Date(item.lastUpdated), 'MMM d, yyyy')}
                     </td>

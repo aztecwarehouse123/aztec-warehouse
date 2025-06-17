@@ -265,10 +265,10 @@ const Settings: React.FC = () => {
 
       // Log the activity
       await addDoc(collection(db, 'activityLogs'), {
-        userId: user?.id,
-        action: 'update_user',
-        details: `Updated user ${editingUser.username}`,
-        timestamp: new Date()
+        user: user?.name,
+        role: user?.role,
+        detail: `updated user "${editingUser.name}" (username: ${userEditForm.username})`,
+        time: new Date().toISOString()
       });
 
       // Update local state
@@ -353,7 +353,8 @@ const Settings: React.FC = () => {
         return;
       }
       
-      if (existingUsers.some(u => u.email === addUserFormData.email)) {
+      // Only check if email exists if an email is provided
+      if (addUserFormData.email.trim() && existingUsers.some(u => u.email === addUserFormData.email)) {
         setAddUserErrors({ email: 'Email already exists' });
         return;
       }

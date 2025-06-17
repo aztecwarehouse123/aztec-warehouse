@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../config/firebase';
 import { collection, getDocs, query, orderBy, where } from 'firebase/firestore';
-import {  Download } from 'lucide-react';
+import {  Download, RefreshCw } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import { format, startOfDay, endOfDay, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import Select from '../../components/ui/Select';
@@ -9,6 +9,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useTheme } from '../../contexts/ThemeContext';
 import { motion, AnimatePresence } from 'framer-motion';
+import Button from '../../components/ui/Button';
 
 
 interface ActivityLog {
@@ -27,6 +28,7 @@ const WarehouseOperations: React.FC = () => {
   const [roleFilter, setRoleFilter] = useState('all');
   const { showToast } = useToast();
   const { isDarkMode } = useTheme();
+  const [isLoading, setIsLoading] = useState(false);
 
   // Fetch activity logs
   const fetchActivityLogs = async () => {
@@ -70,7 +72,10 @@ const WarehouseOperations: React.FC = () => {
       const snapshot = await getDocs(logsQuery);
       let logs = snapshot.docs.map(doc => ({
         id: doc.id,
-        ...doc.data()
+        user: doc.data().user,
+        role: doc.data().role,
+        detail:  doc.data().detail,
+        time: doc.data().time,
       })) as ActivityLog[];
 
       // Apply role filter
@@ -118,7 +123,7 @@ const WarehouseOperations: React.FC = () => {
         ...activityLogs.map(log => [
           log.user,
           log.role,
-          `"${log.detail.replace(/"/g, '""')}"`, // Escape quotes in detail
+          `"${log.detail.replace(/"/g, '""')}"`,
           format(new Date(log.time), 'MMM d, yyyy h:mm a')
         ].join(','))
       ].join('\n');
@@ -217,6 +222,15 @@ const WarehouseOperations: React.FC = () => {
               options={dateFilterOptions}
               className="w-40"
             />
+            <Button
+            variant="secondary"
+            onClick={fetchActivityLogs}
+            className={`flex items-center gap-2 ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+            disabled={isLoading}
+          >
+            <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
+            
+          </Button>
           </div>
         </div>
 

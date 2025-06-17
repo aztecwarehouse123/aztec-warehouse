@@ -5,6 +5,7 @@ import Input from '../ui/Input';
 import Select from '../ui/Select';
 import { StockItem } from '../../types';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface FormData {
   name: string;
@@ -77,14 +78,16 @@ const shelfOptions = Array.from({ length: 6 }, (_, i) => ({
   label: `${i + 1}`
 }));
 
-const predefinedStores = ['supply & serve', 'APHY', 'AZTEC'];
+const predefinedStores = ['supply & serve', 'APHY', 'AZTEC', 'ZK'];
 
 const EditStockForm: React.FC<EditStockFormProps> = ({ 
   item, 
   onSubmit, 
+  onCancel, 
   isLoading = false 
 }) => {
   const { isDarkMode } = useTheme();
+  const { user } = useAuth();
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
 
   const initialStoreName = item.storeName;
@@ -138,30 +141,52 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (validationMessage) {
-      return;
-    }
-    
-    try {
-      const data: StockItem = {
-        ...item,
-        name: formData.name,
-        quantity: Number(formData.quantity),
-        price: Number(formData.price) || 0,
-        supplier: formData.supplier || null,
-        locationCode: formData.locationCode,
-        shelfNumber: formData.shelfNumber,
-        asin: formData.asin || null,
-        status: formData.status,
-        damagedItems: Number(formData.damagedItems),
-        fulfillmentType: formData.fulfillmentType,
-        storeName: formData.storeName === 'other' ? otherStoreName : formData.storeName
-      };
+    if (validate()) {
+      try {
+        const data: StockItem = {
+          id: item.id,
+          name: formData.name,
+          quantity: parseInt(formData.quantity),
+          price: user?.role === 'admin' ? parseFloat(formData.price) : item.price,
+          supplier: formData.supplier || null,
+          locationCode: formData.locationCode,
+          shelfNumber: formData.shelfNumber,
+          asin: formData.asin || null,
+          status: user?.role === 'admin' ? formData.status : 'pending',
+          damagedItems: parseInt(formData.damagedItems),
+          fulfillmentType: formData.fulfillmentType,
+          lastUpdated: new Date(),
+          storeName: formData.storeName === 'other' ? otherStoreName : formData.storeName,
+          barcode: item.barcode
+        };
 
-      await onSubmit(data);
-    } catch (error) {
-      console.error('Error updating stock:', error);
+        await onSubmit(data);
+      } catch (error) {
+        console.error('Error updating stock:', error);
+        setValidationMessage('Failed to update stock. Please try again.');
+      }
     }
+  };
+
+  const validate = () => {
+    if (!formData.name.trim()) {
+      setValidationMessage('Product name is required');
+      return false;
+    }
+    if (!formData.quantity || parseInt(formData.quantity) < 0) {
+      setValidationMessage('Quantity must be a positive number');
+      return false;
+    }
+    if (user?.role === 'admin' && (!formData.price || parseFloat(formData.price) < 0)) {
+      setValidationMessage('Price must be a positive number');
+      return false;
+    }
+    if (!formData.locationCode || !formData.shelfNumber) {
+      setValidationMessage('Location and shelf number are required');
+      return false;
+    }
+    setValidationMessage(null);
+    return true;
   };
 
   return (
@@ -200,17 +225,19 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
           fullWidth
         />
         
-        <Input
-          label="Price"
-          name="price"
-          type="number"
-          value={formData.price}
-          onChange={handleChange}
-          placeholder="Enter price"
-          min="0"
-          step="0.01"
-          fullWidth
-        />
+        {user?.role === 'admin' && (
+          <Input
+            label="Price"
+            name="price"
+            type="number"
+            value={formData.price}
+            onChange={handleChange}
+            placeholder="Enter price"
+            min="0"
+            step="0.01"
+            fullWidth
+          />
+        )}
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -264,30 +291,38 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Select
-          label="Status"
-          name="status"
-          value={formData.status}
-          onChange={handleChange}
-          options={[
-            { value: 'pending', label: 'Pending' },
-            { value: 'active', label: 'Active' }
-          ]}
-          fullWidth
-        />
-
-        <Select
           label="Fulfillment Type"
           name="fulfillmentType"
           value={formData.fulfillmentType}
           onChange={handleChange}
           options={[
-            { value: 'fba', label: 'Fba' },
-            { value: 'mf', label: 'Mf' }
+            { value: 'fba', label: 'FBA' },
+            { value: 'mf', label: 'MF' }
           ]}
           fullWidth
         />
-
-        
+        {user?.role === 'admin' ? (
+          <Select
+            label="Status"
+            name="status"
+            value={formData.status}
+            onChange={handleChange}
+            options={[
+              { value: 'pending', label: 'Pending' },
+              { value: 'active', label: 'Active' }
+            ]}
+            fullWidth
+            required
+          />
+        ) : (
+          <Input
+            label="Status"
+            name="status"
+            value="pending"
+            disabled
+            fullWidth
+          />
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -309,6 +344,7 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
               { value: 'supply & serve', label: 'Supply & Serve' },
               { value: 'APHY', label: 'APHY' },
               { value: 'AZTEC', label: 'AZTEC' },
+              { value: 'ZK', label: 'ZK' },
               { value: 'other', label: 'Other' }
             ]}
           />

@@ -142,6 +142,16 @@ const WarehouseLocations: React.FC = () => {
         <div className="flex justify-center items-center h-64">
           <div className={`animate-spin rounded-full h-8 w-8 border-b-2 ${isDarkMode ? 'border-white' : 'border-slate-800'}`}></div>
         </div>
+      ) : filteredAndSortedSummaries.length === 0 ? (
+        <div className="flex flex-col items-center justify-center h-64 space-y-4">
+          <Package className={`w-12 h-12 ${isDarkMode ? 'text-slate-600' : 'text-slate-400'}`} />
+          <p className={`text-lg font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+            No products found in any location
+          </p>
+          <p className={`text-sm ${isDarkMode ? 'text-slate-500' : 'text-slate-500'}`}>
+            Add products to locations to see them here
+          </p>
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {Object.values(filteredAndSortedSummaries).map(summary => {

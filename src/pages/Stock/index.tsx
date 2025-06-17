@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Edit2, Trash2, Loader2, CheckSquare } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Loader2, CheckSquare, RefreshCw } from 'lucide-react';
 import { motion } from 'framer-motion';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
@@ -182,7 +182,11 @@ const Stock: React.FC = () => {
         const changes = [];
         if (originalItem.name !== data.name) changes.push(`name from "${originalItem.name}" to "${data.name}"`);
         if (originalItem.quantity !== data.quantity) changes.push(`quantity from ${originalItem.quantity} to ${data.quantity}`);
-        if (originalItem.price !== data.price) changes.push(`price from £${originalItem.price} to £${data.price}`);
+        if (originalItem.price !== data.price) {
+          const oldPrice = Number(originalItem.price || 0).toFixed(2);
+          const newPrice = Number(data.price || 0).toFixed(2);
+          changes.push(`price from £${oldPrice} to £${newPrice}`);
+        }
         if (originalItem.locationCode !== data.locationCode || originalItem.shelfNumber !== data.shelfNumber) {
           changes.push(`location from ${originalItem.locationCode}-${originalItem.shelfNumber} to ${data.locationCode}-${data.shelfNumber}`);
         }
@@ -351,14 +355,17 @@ const Stock: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className={`text-2xl font-semibold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Inbound</h1>
+          <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+            Inbound
+          </h1>
           <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} mt-1`}>
             Manage your inbound stock, track quantities, and monitor product status
           </p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
+          
           {isSelectionMode ? (
             <>
               <Button
@@ -389,6 +396,7 @@ const Stock: React.FC = () => {
                 Select Items
               </Button>
               <Button
+                variant="primary"
                 onClick={() => setIsAddModalOpen(true)}
                 className="flex items-center gap-2"
               >
@@ -420,6 +428,15 @@ const Stock: React.FC = () => {
             options={sortOptions}
           />
         </div>
+        <Button
+            variant="secondary"
+            onClick={fetchStockItems}
+            className={`flex items-center gap-2 ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+            disabled={isLoading}
+          >
+            <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
+           
+          </Button>
       </div>
 
       {isLoading ? (
@@ -451,9 +468,13 @@ const Stock: React.FC = () => {
                 <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Status</th>
                 <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Location</th>
                 <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>ASIN</th>
-                <th className={`px-4 py-3 text-right text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Price</th>
+                {user?.role === 'admin' && (
+                  <>
+                    <th className={`px-4 py-3 text-right text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Price</th>
+                    <th className={`px-4 py-3 text-right text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Total Price</th>
+                  </>
+                )}
                 <th className={`px-4 py-3 text-right text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Quantity</th>
-                <th className={`px-4 py-3 text-right text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Total Price</th>
                 <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Last Updated</th>
                 <th className={`px-4 py-3 text-right text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Actions</th>
               </tr>
@@ -503,9 +524,16 @@ const Stock: React.FC = () => {
                       '-'
                     )}
                   </td>
-                  <td className={`px-4 py-3 text-right text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>
-                    {Number(item.price) > 0 ? `£${Number(item.price).toFixed(2)}` : '(Not set)'}
-                  </td>
+                  {user?.role === 'admin' && (
+                    <>
+                      <td className={`px-4 py-3 text-right text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>
+                        {Number(item.price) > 0 ? `£${Number(item.price).toFixed(2)}` : '(Not set)'}
+                      </td>
+                      <td className={`px-4 py-3 text-right text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>
+                        {Number(item.quantity * item.price) > 0 ? `£${Number(item.quantity * item.price).toFixed(2)}` : '(Not set)'}
+                      </td>
+                    </>
+                  )}
                   <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'} text-right`}>
                     <div className="flex items-center justify-end gap-2">
                       {item.quantity <= 10 && (
@@ -521,11 +549,6 @@ const Stock: React.FC = () => {
                       <span>{item.quantity}</span>
                     </div>
                   </td>
-                  <td className={`px-4 py-3 text-right text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>
-                    {Number(item.quantity * item.price) > 0 ? `£${Number(item.quantity * item.price).toFixed(2)}` : '(Not set)'}
-                  </td>
-                  
-                  
                   <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
                     {format(new Date(item.lastUpdated), 'MMM d, yyyy')}
                   </td>

@@ -437,7 +437,7 @@ const AdminDashboard: React.FC = () => {
                 isPositive: true,
                 customIcon: <Plus size={16} className="text-green-500 mr-1" />,
                 label: stats.todayInventoryValueAdditions === 0 ? 'no value added today' : 
-                       `£${stats.todayInventoryValueAdditions.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} added today`
+                       `£ added today`
               }}
         />
         <StatsCard 

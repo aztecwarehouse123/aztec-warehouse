@@ -82,7 +82,7 @@ export type StockCategory = 'electronics' | 'clothing' | 'furniture' | 'food' | 
 export type ActivityLog = {
   id: string;
   user: string;
-  action: string;
-  timestamp: Date;
-  details: string;
+  role: string;
+  detail: string;
+  time: string;
 };
