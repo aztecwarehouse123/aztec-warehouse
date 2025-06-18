@@ -11,6 +11,7 @@ import Settings from './pages/Settings';
 import { useAuth } from './contexts/AuthContext';
 import OutboundStock from './pages/OutboundStock';
 import WarehouseLocations from './pages/WarehouseLocations';
+import Add from './pages/Add';
 
 const ProtectedRoute: React.FC<{
   children: React.ReactNode;
@@ -73,6 +74,11 @@ function App() {
         <Route path="settings" element={
           <ProtectedRoute allowedRoles={['admin', 'inbound', 'outbound']}>
             <Settings />
+          </ProtectedRoute>
+        } />
+        <Route path="add" element={
+          <ProtectedRoute allowedRoles={['admin','inbound']}>
+            <Add />
           </ProtectedRoute>
         } />
       </Route>

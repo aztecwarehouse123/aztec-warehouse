@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Package, ShoppingCart, LogOut, Menu, X, BarChart, Settings, MapPin, Activity } from 'lucide-react';
+import { LayoutDashboard, Package, ShoppingCart, LogOut, Menu, X, BarChart, Settings, MapPin, Activity, Plus } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -38,6 +38,7 @@ const Navbar: React.FC = () => {
 
   const allNavItems = [
     { to: "/", icon: <LayoutDashboard size={20} />, label: "Dashboard", roles: ['admin', 'inbound','outbound'] },
+    { to: "/add", icon: <Plus size={20} />, label: "Add", roles: ['admin', 'inbound'] },
     { to: "/stock", icon: <Package size={20} />, label: "Inbound", roles: ['admin', 'inbound'] },
     { to: "/outbound-stock", icon: <Package size={20} />, label: "Outbound", roles: ['admin', 'outbound'] },
     { to: "/warehouse-locations", icon: <MapPin size={20} />, label: "Locations", roles: ['admin'] },
@@ -45,6 +46,7 @@ const Navbar: React.FC = () => {
     { to: "/reports-analytics", icon: <BarChart size={20} />, label: "Reports", roles: [''] },
     { to: "/warehouse-operations", icon: <Activity size={20} />, label: "Logs", roles: ['admin'] },
     { to: "/settings", icon: <Settings size={20} />, label: "Settings", roles: ['admin', 'inbound', 'outbound'] },
+    
   ];
 
   const navItems = user ? allNavItems.filter(item => item.roles.includes(user.role)) : [];

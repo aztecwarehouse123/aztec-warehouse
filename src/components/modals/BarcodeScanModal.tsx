@@ -23,7 +23,7 @@ const BarcodeScanModal: React.FC<BarcodeScanModalProps> = ({
       const currentTime = Date.now();
       
       // If more than 100ms has passed since the last keypress, reset the buffer
-      if (currentTime - lastKeyTime > 100) {
+      if (currentTime - lastKeyTime > 2000) {
         barcodeBuffer = '';
       }
       
