@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Loader2, RefreshCw, Edit2, Trash2 } from 'lucide-react';
+import { Plus, Loader2, RefreshCw, Edit2, Trash2, Barcode } from 'lucide-react';
 import { motion } from 'framer-motion';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
@@ -15,7 +15,7 @@ import Select from '../../components/ui/Select';
 interface ScannedProduct {
   id: string;
   name: string;
-  dimensions: { length: string; width: string; height: string };
+  dimensions: { length: string; width: string; height: string; unit?: string };
   weight: string;
   barcode: string;
   createdAt: Date;
@@ -27,7 +27,7 @@ const Add: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [products, setProducts] = useState<ScannedProduct[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [form, setForm] = useState({ name: '', length: '', width: '', height: '', weight: '', barcode: '' });
+  const [form, setForm] = useState({ name: '', length: '', width: '', height: '', weight: '', barcode: '', unit: 'cm' });
   const [error, setError] = useState<string | null>(null);
   const [editProduct, setEditProduct] = useState<ScannedProduct | null>(null);
   const [isScanModalOpen, setIsScanModalOpen] = useState(false);
@@ -75,11 +75,12 @@ const Add: React.FC = () => {
         width: product.dimensions?.width || '',
         height: product.dimensions?.height || '',
         weight: product.weight || '',
-        barcode: product.barcode || ''
+        barcode: product.barcode || '',
+        unit: product.dimensions?.unit || 'cm'
       });
       setEditProduct(product);
     } else {
-      setForm({ name: '', length: '', width: '', height: '', weight: '', barcode: '' });
+      setForm({ name: '', length: '', width: '', height: '', weight: '', barcode: '', unit: 'cm' });
       setEditProduct(null);
     }
     setIsModalOpen(true);
@@ -93,6 +94,20 @@ const Add: React.FC = () => {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  const handleUnitSwitch = () => {
+    setForm(prev => {
+      const toIn = prev.unit === 'cm';
+      const convert = (v: string) => v ? (toIn ? (parseFloat(v) / 2.54).toFixed(2) : (parseFloat(v) * 2.54).toFixed(1)) : '';
+      return {
+        ...prev,
+        length: convert(prev.length),
+        width: convert(prev.width),
+        height: convert(prev.height),
+        unit: toIn ? 'in' : 'cm'
+      };
+    });
   };
 
   const handleBarcodeScanned = async (barcode: string) => {
@@ -149,19 +164,47 @@ const Add: React.FC = () => {
         const ref = doc(db, 'scannedProducts', editProduct.id);
         await updateDoc(ref, {
           name: form.name,
-          dimensions: { length: form.length, width: form.width, height: form.height },
+          dimensions: { length: form.length, width: form.width, height: form.height, unit: form.unit },
           weight: form.weight,
           barcode: form.barcode
         });
+        // Add activity log for edit
+        if (user && editProduct) {
+          const changes = [];
+          if (editProduct.name !== form.name) changes.push(`name from "${editProduct.name}" to "${form.name}"`);
+          if (editProduct.weight !== form.weight) changes.push(`weight from ${editProduct.weight || 'none'} to ${form.weight || 'none'}`);
+          if (editProduct.barcode !== form.barcode) changes.push(`barcode from "${editProduct.barcode || 'none'}" to "${form.barcode || 'none'}"`);
+          if (editProduct.dimensions?.length !== form.length) changes.push(`length from ${editProduct.dimensions?.length || 'none'} to ${form.length || 'none'}`);
+          if (editProduct.dimensions?.width !== form.width) changes.push(`width from ${editProduct.dimensions?.width || 'none'} to ${form.width || 'none'}`);
+          if (editProduct.dimensions?.height !== form.height) changes.push(`height from ${editProduct.dimensions?.height || 'none'} to ${form.height || 'none'}`);
+          if (editProduct.dimensions?.unit !== form.unit) changes.push(`unit from ${editProduct.dimensions?.unit || 'cm'} to ${form.unit || 'cm'}`);
+          if (changes.length > 0) {
+            await addDoc(collection(db, 'activityLogs'), {
+              user: user.name,
+              role: user.role,
+              detail: `edited product "${form.name}": ${changes.join(', ')}`,
+              time: new Date().toISOString()
+            });
+          }
+        }
       } else {
         // Add mode
         await addDoc(collection(db, 'scannedProducts'), {
           name: form.name,
-          dimensions: { length: form.length, width: form.width, height: form.height },
+          dimensions: { length: form.length, width: form.width, height: form.height, unit: form.unit },
           weight: form.weight,
           barcode: form.barcode,
           createdAt: Timestamp.fromDate(new Date())
         });
+        // Add activity log for add
+        if (user) {
+          await addDoc(collection(db, 'activityLogs'), {
+            user: user.name,
+            role: user.role,
+            detail: `added new product "${form.name}" with barcode ${form.barcode}`,
+            time: new Date().toISOString()
+          });
+        }
       }
       setIsModalOpen(false);
       setEditProduct(null);
@@ -274,31 +317,45 @@ const Add: React.FC = () => {
             required
             fullWidth
           />
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-sm font-medium">Dimensions</span>
+            <button
+              type="button"
+              onClick={handleUnitSwitch}
+              aria-label={`Switch to ${form.unit === 'cm' ? 'inches' : 'centimeters'}`}
+              className={`px-4 py-1 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 border text-xs font-semibold
+                ${form.unit === 'cm' ? 'bg-blue-600 text-white border-blue-600' : 'bg-blue-600 text-white border-blue-600'}`}
+              style={{ minWidth: 48 }}
+            >
+              {form.unit}
+            </button>
+            <span className="text-xs text-slate-500">Current: {form.unit}</span>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
             <Input
-              label="Length (cm)"
+              label={`Length (${form.unit})`}
               name="length"
               value={form.length}
               onChange={handleChange}
-              placeholder="Length"
+              placeholder={`Length (${form.unit})`}
               required
               fullWidth
             />
             <Input
-              label="Width (cm)"
+              label={`Width (${form.unit})`}
               name="width"
               value={form.width}
               onChange={handleChange}
-              placeholder="Width"
+              placeholder={`Width (${form.unit})`}
               required
               fullWidth
             />
             <Input
-              label="Height (cm)"
+              label={`Height (${form.unit})`}
               name="height"
               value={form.height}
               onChange={handleChange}
-              placeholder="Height"
+              placeholder={`Height (${form.unit})`}
               required
               fullWidth
             />
@@ -311,15 +368,40 @@ const Add: React.FC = () => {
             placeholder="Enter weight in grams (optional)"
             fullWidth
           />
-          <Input
-            label="Barcode"
-            name="barcode"
-            value={form.barcode}
-            onChange={handleChange}
-            placeholder="Enter barcode"
-            required
-            fullWidth
-          />
+          <div className="relative w-full">
+            <Input
+              label="Barcode"
+              name="barcode"
+              value={form.barcode}
+              onChange={handleChange}
+              placeholder="Enter barcode"
+              required
+              fullWidth
+              style={{ paddingRight: 44 }}
+            />
+            <button
+              type="button"
+              onClick={async () => {
+                if (form.barcode.trim() && !isFetchingProductInfo) {
+                  setFetchError(null);
+                  setIsFetchingProductInfo(true);
+                  try {
+                    await handleBarcodeScanned(form.barcode);
+                  } finally {
+                    setIsFetchingProductInfo(false);
+                  }
+                }
+              }}
+              className="absolute right-2 top-1/2 -translate-y-1 flex items-center justify-center w-8 h-8 rounded-md transition bg-transparent hover:bg-blue-50 focus:bg-blue-100 outline-none border-none p-0"
+              style={{ zIndex: 2 }}
+              title="Fetch product info by barcode"
+              tabIndex={0}
+              aria-label="Fetch product info by barcode"
+              disabled={isFetchingProductInfo}
+            >
+              {isFetchingProductInfo ? <Loader2 size={18} className="animate-spin text-blue-500" /> : <Barcode size={18} className="text-blue-500" />}
+            </button>
+          </div>
           {error && <div className="text-red-500 text-sm">{error}</div>}
           {fetchError && <div className="text-red-500 text-sm">{fetchError} Please enter details manually.</div>}
           {isFetchingProductInfo && (
@@ -348,7 +430,7 @@ const Add: React.FC = () => {
           <thead className={isDarkMode ? 'bg-slate-700/50' : 'bg-slate-100'}>
             <tr>
               <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Name</th>
-              <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Dimensions (cm)</th>
+              <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Dimensions (cm/in)</th>
               <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Weight (g)</th>
               <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Barcode</th>
               <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Created At</th>
@@ -382,7 +464,7 @@ const Add: React.FC = () => {
                   <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-blue-400' : 'text-blue-700'} font-medium`}>{product.name}</td>
                   <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{
                     product.dimensions && typeof product.dimensions === 'object' && product.dimensions.length && product.dimensions.width && product.dimensions.height
-                      ? `${product.dimensions.length} x ${product.dimensions.width} x ${product.dimensions.height}`
+                      ? `${product.dimensions.length} x ${product.dimensions.width} x ${product.dimensions.height} ${product.dimensions.unit || 'cm'}`
                       : '-'
                   }</td>
                   <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{product.weight}</td>
@@ -441,7 +523,7 @@ const Add: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Dimensions</p>
-                <p className={`font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{selectedProduct.dimensions && selectedProduct.dimensions.length && selectedProduct.dimensions.width && selectedProduct.dimensions.height ? `${selectedProduct.dimensions.length} x ${selectedProduct.dimensions.width} x ${selectedProduct.dimensions.height} cm` : '-'}</p>
+                <p className={`font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{selectedProduct.dimensions && selectedProduct.dimensions.length && selectedProduct.dimensions.width && selectedProduct.dimensions.height ? `${selectedProduct.dimensions.length} x ${selectedProduct.dimensions.width} x ${selectedProduct.dimensions.height} ${selectedProduct.dimensions.unit || 'cm'}` : '-'}</p>
               </div>
               <div>
                 <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Weight</p>

@@ -4,9 +4,6 @@ git remote set-url origin git@github.com:aztecwarehouse123/aztec-warehouse.git
 or
 git remote set-url origin git@github.com-client:aztecwarehouse123/aztec-warehouse.git
 
-eval "$(ssh-agent -s)"
-ssh-add ~/.ssh/id_ed25519
-
 
 //to check:
 git config user.name
@@ -16,5 +13,13 @@ git config user.name "aztecwarehouse123"
 git config user.email "clientemail@gmail.com"
 
 
+
+eval "$(ssh-agent -s)"
+ssh-add ~/.ssh/id_ed25519
+git add .
+
+git commit -m
+
+git push origin main
 npm run build
 npm run deploy
