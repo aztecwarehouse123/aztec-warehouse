@@ -1,22 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Loader2, RefreshCw, Edit2, Trash2, Barcode } from 'lucide-react';
+import { Plus, Loader2, RefreshCw, Edit2, Trash2, Barcode, Upload } from 'lucide-react';
 import { motion } from 'framer-motion';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Modal from '../../components/modals/Modal';
 import BarcodeScanModal from '../../components/modals/BarcodeScanModal';
 import { db } from '../../config/firebase';
-import { collection, addDoc, getDocs, Timestamp, orderBy, query, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, Timestamp, orderBy, query, doc, updateDoc, deleteDoc, limit, where } from 'firebase/firestore';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { format } from 'date-fns';
-import Select from '../../components/ui/Select';
+import * as XLSX from 'xlsx';
+import Papa from 'papaparse';
+import Toast from '../../components/ui/Toast';
 
 interface ScannedProduct {
   id: string;
   name: string;
-  dimensions: { length: string; width: string; height: string; unit?: string };
-  weight: string;
+  unit: string;
   barcode: string;
   createdAt: Date;
 }
@@ -27,7 +28,7 @@ const Add: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [products, setProducts] = useState<ScannedProduct[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [form, setForm] = useState({ name: '', length: '', width: '', height: '', weight: '', barcode: '', unit: 'cm' });
+  const [form, setForm] = useState({ name: '', unit: '', barcode: '' });
   const [error, setError] = useState<string | null>(null);
   const [editProduct, setEditProduct] = useState<ScannedProduct | null>(null);
   const [isScanModalOpen, setIsScanModalOpen] = useState(false);
@@ -36,30 +37,54 @@ const Add: React.FC = () => {
   const [deleteProductId, setDeleteProductId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState('date');
   const [selectedProduct, setSelectedProduct] = useState<ScannedProduct | null>(null);
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchProducts();
   }, []);
 
-  const fetchProducts = async () => {
+  const fetchProducts = async (search?: string) => {
     setIsLoading(true);
     try {
-      const q = query(collection(db, 'scannedProducts'), orderBy('createdAt', 'desc'));
-      const snapshot = await getDocs(q);
-      const items = snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          name: data.name,
-          dimensions: data.dimensions,
-          weight: data.weight,
-          barcode: data.barcode,
-          createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(data.createdAt)
-        };
-      });
-      setProducts(items);
+      let q;
+      if (search && search.trim() !== '') {
+        // Search by name or barcode (case-insensitive)
+        // Firestore does not support OR queries directly, so do two queries and merge results
+        const nameQ = query(collection(db, 'scannedProducts'), where('name', '>=', search), where('name', '<=', search + '\uf8ff'), orderBy('name'), limit(100));
+        const barcodeQ = query(collection(db, 'scannedProducts'), where('barcode', '>=', search), where('barcode', '<=', search + '\uf8ff'), orderBy('barcode'), limit(100));
+        const [nameSnap, barcodeSnap] = await Promise.all([getDocs(nameQ), getDocs(barcodeQ)]);
+        const items = [...nameSnap.docs, ...barcodeSnap.docs].reduce((acc, doc) => {
+          if (!acc.some(d => d.id === doc.id)) acc.push(doc);
+          return acc;
+        }, [] as typeof nameSnap.docs);
+        setProducts(items.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            name: data.name,
+            unit: data.unit,
+            barcode: data.barcode,
+            createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(data.createdAt)
+          };
+        }));
+      } else {
+        // Fetch recent 100
+        q = query(collection(db, 'scannedProducts'), orderBy('createdAt', 'desc'), limit(100));
+        const snapshot = await getDocs(q);
+        const items = snapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            name: data.name,
+            unit: data.unit,
+            barcode: data.barcode,
+            createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(data.createdAt)
+          };
+        });
+        setProducts(items);
+      }
     } catch {
       setError('Failed to fetch products');
     } finally {
@@ -71,16 +96,12 @@ const Add: React.FC = () => {
     if (product) {
       setForm({
         name: product.name || '',
-        length: product.dimensions?.length || '',
-        width: product.dimensions?.width || '',
-        height: product.dimensions?.height || '',
-        weight: product.weight || '',
-        barcode: product.barcode || '',
-        unit: product.dimensions?.unit || 'cm'
+        unit: product.unit || '',
+        barcode: product.barcode || ''
       });
       setEditProduct(product);
     } else {
-      setForm({ name: '', length: '', width: '', height: '', weight: '', barcode: '', unit: 'cm' });
+      setForm({ name: '', unit: '', barcode: '' });
       setEditProduct(null);
     }
     setIsModalOpen(true);
@@ -96,20 +117,6 @@ const Add: React.FC = () => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  const handleUnitSwitch = () => {
-    setForm(prev => {
-      const toIn = prev.unit === 'cm';
-      const convert = (v: string) => v ? (toIn ? (parseFloat(v) / 2.54).toFixed(2) : (parseFloat(v) * 2.54).toFixed(1)) : '';
-      return {
-        ...prev,
-        length: convert(prev.length),
-        width: convert(prev.width),
-        height: convert(prev.height),
-        unit: toIn ? 'in' : 'cm'
-      };
-    });
-  };
-
   const handleBarcodeScanned = async (barcode: string) => {
     setForm(prev => ({ ...prev, barcode }));
     setIsScanModalOpen(false);
@@ -122,24 +129,9 @@ const Add: React.FC = () => {
       const data = await response.json();
       if (data && data.items && data.items.length > 0) {
         const item = data.items[0];
-        let weightGrams = '';
-        if (item.weight && typeof item.weight === 'string') {
-          // Try to extract number and unit
-          const match = item.weight.match(/([\d.]+)\s*(lbs?|g|grams?)/i);
-          if (match) {
-            const value = parseFloat(match[1]);
-            const unit = match[2].toLowerCase();
-            if (unit.startsWith('lb')) {
-              weightGrams = (value * 453.592).toFixed(0); // lbs to grams
-            } else if (unit.startsWith('g')) {
-              weightGrams = value.toString();
-            }
-          }
-        }
         setForm(prev => ({
           ...prev,
-          name: item.title || prev.name,
-          weight: weightGrams || prev.weight
+          name: item.title || prev.name
         }));
       } else {
         setFetchError('No product info found for this barcode.');
@@ -153,8 +145,8 @@ const Add: React.FC = () => {
 
   const handleAddOrEditProduct = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name.trim() || !form.length.trim() || !form.width.trim() || !form.height.trim() || !form.barcode.trim()) {
-      setError('All fields except weight are required');
+    if (!form.name.trim() || !form.unit.trim() || !form.barcode.trim()) {
+      setError('All fields are required');
       return;
     }
     setIsLoading(true);
@@ -164,20 +156,15 @@ const Add: React.FC = () => {
         const ref = doc(db, 'scannedProducts', editProduct.id);
         await updateDoc(ref, {
           name: form.name,
-          dimensions: { length: form.length, width: form.width, height: form.height, unit: form.unit },
-          weight: form.weight,
+          unit: form.unit,
           barcode: form.barcode
         });
         // Add activity log for edit
         if (user && editProduct) {
           const changes = [];
           if (editProduct.name !== form.name) changes.push(`name from "${editProduct.name}" to "${form.name}"`);
-          if (editProduct.weight !== form.weight) changes.push(`weight from ${editProduct.weight || 'none'} to ${form.weight || 'none'}`);
+          if (editProduct.unit !== form.unit) changes.push(`unit from ${editProduct.unit || 'none'} to ${form.unit || 'none'}`);
           if (editProduct.barcode !== form.barcode) changes.push(`barcode from "${editProduct.barcode || 'none'}" to "${form.barcode || 'none'}"`);
-          if (editProduct.dimensions?.length !== form.length) changes.push(`length from ${editProduct.dimensions?.length || 'none'} to ${form.length || 'none'}`);
-          if (editProduct.dimensions?.width !== form.width) changes.push(`width from ${editProduct.dimensions?.width || 'none'} to ${form.width || 'none'}`);
-          if (editProduct.dimensions?.height !== form.height) changes.push(`height from ${editProduct.dimensions?.height || 'none'} to ${form.height || 'none'}`);
-          if (editProduct.dimensions?.unit !== form.unit) changes.push(`unit from ${editProduct.dimensions?.unit || 'cm'} to ${form.unit || 'cm'}`);
           if (changes.length > 0) {
             await addDoc(collection(db, 'activityLogs'), {
               user: user.name,
@@ -191,8 +178,7 @@ const Add: React.FC = () => {
         // Add mode
         await addDoc(collection(db, 'scannedProducts'), {
           name: form.name,
-          dimensions: { length: form.length, width: form.width, height: form.height, unit: form.unit },
-          weight: form.weight,
+          unit: form.unit,
           barcode: form.barcode,
           createdAt: Timestamp.fromDate(new Date())
         });
@@ -230,28 +216,69 @@ const Add: React.FC = () => {
     }
   };
 
-  // Filtering and sorting logic
-  const filteredProducts = products.filter(product => {
-    const searchLower = searchQuery.toLowerCase();
-    const matchesName = product.name?.toLowerCase().includes(searchLower);
-    const matchesBarcode = product.barcode?.toLowerCase().includes(searchLower);
-    return matchesName || matchesBarcode;
-  }).sort((a, b) => {
-    if (sortBy === 'date') {
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    } else if (sortBy === 'size') {
-      // Sort by volume (length * width * height), fallback to 0 if missing
-      const getVolume = (p: ScannedProduct) => {
-        const d = p.dimensions || {};
-        const l = parseFloat(d.length) || 0;
-        const w = parseFloat(d.width) || 0;
-        const h = parseFloat(d.height) || 0;
-        return l * w * h;
-      };
-      return getVolume(b) - getVolume(a);
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    let products: { name: string; unit: string; barcode: string }[] = [];
+    try {
+      if (file.name.endsWith('.csv')) {
+        // Parse CSV
+        const text = await file.text();
+        const result = Papa.parse(text, { header: true });
+        const allRows = (result.data as Record<string, unknown>[]);
+        products = allRows.map(row => ({
+          name: row['Description']?.toString().trim() || '',
+          unit: row['Unit']?.toString().trim() || '',
+          barcode: row['EAN']?.toString().trim() || ''
+        })).filter(p => p.name || p.unit || p.barcode);
+        const skipped = allRows.length - products.length;
+        if (skipped > 0) {
+          console.log(`${skipped} rows skipped (all columns empty).`);
+          setToast({ type: 'error', message: `${skipped} rows skipped (all columns empty).` });
+        }
+      } else if (file.name.endsWith('.xlsx')) {
+        // Parse XLSX
+        const data = await file.arrayBuffer();
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const allRows = XLSX.utils.sheet_to_json(sheet) as Record<string, unknown>[];
+        products = allRows.map(row => ({
+          name: row['Description']?.toString().trim() || '',
+          unit: row['Unit']?.toString().trim() || '',
+          barcode: row['EAN']?.toString().trim() || ''
+        })).filter(p => p.name || p.unit || p.barcode);
+        const skipped = allRows.length - products.length;
+        if (skipped > 0) {
+          console.log(`${skipped} rows skipped (all columns empty).`);
+          setToast({ type: 'error', message: `${skipped} rows skipped (all columns empty).` });
+        }
+      } else {
+        console.log('Unsupported file type. Please upload a .csv or .xlsx file.');
+        setToast({ type: 'error', message: 'Unsupported file type. Please upload a .csv or .xlsx file.' });
+        return;
+      }
+      if (products.length === 0) {
+        console.log('No valid products found in file.');
+        setToast({ type: 'error', message: 'No valid products found in file.' });
+        return;
+      }
+      // Upload to Firebase
+      for (const p of products) {
+        await addDoc(collection(db, 'scannedProducts'), {
+          name: p.name,
+          unit: p.unit,
+          barcode: p.barcode,
+          createdAt: Timestamp.fromDate(new Date())
+        });
+      }
+      setToast({ type: 'success', message: `Uploaded ${products.length} products successfully!` });
+      console.log(`Uploaded ${products.length} products successfully!`);
+      fetchProducts();
+    } catch {
+      console.log('Failed to upload products.');
+      setToast({ type: 'error', message: 'Failed to upload products.' });
     }
-    return 0;
-  });
+  };
 
   if (!user || (user.role !== 'admin' && user.role !== 'inbound')) {
     return <div className="p-8 text-center text-red-500 font-semibold">You are not authorized to access this page.</div>;
@@ -271,13 +298,20 @@ const Add: React.FC = () => {
             className={`flex items-center gap-2 ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
             disabled={isLoading}
             icon={<RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />}
-          >
-           
+          />
+          <Button icon={<Upload size={18} />} onClick={() => fileInputRef.current?.click()}>
+            Upload CSV/XLSX
           </Button>
+          <input
+            type="file"
+            accept=".csv,.xlsx"
+            ref={fileInputRef}
+            onChange={handleFileUpload}
+            style={{ display: 'none' }}
+          />
           <Button icon={<Plus size={18} />} onClick={() => handleOpenModal()}>
             Add Product
           </Button>
-          
         </div>
       </div>
       <div className="flex flex-col sm:flex-row gap-4 mb-4">
@@ -286,24 +320,16 @@ const Add: React.FC = () => {
             type="text"
             placeholder="Search by name or barcode"
             value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
+            onChange={e => {
+              setSearchQuery(e.target.value);
+              fetchProducts(e.target.value);
+            }}
             className="pl-10"
             fullWidth
           />
           <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400">
             <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-search"><circle cx="7" cy="7" r="6"/><path d="m15 15-3.5-3.5"/></svg>
           </span>
-        </div>
-        <div className="w-full sm:w-48">
-          <Select
-            value={sortBy}
-            onChange={e => setSortBy(e.target.value)}
-            options={[
-              { value: 'date', label: 'Date Added' },
-              { value: 'size', label: 'Size (Volume)' }
-            ]}
-            fullWidth
-          />
         </div>
       </div>
       <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={editProduct ? 'Edit Product' : 'Add Product'} size="sm">
@@ -317,55 +343,13 @@ const Add: React.FC = () => {
             required
             fullWidth
           />
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-sm font-medium">Dimensions</span>
-            <button
-              type="button"
-              onClick={handleUnitSwitch}
-              aria-label={`Switch to ${form.unit === 'cm' ? 'inches' : 'centimeters'}`}
-              className={`px-4 py-1 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 border text-xs font-semibold
-                ${form.unit === 'cm' ? 'bg-blue-600 text-white border-blue-600' : 'bg-blue-600 text-white border-blue-600'}`}
-              style={{ minWidth: 48 }}
-            >
-              {form.unit}
-            </button>
-            <span className="text-xs text-slate-500">Current: {form.unit}</span>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-            <Input
-              label={`Length (${form.unit})`}
-              name="length"
-              value={form.length}
-              onChange={handleChange}
-              placeholder={`Length (${form.unit})`}
-              required
-              fullWidth
-            />
-            <Input
-              label={`Width (${form.unit})`}
-              name="width"
-              value={form.width}
-              onChange={handleChange}
-              placeholder={`Width (${form.unit})`}
-              required
-              fullWidth
-            />
-            <Input
-              label={`Height (${form.unit})`}
-              name="height"
-              value={form.height}
-              onChange={handleChange}
-              placeholder={`Height (${form.unit})`}
-              required
-              fullWidth
-            />
-          </div>
           <Input
-            label="Weight (grams)"
-            name="weight"
-            value={form.weight}
+            label="Unit"
+            name="unit"
+            value={form.unit}
             onChange={handleChange}
-            placeholder="Enter weight in grams (optional)"
+            placeholder="e.g. 350ML, 75GM, 1PC"
+            required
             fullWidth
           />
           <div className="relative w-full">
@@ -430,8 +414,7 @@ const Add: React.FC = () => {
           <thead className={isDarkMode ? 'bg-slate-700/50' : 'bg-slate-100'}>
             <tr>
               <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Name</th>
-              <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Dimensions (cm/in)</th>
-              <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Weight (g)</th>
+              <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Unit</th>
               <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Barcode</th>
               <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Created At</th>
               <th className={`px-4 py-3 text-right text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Actions</th>
@@ -440,19 +423,19 @@ const Add: React.FC = () => {
           <tbody className={`divide-y ${isDarkMode ? 'divide-slate-700' : 'divide-slate-200'}`}>
             {isLoading ? (
               <tr>
-                <td colSpan={5} style={{ border: 0, padding: 0 }}>
+                <td colSpan={4} style={{ border: 0, padding: 0 }}>
                   <div className="flex flex-col items-center justify-center min-h-[200px] w-full py-12">
                     <Loader2 className={`w-8 h-8 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'} animate-spin`} />
                     <p className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>Loading products...</p>
                   </div>
                 </td>
               </tr>
-            ) : filteredProducts.length === 0 ? (
+            ) : products.length === 0 ? (
               <tr>
-                <td colSpan={5} className={`text-center py-8 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>No products found.</td>
+                <td colSpan={4} className={`text-center py-8 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>No products found.</td>
               </tr>
-            ) : (
-              filteredProducts.map((product, index) => (
+            ) :
+              products.map((product, index) => (
                 <motion.tr
                   key={product.id}
                   initial={{ opacity: 0, y: 20 }}
@@ -462,12 +445,7 @@ const Add: React.FC = () => {
                   onClick={() => setSelectedProduct(product)}
                 >
                   <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-blue-400' : 'text-blue-700'} font-medium`}>{product.name}</td>
-                  <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{
-                    product.dimensions && typeof product.dimensions === 'object' && product.dimensions.length && product.dimensions.width && product.dimensions.height
-                      ? `${product.dimensions.length} x ${product.dimensions.width} x ${product.dimensions.height} ${product.dimensions.unit || 'cm'}`
-                      : '-'
-                  }</td>
-                  <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{product.weight}</td>
+                  <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{product.unit}</td>
                   <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{product.barcode}</td>
                   <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{format(product.createdAt, 'MMM d, yyyy, h:mm a')}</td>
                   <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'} text-right`}>
@@ -489,7 +467,7 @@ const Add: React.FC = () => {
                   </td>
                 </motion.tr>
               ))
-            )}
+            }
           </tbody>
         </table>
       </div>
@@ -522,12 +500,8 @@ const Add: React.FC = () => {
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Dimensions</p>
-                <p className={`font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{selectedProduct.dimensions && selectedProduct.dimensions.length && selectedProduct.dimensions.width && selectedProduct.dimensions.height ? `${selectedProduct.dimensions.length} x ${selectedProduct.dimensions.width} x ${selectedProduct.dimensions.height} ${selectedProduct.dimensions.unit || 'cm'}` : '-'}</p>
-              </div>
-              <div>
-                <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Weight</p>
-                <p className={`font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{selectedProduct.weight ? `${selectedProduct.weight} g` : '-'}</p>
+                <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Unit</p>
+                <p className={`font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{selectedProduct.unit || '-'}</p>
               </div>
               <div>
                 <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Barcode</p>
@@ -541,6 +515,7 @@ const Add: React.FC = () => {
           </div>
         )}
       </Modal>
+      {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
     </div>
   );
 };
