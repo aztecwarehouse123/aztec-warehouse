@@ -36,7 +36,7 @@ const Add: React.FC = () => {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [deleteProductId, setDeleteProductId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [displaySearchQuery, setDisplaySearchQuery] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<ScannedProduct | null>(null);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -292,9 +292,9 @@ const Add: React.FC = () => {
           <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} mt-1`}>Scan and add new products to your warehouse inventory</p>
         </div>
         <div className="flex items-center gap-2">
-        <Button
+          <Button
             variant="secondary"
-            onClick={fetchProducts}
+            onClick={() => fetchProducts()}
             className={`flex items-center gap-2 ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
             disabled={isLoading}
             icon={<RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />}
@@ -319,10 +319,11 @@ const Add: React.FC = () => {
           <Input
             type="text"
             placeholder="Search by name or barcode"
-            value={searchQuery}
+            value={displaySearchQuery}
             onChange={e => {
-              setSearchQuery(e.target.value);
-              fetchProducts(e.target.value);
+              const inputValue = e.target.value;
+              setDisplaySearchQuery(inputValue);
+              fetchProducts(inputValue.toUpperCase());
             }}
             className="pl-10"
             fullWidth

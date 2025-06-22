@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Barcode, CheckCircle2, Trash2 } from 'lucide-react';
+import { Plus, Barcode, Trash2 } from 'lucide-react';
 import Input from '../ui/Input';
 import Button from '../ui/Button';
 import Select from '../ui/Select';
@@ -106,8 +106,9 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
   const [showOtherStoreInput, setShowOtherStoreInput] = useState(false);
   const [otherStoreName, setOtherStoreName] = useState('');
   const { isDarkMode } = useTheme();
-  const [isSearchingBarcode, setIsSearchingBarcode] = useState(false);
   const [barcodeSearchMessage, setBarcodeSearchMessage] = useState<string | null>(null);
+  const [isFetchingProductInfo, setIsFetchingProductInfo] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -150,7 +151,6 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
       ...prev,
       barcode
     }));
-    setIsSearchingBarcode(true);
     setBarcodeSearchMessage(null);
     try {
       const q = query(collection(db, 'scannedProducts'), where('barcode', '==', barcode));
@@ -167,8 +167,46 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
       }
     } catch {
       setBarcodeSearchMessage('Failed to search for product. Please enter details manually.');
+    }
+  };
+
+  const fetchBarcodeInfo = async () => {
+    if (!formData.barcode || isFetchingProductInfo) return;
+    setFetchError(null);
+    setIsFetchingProductInfo(true);
+    try {
+      // First, try to fetch from scannedProducts collection (like scan button)
+      const q = query(collection(db, 'scannedProducts'), where('barcode', '==', formData.barcode));
+      const snapshot = await getDocs(q);
+      if (!snapshot.empty) {
+        const docData = snapshot.docs[0].data();
+        setFormData(prev => ({
+          ...prev,
+          name: docData.name || prev.name
+        }));
+        setBarcodeSearchMessage('Product name auto-filled from scanned products.');
+        setIsFetchingProductInfo(false);
+        return;
+      }
+      // If not found, try UPC API
+      const proxy = 'https://corsproxy.io/?';
+      const url = `${proxy}https://api.upcitemdb.com/prod/trial/lookup?upc=${formData.barcode}`;
+      const response = await fetch(url);
+      const data = await response.json();
+      if (data && data.items && data.items.length > 0) {
+        const item = data.items[0];
+        setFormData(prev => ({
+          ...prev,
+          name: item.title || prev.name
+        }));
+        setBarcodeSearchMessage('Product name auto-filled from UPC database.');
+      } else {
+        setFetchError('No product info found for this barcode.');
+      }
+    } catch {
+      setFetchError('Failed to fetch product info.');
     } finally {
-      setIsSearchingBarcode(false);
+      setIsFetchingProductInfo(false);
     }
   };
 
@@ -367,7 +405,7 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
             fullWidth
           />
           <div className="space-y-2">
-            <div className="flex gap-2">
+            <div className="flex gap-2 relative w-full">
               <Input
                 label="Barcode"
                 name="barcode"
@@ -375,24 +413,26 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
                 onChange={handleChange}
                 placeholder="Enter barcode manually"
                 fullWidth
+                style={{ paddingRight: 44 }}
               />
-              {isSearchingBarcode && (
-                <div className="flex items-center gap-2 text-blue-500 text-sm mt-1">
-                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                  Searching for product...
-                </div>
-              )}
-              {barcodeSearchMessage && (
-                <div className="flex items-center text-xs mt-1 text-green-600 dark:text-green-400 pl-1">
-                  {barcodeSearchMessage}
-                </div>
-              )}
+              <button
+                type="button"
+                onClick={fetchBarcodeInfo}
+                className="absolute right-2 top-1/2 -translate-y-1 flex items-center justify-center w-8 h-8 rounded-md transition bg-transparent hover:bg-blue-50 focus:bg-blue-100 outline-none border-none p-0"
+                style={{ zIndex: 2 }}
+                title="Fetch product info by barcode"
+                tabIndex={0}
+                aria-label="Fetch product info by barcode"
+                disabled={isFetchingProductInfo}
+              >
+                {isFetchingProductInfo ? <svg className="animate-spin text-blue-500" width="18" height="18" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> : <Barcode size={18} className="text-blue-500" />}
+              </button>
             </div>
-            {formData.barcode && (
-              <div className="flex items-center gap-1 text-green-600 text-sm">
-                <CheckCircle2 size={16} />
-                <span>Barcode entered</span>
-              </div>
+            {fetchError && (
+              <div className="text-red-500 text-sm">{fetchError} Please enter details manually.</div>
+            )}
+            {barcodeSearchMessage && (
+              <div className="flex items-center text-xs mt-1 text-green-600 dark:text-green-400 pl-1">{barcodeSearchMessage}</div>
             )}
           </div>
         
