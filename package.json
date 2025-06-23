@@ -1,7 +1,7 @@
 {
   "name": "warehouse-management",
   "private": true,
-  "homepage": "https://aztecwarehouse123.github.io/aztec-warehouse",
+  "homepage": "https://aztecwms.com",
   "version": "0.1.0",
   "type": "module",
   "scripts": {
