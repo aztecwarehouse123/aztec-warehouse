@@ -4,6 +4,7 @@ import AdminDashboard from './AdminDashboard';
 import InboundDashboard from './InboundDashboard';
 //import OutboundDashboard from './OutboundDashboard';
 import OutboundDashboard2 from '../OutboundDashboard2';
+import Add from '../Add';
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
@@ -18,6 +19,8 @@ const Dashboard: React.FC = () => {
     case 'outbound':
       return <OutboundDashboard2 />;
       //return <OutboundDashboard/>
+    case 'staff':
+      return <Add/>
     default:
       return null;
   }

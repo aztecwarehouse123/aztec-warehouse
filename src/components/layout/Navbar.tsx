@@ -38,14 +38,14 @@ const Navbar: React.FC = () => {
 
   const allNavItems = [
     { to: "/", icon: <LayoutDashboard size={20} />, label: "Dashboard", roles: ['admin', 'inbound','outbound'] },
-    { to: "/add", icon: <Plus size={20} />, label: "Add", roles: ['admin', 'inbound'] },
-    { to: "/stock", icon: <Package size={20} />, label: "Inbound", roles: ['admin', 'inbound'] },
-    { to: "/outbound-stock", icon: <Package size={20} />, label: "Outbound", roles: ['admin', 'outbound'] },
-    { to: "/warehouse-locations", icon: <MapPin size={20} />, label: "Locations", roles: ['admin'] },
+    { to: "/add", icon: <Plus size={20} />, label: "Add", roles: ['admin', 'inbound', 'staff'] },
+    { to: "/stock", icon: <Package size={20} />, label: "Inbound", roles: ['admin', 'inbound', 'staff'] },
+    { to: "/outbound-stock", icon: <Package size={20} />, label: "Outbound", roles: ['admin', 'outbound', 'staff'] },
+    { to: "/warehouse-locations", icon: <MapPin size={20} />, label: "Locations", roles: ['admin', 'staff'] },
     { to: "/orders", icon: <ShoppingCart size={20} />, label: "Orders", roles: [''] },
     { to: "/reports-analytics", icon: <BarChart size={20} />, label: "Reports", roles: [''] },
     { to: "/warehouse-operations", icon: <Activity size={20} />, label: "Logs", roles: ['admin'] },
-    { to: "/settings", icon: <Settings size={20} />, label: "Settings", roles: ['admin', 'inbound', 'outbound'] },
+    { to: "/settings", icon: <Settings size={20} />, label: "Settings", roles: ['admin', 'inbound', 'outbound', 'staff'] },
     
   ];
 
@@ -100,8 +100,8 @@ const Navbar: React.FC = () => {
               <NavLink 
                 to={item.to} 
                 className={navLinkClasses}
-                end={item.to === "/"}
-                >
+                {...(item.to === "/" ? { end: true } : {})}
+              >
                   <motion.div
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
@@ -185,7 +185,7 @@ const Navbar: React.FC = () => {
                 to={item.to} 
                 className={navLinkClasses}
                 onClick={closeMobileMenu}
-                end={item.to === "/"}
+                {...(item.to === "/" ? { end: true } : {})}
                   >
                     <motion.div
                       whileHover={{ scale: 1.02 }}

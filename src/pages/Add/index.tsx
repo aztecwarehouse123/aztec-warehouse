@@ -280,7 +280,7 @@ const Add: React.FC = () => {
     }
   };
 
-  if (!user || (user.role !== 'admin' && user.role !== 'inbound')) {
+  if (!user || (user.role !== 'admin' && user.role !== 'inbound' && user.role !== 'staff')) {
     return <div className="p-8 text-center text-red-500 font-semibold">You are not authorized to access this page.</div>;
   }
 

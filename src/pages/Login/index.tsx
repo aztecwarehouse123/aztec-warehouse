@@ -21,7 +21,11 @@ const Login: React.FC = () => {
   useEffect(() => {
     if (isAuthenticated && user) {
       showToast(`Welcome back, ${user.name}!`, 'success');
-      navigate('/');
+      if (user.role === 'staff') {
+        navigate('/add');
+      } else {
+        navigate('/');
+      }
     }
   }, [isAuthenticated, user, navigate, showToast]);
 

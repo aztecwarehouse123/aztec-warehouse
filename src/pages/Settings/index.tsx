@@ -795,6 +795,7 @@ const Settings: React.FC = () => {
                   options={[
                     { value: 'inbound', label: 'Inbound' },
                     { value: 'outbound', label: 'Outbound' },
+                    { value: 'staff', label: 'Staff' },
                   ]}
                   fullWidth
                 />

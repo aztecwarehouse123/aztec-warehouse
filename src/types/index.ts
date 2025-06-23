@@ -3,7 +3,7 @@ export type User = {
   username: string;
   email: string;
   name: string;
-  role: 'admin' | 'inbound' | 'outbound';
+  role: 'admin' | 'inbound' | 'outbound' | 'staff';
   password?: string;
 };
 

@@ -41,7 +41,7 @@ function App() {
         } />
 
         <Route path="stock" element={
-          <ProtectedRoute allowedRoles={['admin','inbound']}>
+          <ProtectedRoute allowedRoles={['admin','inbound','staff']}>
             <Stock />
           </ProtectedRoute>
         } />
@@ -51,13 +51,13 @@ function App() {
           </ProtectedRoute>
         } />
         <Route path="outbound-stock" element={
-          <ProtectedRoute allowedRoles={['admin','outbound']}>
+          <ProtectedRoute allowedRoles={['admin','outbound','staff']}>
             <OutboundStock />
           </ProtectedRoute>
         } />
         
         <Route path="warehouse-locations" element={
-          <ProtectedRoute allowedRoles={['admin']}>
+          <ProtectedRoute allowedRoles={['admin','staff']}>
             <WarehouseLocations />
           </ProtectedRoute>
         } />
@@ -72,12 +72,12 @@ function App() {
           </ProtectedRoute>
         } />
         <Route path="settings" element={
-          <ProtectedRoute allowedRoles={['admin', 'inbound', 'outbound']}>
+          <ProtectedRoute allowedRoles={['admin', 'inbound', 'outbound', 'staff']}>
             <Settings />
           </ProtectedRoute>
         } />
         <Route path="add" element={
-          <ProtectedRoute allowedRoles={['admin','inbound']}>
+          <ProtectedRoute allowedRoles={['admin','inbound','staff']}>
             <Add />
           </ProtectedRoute>
         } />
