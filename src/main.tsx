@@ -9,7 +9,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <Router basename='/aztec-warehouse'>
+    <Router basename='/'>
       <ThemeProvider>
       <AuthProvider>
         <ToastProvider>
