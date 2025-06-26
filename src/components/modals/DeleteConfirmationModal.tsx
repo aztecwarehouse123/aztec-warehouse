@@ -2,6 +2,7 @@ import React from 'react';
 import Modal from './Modal';
 import Button from '../ui/Button';
 import { AlertTriangle } from 'lucide-react';
+import { useTheme } from '../../contexts/ThemeContext';
 
 interface DeleteConfirmationModalProps {
   isOpen: boolean;
@@ -20,6 +21,7 @@ const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = ({
   message,
   isLoading = false
 }) => {
+  const { isDarkMode } = useTheme();
   return (
     <Modal
       isOpen={isOpen}
@@ -30,14 +32,15 @@ const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = ({
       <div className="space-y-4">
         <div className="flex items-center gap-3 text-amber-600">
           <AlertTriangle size={24} />
-          <p className="text-slate-700">{message}</p>
+          <p className={isDarkMode ? 'text-slate-200' : 'text-slate-700'}>{message}</p>
         </div>
         
         <div className="flex justify-end gap-3 pt-4">
           <Button
-            variant="outline"
+            variant="secondary"
             onClick={onClose}
             disabled={isLoading}
+            className={!isDarkMode ? 'text-slate-700' : 'text-slate-100'}
           >
             Cancel
           </Button>

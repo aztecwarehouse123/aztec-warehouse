@@ -23,7 +23,7 @@ interface FormData {
 
 interface EditStockFormProps {
   item: StockItem;
-  onSubmit: (data: StockItem) => Promise<void>;
+  onSubmit: (data: StockItem, originalItem: StockItem) => Promise<void>;
   onCancel: () => void;
   isLoading?: boolean;
 }
@@ -74,11 +74,23 @@ const locationOptions = [
 ];
 
 const shelfOptions = Array.from({ length: 6 }, (_, i) => ({
-  value: (i + 1).toString(),
-  label: `${i + 1}`
+  value: i.toString(),
+  label: `${i}`
 }));
 
 const predefinedStores = ['supply & serve', 'APHY', 'AZTEC', 'ZK'];
+
+const supplierOptions = [
+  { value: 'Rayburns Trading', label: 'Rayburns Trading' },
+  { value: 'Intamarque', label: 'Intamarque' },
+  { value: 'Sian Wholesale', label: 'Sian Wholesale' },
+  { value: 'DMG', label: 'DMG' },
+  { value: 'CVT', label: 'CVT' },
+  { value: 'Wholesale Trading Supplies', label: 'Wholesale Trading Supplies' },
+  { value: 'HJA', label: 'HJA' },
+  { value: 'Price Check', label: 'Price Check' },
+  { value: 'other', label: 'Other' }
+];
 
 const EditStockForm: React.FC<EditStockFormProps> = ({ 
   item, 
@@ -93,11 +105,16 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
   const initialStoreName = item.storeName;
   const isCustomStore = initialStoreName && !predefinedStores.includes(initialStoreName);
 
+  // Supplier initialization logic
+  const supplierInOptions = supplierOptions.some(opt => opt.value === (item.supplier || ''));
+  const initialSupplier = supplierInOptions ? (item.supplier || '') : 'other';
+  const initialOtherSupplier = supplierInOptions ? '' : (item.supplier || '');
+
   const [formData, setFormData] = useState<FormData>({
     name: item.name,
     quantity: item.quantity.toString(),
     price: item.price.toString(),
-    supplier: item.supplier || '',
+    supplier: initialSupplier,
     locationCode: item.locationCode,
     shelfNumber: item.shelfNumber,
     asin: item.asin || '',
@@ -108,6 +125,8 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
   });
   const [showOtherStoreInput, setShowOtherStoreInput] = useState(isCustomStore);
   const [otherStoreName, setOtherStoreName] = useState(isCustomStore ? initialStoreName : '');
+  const [showOtherSupplierInput, setShowOtherSupplierInput] = useState(initialSupplier === 'other');
+  const [otherSupplier, setOtherSupplier] = useState(initialOtherSupplier);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -132,6 +151,11 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
       return;
     }
     
+    if (name === 'supplier') {
+      setShowOtherSupplierInput(value === 'other');
+      if (value !== 'other') setOtherSupplier('');
+    }
+    
     setFormData(prev => ({
       ...prev,
       [name]: value
@@ -148,7 +172,7 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
           name: formData.name,
           quantity: parseInt(formData.quantity),
           price: user?.role === 'admin' ? parseFloat(formData.price) : item.price,
-          supplier: formData.supplier || null,
+          supplier: formData.supplier === 'other' ? otherSupplier : formData.supplier || null,
           locationCode: formData.locationCode,
           shelfNumber: formData.shelfNumber,
           asin: formData.asin || null,
@@ -160,7 +184,7 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
           barcode: item.barcode
         };
 
-        await onSubmit(data);
+        await onSubmit(data, item);
       } catch (error) {
         console.error('Error updating stock:', error);
         setValidationMessage('Failed to update stock. Please try again.');
@@ -201,15 +225,29 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
           required
           fullWidth
         />
+         {user?.role === 'admin' ? (
+          <Select
+            label="Status"
+            name="status"
+            value={formData.status}
+            onChange={handleChange}
+            options={[
+              { value: 'pending', label: 'Pending' },
+              { value: 'active', label: 'Active' }
+            ]}
+            fullWidth
+            required
+          />
+        ) : (
+          <Input
+            label="Status"
+            name="status"
+            value="pending"
+            disabled
+            fullWidth
+          />
+        )}
         
-        <Input
-          label="Supplier"
-          name="supplier"
-          value={formData.supplier}
-          onChange={handleChange}
-          placeholder="Enter supplier name"
-          fullWidth
-        />
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -301,31 +339,32 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
           ]}
           fullWidth
         />
-        {user?.role === 'admin' ? (
+        <div>
           <Select
-            label="Status"
-            name="status"
-            value={formData.status}
+            label="Supplier"
+            name="supplier"
+            value={formData.supplier}
             onChange={handleChange}
-            options={[
-              { value: 'pending', label: 'Pending' },
-              { value: 'active', label: 'Active' }
-            ]}
-            fullWidth
+            options={supplierOptions}
             required
-          />
-        ) : (
-          <Input
-            label="Status"
-            name="status"
-            value="pending"
-            disabled
             fullWidth
           />
-        )}
+          
+        </div>
+       
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {showOtherSupplierInput && (
+            <Input
+              label="Other Supplier"
+              value={otherSupplier}
+              onChange={e => setOtherSupplier(e.target.value)}
+              placeholder="Enter supplier name"
+              required={showOtherSupplierInput}
+              fullWidth
+            />
+          )}
       <div>
           <label className={`block text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'} mb-1`}>
             Store Name
@@ -350,7 +389,7 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
           />
           
         </div>
-        {showOtherStoreInput && (
+        {showOtherStoreInput && !showOtherSupplierInput && (
           <div>
             <label className={`block text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'} mb-1`}>
               Other Store Name
@@ -365,6 +404,25 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
           </div>
         )}
         
+        
+        
+      </div>
+
+      <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+      {showOtherStoreInput && showOtherSupplierInput && (
+          <div>
+            <label className={`block text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'} mb-1`}>
+              Other Store Name
+            </label>
+            <Input
+              type="text"
+              value={otherStoreName}
+              onChange={(e) => setOtherStoreName(e.target.value)}
+              placeholder="Enter store name"
+              required={showOtherStoreInput}
+            />
+          </div>
+        )}
       </div>
       
       

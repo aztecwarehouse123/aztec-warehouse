@@ -80,9 +80,21 @@ const locationOptions = [
 ];
 
 const shelfOptions = Array.from({ length: 6 }, (_, i) => ({
-  value: (i + 1).toString(),
-  label: `${i + 1}`
+  value: i.toString(),
+  label: `${i}`
 }));
+
+const supplierOptions = [
+  { value: 'Rayburns Trading', label: 'Rayburns Trading' },
+  { value: 'Intamarque', label: 'Intamarque' },
+  { value: 'Sian Wholesale', label: 'Sian Wholesale' },
+  { value: 'DMG', label: 'DMG' },
+  { value: 'CVT', label: 'CVT' },
+  { value: 'Wholesale Trading Supplies', label: 'Wholesale Trading Supplies' },
+  { value: 'HJA', label: 'HJA' },
+  { value: 'Price Check', label: 'Price Check' },
+  { value: 'other', label: 'Other' }
+];
 
 const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false }) => {
   const { user } = useAuth();
@@ -98,7 +110,7 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
   });
 
   const [locationEntries, setLocationEntries] = useState<LocationEntry[]>([
-    { locationCode: 'AA', shelfNumber: '1', quantity: '' }
+    { locationCode: 'AA', shelfNumber: '0', quantity: '' }
   ]);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -109,10 +121,16 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
   const [barcodeSearchMessage, setBarcodeSearchMessage] = useState<string | null>(null);
   const [isFetchingProductInfo, setIsFetchingProductInfo] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [showOtherSupplierInput, setShowOtherSupplierInput] = useState(false);
+  const [otherSupplier, setOtherSupplier] = useState('');
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+    if (name === 'supplier') {
+      setShowOtherSupplierInput(value === 'other');
+      if (value !== 'other') setOtherSupplier('');
+    }
     
     if (errors[name]) {
       setErrors(prev => {
@@ -134,7 +152,7 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
   const addLocationEntry = () => {
     setLocationEntries(prev => [
       ...prev,
-      { locationCode: 'AA', shelfNumber: '1', quantity: '' }
+      { locationCode: 'AA', shelfNumber: '0', quantity: '' }
     ]);
   };
 
@@ -237,7 +255,7 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
           name: formData.name,
           quantity: parseInt(entry.quantity),
           price: user?.role === 'admin' ? parseFloat(formData.price) : 0,
-          supplier: formData.supplier || null,
+          supplier: formData.supplier === 'other' ? otherSupplier : formData.supplier || null,
           locationCode: entry.locationCode,
           shelfNumber: entry.shelfNumber,
           asin: formData.asin || null,
@@ -270,16 +288,18 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
             required
             fullWidth
           />
-          
-          <Input
-            label="Supplier"
-            name="supplier"
-            value={formData.supplier}
-            onChange={handleChange}
-            error={errors.supplier}
-            placeholder="Enter supplier name"
-            fullWidth
-          />
+          <div>
+            <Select
+              label="Supplier"
+              name="supplier"
+              value={formData.supplier}
+              onChange={handleChange}
+              options={supplierOptions}
+              required
+              fullWidth
+            />
+            
+          </div>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -296,6 +316,16 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
               fullWidth
             />
           )}
+          {showOtherSupplierInput && (
+              <Input
+                label="Other Supplier"
+                value={otherSupplier}
+                onChange={e => setOtherSupplier(e.target.value)}
+                placeholder="Enter supplier name"
+                required={showOtherSupplierInput}
+                fullWidth
+              />
+            )}
         </div>
 
         

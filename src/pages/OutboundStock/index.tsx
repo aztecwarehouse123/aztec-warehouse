@@ -55,32 +55,35 @@ const OutboundStock: React.FC = () => {
   }, [showToast]);
 
   // Filter and sort items
-  const filteredItems = items.filter(item => {
-    const searchLower = searchQuery.toLowerCase();
-    const matchesName = item.name.toLowerCase().includes(searchLower);
-    const matchesLocation = `${item.locationCode} - ${item.shelfNumber}`.toLowerCase().includes(searchLower);
-    
-    // Handle comma-separated ASINs
-    const matchesAsin = item.asin ? item.asin.split(',').some(asin => 
-      asin.trim().toLowerCase().includes(searchLower)
-    ) : false;
+  const filteredItems = items
+    .filter(item => item.quantity > 0) // Exclude items with zero quantity
+    .filter(item => {
+      const searchLower = searchQuery.toLowerCase();
+      const matchesName = item.name.toLowerCase().includes(searchLower);
+      const matchesLocation = `${item.locationCode} - ${item.shelfNumber}`.toLowerCase().includes(searchLower);
+      
+      // Handle comma-separated ASINs
+      const matchesAsin = item.asin ? item.asin.split(',').some(asin => 
+        asin.trim().toLowerCase().includes(searchLower)
+      ) : false;
 
-    // Handle barcode search
-    const matchesBarcode = item.barcode ? item.barcode.toLowerCase().includes(searchLower) : false;
-    
-    return matchesName || matchesLocation || matchesAsin || matchesBarcode;
-  }).sort((a, b) => {
-    if (sortBy === 'name') {
-      return a.name.localeCompare(b.name);
-    } else if (sortBy === 'quantity') {
-      return b.quantity - a.quantity;
-    } else if (sortBy === 'price') {
-      return b.price - a.price;
-    } else if (sortBy === 'date') {
-      return new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime();
-    }
-    return 0;
-  });
+      // Handle barcode search
+      const matchesBarcode = item.barcode ? item.barcode.toLowerCase().includes(searchLower) : false;
+      
+      return matchesName || matchesLocation || matchesAsin || matchesBarcode;
+    })
+    .sort((a, b) => {
+      if (sortBy === 'name') {
+        return a.name.localeCompare(b.name);
+      } else if (sortBy === 'quantity') {
+        return b.quantity - a.quantity;
+      } else if (sortBy === 'price') {
+        return b.price - a.price;
+      } else if (sortBy === 'date') {
+        return new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime();
+      }
+      return 0;
+    });
 
   const handleUpdateStock = async (data: { id: string; quantity: number; reason: string; storeName: string }) => {
     setIsLoading(true);
