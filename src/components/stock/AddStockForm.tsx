@@ -9,7 +9,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { db } from '../../config/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
-import DeleteConfirmationModal from '../modals/DeleteConfirmationModal';
+import ConfirmationModal from '../modals/ConfirmationModal';
 
 
 interface AddStockFormProps {
@@ -574,13 +574,15 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
         onBarcodeScanned={handleBarcodeScanned}
       />
 
-      <DeleteConfirmationModal
+      <ConfirmationModal
         isOpen={isDuplicateModalOpen}
         onClose={handleCancelDuplicate}
         onConfirm={handleConfirmDuplicate}
         title="Duplicate Stock Detected"
         message={duplicateInfo ? `A product with the same name and barcode already exists at location ${duplicateInfo.location}. Do you want to add stock anyway?` : ''}
         isLoading={isLoading}
+        confirmLabel="Yes"
+        cancelLabel="No"
       />
     </>
   );
