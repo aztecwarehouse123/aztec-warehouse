@@ -652,6 +652,7 @@ const handleConfirmQuantityUpdate = async () => {
         <AddStockForm 
           onSubmit={handleAddStock}
           isLoading={isLoading}
+          existingStockItems={items}
         />
       </Modal>
       

@@ -9,11 +9,13 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { db } from '../../config/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
+import DeleteConfirmationModal from '../modals/DeleteConfirmationModal';
 
 
 interface AddStockFormProps {
   onSubmit: (data: Omit<StockItem, 'id'>[]) => Promise<void>;
   isLoading?: boolean;
+  existingStockItems: StockItem[];
 }
 
 interface FormData {
@@ -96,7 +98,7 @@ const supplierOptions = [
   { value: 'other', label: 'Other' }
 ];
 
-const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false }) => {
+const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false, existingStockItems }) => {
   const { user } = useAuth();
   const [formData, setFormData] = useState<FormData>({
     name: '',
@@ -123,6 +125,9 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [showOtherSupplierInput, setShowOtherSupplierInput] = useState(false);
   const [otherSupplier, setOtherSupplier] = useState('');
+  const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
+  const [pendingStockData, setPendingStockData] = useState<Omit<StockItem, 'id'>[] | null>(null);
+  const [duplicateInfo, setDuplicateInfo] = useState<{name: string, location: string} | null>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -248,30 +253,65 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (validate()) {
+      const stockData = locationEntries.map(entry => ({
+        name: formData.name,
+        quantity: parseInt(entry.quantity),
+        price: user?.role === 'admin' ? parseFloat(formData.price) : 0,
+        supplier: formData.supplier === 'other' ? otherSupplier : formData.supplier || null,
+        locationCode: entry.locationCode,
+        shelfNumber: entry.shelfNumber,
+        asin: formData.asin || null,
+        status: formData.status as 'pending' | 'active',
+        damagedItems: parseInt(formData.damagedItems),
+        barcode: formData.barcode || null,
+        fulfillmentType: formData.fulfillmentType,
+        lastUpdated: new Date(),
+        storeName: formData.storeName === 'other' ? otherStoreName : formData.storeName
+      }));
+      // Check for duplicate (same name, barcode, and location)
+      const duplicate = stockData.find(newItem =>
+        existingStockItems.some(existing =>
+          existing.name.trim().toLowerCase() === newItem.name.trim().toLowerCase() &&
+          (existing.barcode || '') === (newItem.barcode || '') &&
+          existing.locationCode === newItem.locationCode &&
+          existing.shelfNumber === newItem.shelfNumber
+        )
+      );
+      if (duplicate) {
+        setDuplicateInfo({
+          name: duplicate.name,
+          location: `${duplicate.locationCode}-${duplicate.shelfNumber}`
+        });
+        setPendingStockData(stockData);
+        setIsDuplicateModalOpen(true);
+        return;
+      }
       try {
-        const stockData = locationEntries.map(entry => ({
-          name: formData.name,
-          quantity: parseInt(entry.quantity),
-          price: user?.role === 'admin' ? parseFloat(formData.price) : 0,
-          supplier: formData.supplier === 'other' ? otherSupplier : formData.supplier || null,
-          locationCode: entry.locationCode,
-          shelfNumber: entry.shelfNumber,
-          asin: formData.asin || null,
-          status: formData.status as 'pending' | 'active',
-          damagedItems: parseInt(formData.damagedItems),
-          barcode: formData.barcode || null,
-          fulfillmentType: formData.fulfillmentType,
-          lastUpdated: new Date(),
-          storeName: formData.storeName === 'other' ? otherStoreName : formData.storeName
-        }));
-
         await onSubmit(stockData);
       } catch (error) {
         console.error('Error adding stock:', error);
       }
     }
+  };
+
+  const handleConfirmDuplicate = async () => {
+    if (pendingStockData) {
+      try {
+        await onSubmit(pendingStockData);
+      } catch (error) {
+        console.error('Error adding stock:', error);
+      }
+      setIsDuplicateModalOpen(false);
+      setPendingStockData(null);
+      setDuplicateInfo(null);
+    }
+  };
+
+  const handleCancelDuplicate = () => {
+    setIsDuplicateModalOpen(false);
+    setPendingStockData(null);
+    setDuplicateInfo(null);
   };
 
   return (
@@ -532,6 +572,15 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
         isOpen={isScanModalOpen}
         onClose={() => setIsScanModalOpen(false)}
         onBarcodeScanned={handleBarcodeScanned}
+      />
+
+      <DeleteConfirmationModal
+        isOpen={isDuplicateModalOpen}
+        onClose={handleCancelDuplicate}
+        onConfirm={handleConfirmDuplicate}
+        title="Duplicate Stock Detected"
+        message={duplicateInfo ? `A product with the same name and barcode already exists at location ${duplicateInfo.location}. Do you want to add stock anyway?` : ''}
+        isLoading={isLoading}
       />
     </>
   );
