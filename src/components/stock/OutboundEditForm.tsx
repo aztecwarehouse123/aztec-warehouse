@@ -12,30 +12,40 @@ interface OutboundEditFormProps {
   isLoading: boolean;
 }
 
+const predefinedStores = ['supply & serve', 'APHY', 'AZTEC', 'ZK'];
+
 const OutboundEditForm: React.FC<OutboundEditFormProps> = ({ item, onSubmit, isLoading }) => {
-  const [deductQuantity, setDeductQuantity] = useState<number>(0);
+  const [deductQuantity, setDeductQuantity] = useState<string>('');
   const [reason, setReason] = useState<string>('');
   const [otherReason, setOtherReason] = useState<string>('');
-  const [storeName, setStoreName] = useState<string>(item.storeName || '');
+  const storeOptions = predefinedStores.includes(item.storeName)
+    ? predefinedStores
+    : [item.storeName, ...predefinedStores];
+  const storeSelectOptions = [...storeOptions, 'other'];
+  const [storeName, setStoreName] = useState<string>(item.storeName || storeOptions[0] || '');
+  const [otherStoreName, setOtherStoreName] = useState<string>('');
   const { isDarkMode } = useTheme();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (deductQuantity <= 0 || deductQuantity > item.quantity) return;
+    const quantityNum = Number(deductQuantity);
+    if (!deductQuantity || quantityNum <= 0 || quantityNum > item.quantity) return;
     const finalReason = reason === 'other' ? otherReason : reason;
+    const finalStoreName = storeName === 'other' ? otherStoreName.trim() : storeName.trim();
     await onSubmit({ 
       id: item.id, 
-      quantity: item.quantity - deductQuantity, 
+      quantity: item.quantity - quantityNum, 
       reason: finalReason,
-      storeName: storeName.trim()
+      storeName: finalStoreName
     });
   };
 
   const getValidationMessage = () => {
-    if (deductQuantity <= 0) {
+    const quantityNum = Number(deductQuantity);
+    if (!deductQuantity || quantityNum <= 0) {
       return "Quantity to deduct must be greater than 0";
     }
-    if (deductQuantity > item.quantity) {
+    if (quantityNum > item.quantity) {
       return `Cannot deduct more than current stock (${item.quantity} units)`;
     }
     if (!reason) {
@@ -44,8 +54,8 @@ const OutboundEditForm: React.FC<OutboundEditFormProps> = ({ item, onSubmit, isL
     if (reason === 'other' && !otherReason.trim()) {
       return "Please specify the reason";
     }
-    if (!storeName.trim()) {
-      return "Please enter the store name";
+    if (!storeName.trim() || (storeName === 'other' && !otherStoreName.trim())) {
+      return "Please select or enter the store name";
     }
     return null;
   };
@@ -77,12 +87,10 @@ const OutboundEditForm: React.FC<OutboundEditFormProps> = ({ item, onSubmit, isL
             min="1"
             max={item.quantity}
             value={deductQuantity}
-            onChange={(e) => setDeductQuantity(Number(e.target.value))}
+            onChange={(e) => setDeductQuantity(e.target.value.replace(/^0+(?!$)/, ''))}
             placeholder="Enter quantity to deduct"
             required
-            className={`${isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-300 text-gray-900'} ${
-              validationMessage ? 'border-red-500 focus:border-red-500' : ''
-            }`}
+            className={`${isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-300 text-gray-900'} ${validationMessage ? 'border-red-500 focus:border-red-500' : ''}`}
           />
         </div>
 
@@ -106,9 +114,7 @@ const OutboundEditForm: React.FC<OutboundEditFormProps> = ({ item, onSubmit, isL
               { value: 'damaged', label: 'Damaged' },
               { value: 'other', label: 'Other' }
             ]}
-            className={`${isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-300 text-gray-900'} ${
-              validationMessage ? 'border-red-500 focus:border-red-500' : ''
-            }`}
+            className={`${isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-300 text-gray-900'} ${validationMessage ? 'border-red-500 focus:border-red-500' : ''}`}
           />
         </div>
 
@@ -127,9 +133,7 @@ const OutboundEditForm: React.FC<OutboundEditFormProps> = ({ item, onSubmit, isL
               onChange={(e) => setOtherReason(e.target.value)}
               placeholder="Enter the reason"
               required
-              className={`${isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-300 text-gray-900'} ${
-                validationMessage ? 'border-red-500 focus:border-red-500' : ''
-              }`}
+              className={`${isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-300 text-gray-900'} ${validationMessage ? 'border-red-500 focus:border-red-500' : ''}`}
             />
           </div>
         )}
@@ -141,29 +145,37 @@ const OutboundEditForm: React.FC<OutboundEditFormProps> = ({ item, onSubmit, isL
           >
             Store Name
           </label>
-          <Input
+          <Select
             id="storeName"
-            type="text"
             value={storeName}
             onChange={(e) => setStoreName(e.target.value)}
-            placeholder="Enter store name"
+            options={storeSelectOptions.map(store => ({ value: store, label: store === 'other' ? 'Other' : store }))}
             required
-            className={`${isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-300 text-gray-900'} ${
-              validationMessage ? 'border-red-500 focus:border-red-500' : ''
-            }`}
+            className={`${isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-300 text-gray-900'} ${validationMessage ? 'border-red-500 focus:border-red-500' : ''}`}
           />
+          {storeName === 'other' && (
+            <Input
+              id="otherStoreName"
+              type="text"
+              value={otherStoreName}
+              onChange={(e) => setOtherStoreName(e.target.value)}
+              placeholder="Enter store name"
+              required
+              className={`${isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-300 text-gray-900'} ${validationMessage ? 'border-red-500 focus:border-red-500' : ''}`}
+            />
+          )}
         </div>
 
-          {validationMessage ? (
-            <div className={`flex items-center space-x-2 text-sm ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>
-              <AlertCircle size={16} />
-              <span>{validationMessage}</span>
-            </div>
-          ) : (
-            <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
-              Enter the quantity to be deducted from current stock
-            </p>
-          )}
+        {validationMessage ? (
+          <div className={`flex items-center space-x-2 text-sm ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>
+            <AlertCircle size={16} />
+            <span>{validationMessage}</span>
+          </div>
+        ) : (
+          <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+            Enter the quantity to be deducted from current stock
+          </p>
+        )}
       </div>
 
       <div className="flex justify-end space-x-3">
