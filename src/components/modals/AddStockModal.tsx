@@ -8,54 +8,33 @@ interface AddStockModalProps {
 }
 
 const locationOptions = [
-  { value: 'AA', label: 'AA' },
-  { value: 'AB', label: 'AB' },
-  { value: 'AC', label: 'AC' },
-  { value: 'AD', label: 'AD' },
-  { value: 'AE', label: 'AE' },
-  { value: 'AF', label: 'AF' },
-  { value: 'AG', label: 'AG' },
-  { value: 'BA', label: 'BA' },
-  { value: 'BB', label: 'BB' },
-  { value: 'BC', label: 'BC' },
-  { value: 'BD', label: 'BD' },
-  { value: 'BE', label: 'BE' },
-  { value: 'BF', label: 'BF' },
-  { value: 'BG', label: 'BG' },
-  { value: 'CA', label: 'CA' },
-  { value: 'CB', label: 'CB' },
-  { value: 'CC', label: 'CC' },
-  { value: 'CD', label: 'CD' },
-  { value: 'CE', label: 'CE' },
-  { value: 'CF', label: 'CF' },
-  { value: 'CG', label: 'CG' },
-  { value: 'DA', label: 'DA' },
-  { value: 'DB', label: 'DB' },
-  { value: 'DC', label: 'DC' },
-  { value: 'DD', label: 'DD' },
-  { value: 'DE', label: 'DE' },
-  { value: 'DF', label: 'DF' },
-  { value: 'DG', label: 'DG' },
-  { value: 'EA', label: 'EA' },
-  { value: 'EB', label: 'EB' },
-  { value: 'EC', label: 'EC' },
-  { value: 'ED', label: 'ED' },
-  { value: 'EE', label: 'EE' },
-  { value: 'EF', label: 'EF' },
-  { value: 'EG', label: 'EG' },
-  { value: 'FA', label: 'FA' },
-  { value: 'FB', label: 'FB' },
-  { value: 'FC', label: 'FC' },
-  { value: 'FD', label: 'FD' },
-  { value: 'FE', label: 'FE' },
-  { value: 'FF', label: 'FF' },
-  { value: 'FG', label: 'FG' }
+  { value: 'A', label: 'A' },
+  { value: 'B', label: 'B' },
+  { value: 'C', label: 'C' },
+  { value: 'D', label: 'D' },
+  { value: 'E', label: 'E' },
+  { value: 'F', label: 'F' },
+  { value: 'G', label: 'G' },
+  { value: 'H', label: 'H' },
+  { value: 'I', label: 'I' },
+  { value: 'J', label: 'J' },
+  { value: 'K', label: 'K' },
+  { value: 'L', label: 'L' },
+  { value: 'M', label: 'M' },
+  { value: 'N', label: 'N' },
+  { value: 'O', label: 'O' },
+  { value: 'P', label: 'P' },
+  { value: 'Q', label: 'Q' },
+  { value: 'R', label: 'R' },
+  { value: 'S', label: 'S' },
+  { value: 'T', label: 'T' },
 ];
 
-const shelfOptions = Array.from({ length: 6 }, (_, i) => ({
-  value: (i + 1).toString(),
-  label: `${i + 1}`
-}));
+function getShelfOptions(locationCode: string) {
+  const twoShelf = ['A', 'B', 'Q', 'R', 'S', 'T'];
+  const max = twoShelf.includes(locationCode) ? 2 : 5;
+  return Array.from({ length: max }, (_, i) => ({ value: (i + 1).toString(), label: (i + 1).toString() }));
+}
 
 const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, onAdd }) => {
   const [name, setName] = useState('');
@@ -79,7 +58,9 @@ const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, onAdd })
       barcode: barcode || '',
       asin: asin || '',
       status: 'pending',
-      damagedItems: 0
+      damagedItems: 0,
+      fulfillmentType: 'fba',
+      storeName: 'supply & serve',
     });
     handleClose();
   };
@@ -168,7 +149,7 @@ const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, onAdd })
                 className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 required
               >
-                {shelfOptions.map(option => (
+                {getShelfOptions(locationCode).map(option => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>

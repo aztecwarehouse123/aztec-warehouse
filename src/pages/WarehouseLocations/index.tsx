@@ -82,14 +82,16 @@ const WarehouseLocations: React.FC = () => {
     Promise.all([fetchLocations(), fetchAvailability()]).finally(() => setIsLoading(false));
   }, []);
 
-  const allLocationCodes = [
-    'AA', 'AB', 'AC', 'AD', 'AE', 'AF', 'AG',
-    'BA', 'BB', 'BC', 'BD', 'BE', 'BF', 'BG',
-    'CA', 'CB', 'CC', 'CD', 'CE', 'CF', 'CG',
-    'DA', 'DB', 'DC', 'DD', 'DE', 'DF', 'DG',
-    'EA', 'EB', 'EC', 'ED', 'EE', 'EF', 'EG',
-    'FA', 'FB', 'FC', 'FD', 'FE', 'FF', 'FG'
+  const locationOptions = [
+    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T'
   ];
+  function getShelfOptions(locationCode: string) {
+    const twoShelf = ['A', 'B', 'Q', 'R', 'S', 'T'];
+    const max = twoShelf.includes(locationCode) ? 2 : 5;
+    return Array.from({ length: max }, (_, i) => (i + 1).toString());
+  }
+
+  const allLocationCodes = locationOptions;
 
   const locationSummaries = allLocationCodes.reduce((acc, code) => {
     const products = locations.filter(loc => loc.locationCode === code);
@@ -153,7 +155,7 @@ const WarehouseLocations: React.FC = () => {
     }
   };
 
-  function sanitizeStockData(data: Record<string, any>) {
+  function sanitizeStockData(data: Record<string, unknown>) {
     const clean = { ...data };
     Object.keys(clean).forEach(key => {
       if (clean[key] === undefined) clean[key] = null;
@@ -456,7 +458,7 @@ const WarehouseLocations: React.FC = () => {
                 className={`w-full rounded border px-2 py-1 ${isDarkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300 text-slate-800'}`}
                 required
               >
-                {allLocationCodes.map(code => (
+                {locationOptions.map(code => (
                   <option key={code} value={code}>{code}</option>
                 ))}
               </select>
@@ -469,7 +471,7 @@ const WarehouseLocations: React.FC = () => {
                 className={`w-full rounded border px-2 py-1 ${isDarkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300 text-slate-800'}`}
                 required
               >
-                {[0,1,2,3,4,5].map(num => (
+                {getShelfOptions(moveLocation).map(num => (
                   <option key={num} value={num}>{num}</option>
                 ))}
               </select>

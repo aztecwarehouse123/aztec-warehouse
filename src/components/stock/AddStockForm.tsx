@@ -37,54 +37,33 @@ interface LocationEntry {
 }
 
 const locationOptions = [
-  { value: 'AA', label: 'AA' },
-  { value: 'AB', label: 'AB' },
-  { value: 'AC', label: 'AC' },
-  { value: 'AD', label: 'AD' },
-  { value: 'AE', label: 'AE' },
-  { value: 'AF', label: 'AF' },
-  { value: 'AG', label: 'AG' },
-  { value: 'BA', label: 'BA' },
-  { value: 'BB', label: 'BB' },
-  { value: 'BC', label: 'BC' },
-  { value: 'BD', label: 'BD' },
-  { value: 'BE', label: 'BE' },
-  { value: 'BF', label: 'BF' },
-  { value: 'BG', label: 'BG' },
-  { value: 'CA', label: 'CA' },
-  { value: 'CB', label: 'CB' },
-  { value: 'CC', label: 'CC' },
-  { value: 'CD', label: 'CD' },
-  { value: 'CE', label: 'CE' },
-  { value: 'CF', label: 'CF' },
-  { value: 'CG', label: 'CG' },
-  { value: 'DA', label: 'DA' },
-  { value: 'DB', label: 'DB' },
-  { value: 'DC', label: 'DC' },
-  { value: 'DD', label: 'DD' },
-  { value: 'DE', label: 'DE' },
-  { value: 'DF', label: 'DF' },
-  { value: 'DG', label: 'DG' },
-  { value: 'EA', label: 'EA' },
-  { value: 'EB', label: 'EB' },
-  { value: 'EC', label: 'EC' },
-  { value: 'ED', label: 'ED' },
-  { value: 'EE', label: 'EE' },
-  { value: 'EF', label: 'EF' },
-  { value: 'EG', label: 'EG' },
-  { value: 'FA', label: 'FA' },
-  { value: 'FB', label: 'FB' },
-  { value: 'FC', label: 'FC' },
-  { value: 'FD', label: 'FD' },
-  { value: 'FE', label: 'FE' },
-  { value: 'FF', label: 'FF' },
-  { value: 'FG', label: 'FG' }
+  { value: 'A', label: 'A' },
+  { value: 'B', label: 'B' },
+  { value: 'C', label: 'C' },
+  { value: 'D', label: 'D' },
+  { value: 'E', label: 'E' },
+  { value: 'F', label: 'F' },
+  { value: 'G', label: 'G' },
+  { value: 'H', label: 'H' },
+  { value: 'I', label: 'I' },
+  { value: 'J', label: 'J' },
+  { value: 'K', label: 'K' },
+  { value: 'L', label: 'L' },
+  { value: 'M', label: 'M' },
+  { value: 'N', label: 'N' },
+  { value: 'O', label: 'O' },
+  { value: 'P', label: 'P' },
+  { value: 'Q', label: 'Q' },
+  { value: 'R', label: 'R' },
+  { value: 'S', label: 'S' },
+  { value: 'T', label: 'T' },
 ];
 
-const shelfOptions = Array.from({ length: 6 }, (_, i) => ({
-  value: i.toString(),
-  label: `${i}`
-}));
+function getShelfOptions(locationCode: string) {
+  const twoShelf = ['A', 'B', 'Q', 'R', 'S', 'T'];
+  const max = twoShelf.includes(locationCode) ? 2 : 5;
+  return Array.from({ length: max }, (_, i) => ({ value: (i + 1).toString(), label: (i + 1).toString() }));
+}
 
 const supplierOptions = [
   { value: 'Rayburns Trading', label: 'Rayburns Trading' },
@@ -112,7 +91,7 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
   });
 
   const [locationEntries, setLocationEntries] = useState<LocationEntry[]>([
-    { locationCode: 'AA', shelfNumber: '0', quantity: '' }
+    { locationCode: 'A', shelfNumber: '1', quantity: '' }
   ]);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -157,7 +136,7 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
   const addLocationEntry = () => {
     setLocationEntries(prev => [
       ...prev,
-      { locationCode: 'AA', shelfNumber: '0', quantity: '' }
+      { locationCode: 'A', shelfNumber: '1', quantity: '' }
     ]);
   };
 
@@ -254,11 +233,13 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (validate()) {
+      const defaultSupplier = supplierOptions[0].value;
+      const defaultStore = 'supply & serve';
       const stockData = locationEntries.map(entry => ({
         name: formData.name,
         quantity: parseInt(entry.quantity),
         price: user?.role === 'admin' ? parseFloat(formData.price) : 0,
-        supplier: formData.supplier === 'other' ? otherSupplier : formData.supplier || null,
+        supplier: formData.supplier === 'other' ? otherSupplier : (formData.supplier || defaultSupplier),
         locationCode: entry.locationCode,
         shelfNumber: entry.shelfNumber,
         asin: formData.asin || null,
@@ -267,7 +248,7 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
         barcode: formData.barcode || null,
         fulfillmentType: formData.fulfillmentType,
         lastUpdated: new Date(),
-        storeName: formData.storeName === 'other' ? otherStoreName : formData.storeName
+        storeName: formData.storeName === 'other' ? otherStoreName : (formData.storeName || defaultStore)
       }));
       // Check for duplicate (same name, barcode, and location)
       const duplicate = stockData.find(newItem =>
@@ -398,7 +379,7 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
                 label="Shelf Number"
                 value={entry.shelfNumber}
                 onChange={(e) => handleLocationEntryChange(index, 'shelfNumber', e.target.value)}
-                options={shelfOptions}
+                options={getShelfOptions(entry.locationCode)}
                 required
                 fullWidth
               />
