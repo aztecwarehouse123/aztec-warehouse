@@ -29,33 +29,94 @@ interface EditStockFormProps {
 }
 
 const locationOptions = [
-  { value: 'A', label: 'A' },
-  { value: 'B', label: 'B' },
-  { value: 'C', label: 'C' },
-  { value: 'D', label: 'D' },
-  { value: 'E', label: 'E' },
-  { value: 'F', label: 'F' },
-  { value: 'G', label: 'G' },
-  { value: 'H', label: 'H' },
-  { value: 'I', label: 'I' },
-  { value: 'J', label: 'J' },
-  { value: 'K', label: 'K' },
-  { value: 'L', label: 'L' },
-  { value: 'M', label: 'M' },
-  { value: 'N', label: 'N' },
-  { value: 'O', label: 'O' },
-  { value: 'P', label: 'P' },
-  { value: 'Q', label: 'Q' },
-  { value: 'R', label: 'R' },
-  { value: 'S', label: 'S' },
-  { value: 'T', label: 'T' },
+  { value: 'A1', label: 'A1' },
+  { value: 'A2', label: 'A2' },
+  { value: 'B1', label: 'B1' },
+  { value: 'B2', label: 'B2' },
+  { value: 'C1', label: 'C1' },
+  { value: 'C2', label: 'C2' },
+  { value: 'C3', label: 'C3' },
+  { value: 'C4', label: 'C4' },
+  { value: 'C5', label: 'C5' },
+  { value: 'D1', label: 'D1' },
+  { value: 'D2', label: 'D2' },
+  { value: 'D3', label: 'D3' },
+  { value: 'D4', label: 'D4' },
+  { value: 'D5', label: 'D5' },
+  { value: 'E1', label: 'E1' },
+  { value: 'E2', label: 'E2' },
+  { value: 'E3', label: 'E3' },
+  { value: 'E4', label: 'E4' },
+  { value: 'E5', label: 'E5' },
+  { value: 'F1', label: 'F1' },
+  { value: 'F2', label: 'F2' },
+  { value: 'F3', label: 'F3' },
+  { value: 'F4', label: 'F4' },
+  { value: 'F5', label: 'F5' },
+  { value: 'G1', label: 'G1' },
+  { value: 'G2', label: 'G2' },
+  { value: 'G3', label: 'G3' },
+  { value: 'G4', label: 'G4' },
+  { value: 'G5', label: 'G5' },
+  { value: 'H1', label: 'H1' },
+  { value: 'H2', label: 'H2' },
+  { value: 'H3', label: 'H3' },
+  { value: 'H4', label: 'H4' },
+  { value: 'H5', label: 'H5' },
+  { value: 'I1', label: 'I1' },
+  { value: 'I2', label: 'I2' },
+  { value: 'I3', label: 'I3' },
+  { value: 'I4', label: 'I4' },
+  { value: 'I5', label: 'I5' },
+  { value: 'J1', label: 'J1' },
+  { value: 'J2', label: 'J2' },
+  { value: 'J3', label: 'J3' },
+  { value: 'J4', label: 'J4' },
+  { value: 'J5', label: 'J5' },
+  { value: 'K1', label: 'K1' },
+  { value: 'K2', label: 'K2' },
+  { value: 'K3', label: 'K3' },
+  { value: 'K4', label: 'K4' },
+  { value: 'K5', label: 'K5' },
+  { value: 'L1', label: 'L1' },
+  { value: 'L2', label: 'L2' },
+  { value: 'L3', label: 'L3' },
+  { value: 'L4', label: 'L4' },
+  { value: 'L5', label: 'L5' },
+  { value: 'M1', label: 'M1' },
+  { value: 'M2', label: 'M2' },
+  { value: 'M3', label: 'M3' },
+  { value: 'M4', label: 'M4' },
+  { value: 'M5', label: 'M5' },
+  { value: 'N1', label: 'N1' },
+  { value: 'N2', label: 'N2' },
+  { value: 'N3', label: 'N3' },
+  { value: 'N4', label: 'N4' },
+  { value: 'N5', label: 'N5' },
+  { value: 'O1', label: 'O1' },
+  { value: 'O2', label: 'O2' },
+  { value: 'O3', label: 'O3' },
+  { value: 'O4', label: 'O4' },
+  { value: 'O5', label: 'O5' },
+  { value: 'P1', label: 'P1' },
+  { value: 'P2', label: 'P2' },
+  { value: 'P3', label: 'P3' },
+  { value: 'P4', label: 'P4' },
+  { value: 'P5', label: 'P5' },
+  { value: 'Q1', label: 'Q1' },
+  { value: 'Q2', label: 'Q2' },
+  { value: 'R1', label: 'R1' },
+  { value: 'R2', label: 'R2' },
+  { value: 'S1', label: 'S1' },
+  { value: 'S2', label: 'S2' },
+  { value: 'T1', label: 'T1' },
+  { value: 'T2', label: 'T2' }
 ];
 
-function getShelfOptions(locationCode: string) {
-  const twoShelf = ['A', 'B', 'Q', 'R', 'S', 'T'];
-  const max = twoShelf.includes(locationCode) ? 2 : 5;
-  return Array.from({ length: max }, (_, i) => ({ value: (i + 1).toString(), label: (i + 1).toString() }));
-}
+const shelfOptions = Array.from({ length: 6 }, (_, i) => ({
+  value: i.toString(),
+  label: `${i}`
+}));
 
 const predefinedStores = ['supply & serve', 'APHY', 'AZTEC', 'ZK'];
 
@@ -273,7 +334,7 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
           name="shelfNumber"
           value={formData.shelfNumber}
           onChange={handleChange}
-          options={getShelfOptions(formData.locationCode)}
+          options={shelfOptions}
           required
           fullWidth
         />

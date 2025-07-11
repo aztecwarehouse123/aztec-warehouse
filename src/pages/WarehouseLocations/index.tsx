@@ -28,7 +28,7 @@ const WarehouseLocations: React.FC = () => {
   const [moveModalOpen, setMoveModalOpen] = useState(false);
   const [moveProduct, setMoveProduct] = useState<StockItem | null>(null);
   const [moveQuantity, setMoveQuantity] = useState(1);
-  const [moveLocation, setMoveLocation] = useState('AA');
+  const [moveLocation, setMoveLocation] = useState('A1');
   const [moveShelf, setMoveShelf] = useState('0');
   const [moveLoading, setMoveLoading] = useState(false);
   const { user } = useAuth();
@@ -82,16 +82,28 @@ const WarehouseLocations: React.FC = () => {
     Promise.all([fetchLocations(), fetchAvailability()]).finally(() => setIsLoading(false));
   }, []);
 
-  const locationOptions = [
-    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T'
+  const allLocationCodes = [
+    'A1', 'A2',
+    'B1', 'B2',
+    'C1', 'C2', 'C3', 'C4', 'C5',
+    'D1', 'D2', 'D3', 'D4', 'D5',
+    'E1', 'E2', 'E3', 'E4', 'E5',
+    'F1', 'F2', 'F3', 'F4', 'F5',
+    'G1', 'G2', 'G3', 'G4', 'G5',
+    'H1', 'H2', 'H3', 'H4', 'H5',
+    'I1', 'I2', 'I3', 'I4', 'I5',
+    'J1', 'J2', 'J3', 'J4', 'J5',
+    'K1', 'K2', 'K3', 'K4', 'K5',
+    'L1', 'L2', 'L3', 'L4', 'L5',
+    'M1', 'M2', 'M3', 'M4', 'M5',
+    'N1', 'N2', 'N3', 'N4', 'N5',
+    'O1', 'O2', 'O3', 'O4', 'O5',
+    'P1', 'P2', 'P3', 'P4', 'P5',
+    'Q1', 'Q2',
+    'R1', 'R2',
+    'S1', 'S2',
+    'T1', 'T2'
   ];
-  function getShelfOptions(locationCode: string) {
-    const twoShelf = ['A', 'B', 'Q', 'R', 'S', 'T'];
-    const max = twoShelf.includes(locationCode) ? 2 : 5;
-    return Array.from({ length: max }, (_, i) => (i + 1).toString());
-  }
-
-  const allLocationCodes = locationOptions;
 
   const locationSummaries = allLocationCodes.reduce((acc, code) => {
     const products = locations.filter(loc => loc.locationCode === code);
@@ -155,7 +167,7 @@ const WarehouseLocations: React.FC = () => {
     }
   };
 
-  function sanitizeStockData(data: Record<string, unknown>) {
+  function sanitizeStockData(data: Record<string, any>) {
     const clean = { ...data };
     Object.keys(clean).forEach(key => {
       if (clean[key] === undefined) clean[key] = null;
@@ -458,7 +470,7 @@ const WarehouseLocations: React.FC = () => {
                 className={`w-full rounded border px-2 py-1 ${isDarkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300 text-slate-800'}`}
                 required
               >
-                {locationOptions.map(code => (
+                {allLocationCodes.map(code => (
                   <option key={code} value={code}>{code}</option>
                 ))}
               </select>
@@ -471,7 +483,7 @@ const WarehouseLocations: React.FC = () => {
                 className={`w-full rounded border px-2 py-1 ${isDarkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300 text-slate-800'}`}
                 required
               >
-                {getShelfOptions(moveLocation).map(num => (
+                {[0,1,2,3,4,5].map(num => (
                   <option key={num} value={num}>{num}</option>
                 ))}
               </select>

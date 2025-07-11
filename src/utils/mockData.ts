@@ -38,7 +38,7 @@ export const stockItems: StockItem[] = [
     price: 89.99,
     supplier: 'Tech Supplies Inc.',
     lastUpdated: new Date(),
-    locationCode: 'AA',
+    locationCode: 'A1',
     shelfNumber: 3,
   },
   {
@@ -48,7 +48,7 @@ export const stockItems: StockItem[] = [
     price: 24.99,
     supplier: 'Fashion Forward',
     lastUpdated: subDays(new Date(), 2),
-    locationCode: 'AB',
+    locationCode: 'A2',
     shelfNumber: 1,
   },
   {
@@ -58,7 +58,7 @@ export const stockItems: StockItem[] = [
     price: 149.99,
     supplier: 'Office Comfort LLC',
     lastUpdated: subDays(new Date(), 5),
-    locationCode: 'AC',
+    locationCode: 'B1',
     shelfNumber: 2,
   },
   {
@@ -68,7 +68,7 @@ export const stockItems: StockItem[] = [
     price: 19.99,
     supplier: 'Tech Accessories Co.',
     lastUpdated: subDays(new Date(), 1),
-    locationCode: 'AA',
+    locationCode: 'B2',
     shelfNumber: 4,
   },
   {
@@ -78,7 +78,7 @@ export const stockItems: StockItem[] = [
     price: 2.99,
     supplier: 'Nutrition Wholesale',
     lastUpdated: subDays(new Date(), 3),
-    locationCode: 'AB',
+    locationCode: 'C1',
     shelfNumber: 2,
   },
   {
@@ -88,7 +88,7 @@ export const stockItems: StockItem[] = [
     price: 59.99,
     supplier: 'Travel Gear Ltd.',
     lastUpdated: subDays(new Date(), 7),
-    locationCode: 'AC',
+    locationCode: 'C2',
     shelfNumber: 3,
   },
   {
@@ -98,7 +98,7 @@ export const stockItems: StockItem[] = [
     price: 29.99,
     supplier: 'Tech Supplies Inc.',
     lastUpdated: subDays(new Date(), 4),
-    locationCode: 'AA',
+    locationCode: 'D1',
     shelfNumber: 2,
   },
   {
@@ -108,7 +108,7 @@ export const stockItems: StockItem[] = [
     price: 49.99,
     supplier: 'Fashion Forward',
     lastUpdated: subDays(new Date(), 6),
-    locationCode: 'AB',
+    locationCode: 'D2',
     shelfNumber: 4,
   }
 ];
