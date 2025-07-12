@@ -306,19 +306,19 @@ const Add: React.FC = () => {
         </span>
       </div>
       <div className="space-y-6">
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-6 gap-4">
           <div>
-            <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} mt-1`}>Scan and add new products to your warehouse inventory</p>
+            <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} mt-1 text-left md:text-left`}>Scan and add new products to your warehouse inventory</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-2 w-full md:w-auto">
             <Button
               variant="secondary"
               onClick={() => fetchProducts()}
-              className={`flex items-center gap-2 ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`flex items-center gap-2 w-full md:w-auto ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
               disabled={isLoading}
               icon={<RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />}
             />
-            <Button icon={<Upload size={18} />} onClick={() => fileInputRef.current?.click()}>
+            <Button icon={<Upload size={18} />} onClick={() => fileInputRef.current?.click()} className="w-full md:w-auto">
               Upload CSV/XLSX
             </Button>
             <input
@@ -328,7 +328,7 @@ const Add: React.FC = () => {
               onChange={handleFileUpload}
               style={{ display: 'none' }}
             />
-            <Button icon={<Plus size={18} />} onClick={() => handleOpenModal()}>
+            <Button icon={<Plus size={18} />} onClick={() => handleOpenModal()} className="w-full md:w-auto">
               Add Product
             </Button>
           </div>
@@ -429,7 +429,9 @@ const Add: React.FC = () => {
           onClose={() => setIsScanModalOpen(false)}
           onBarcodeScanned={handleBarcodeScanned}
         />
-        <div className={`overflow-x-auto overflow-y-hidden ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} rounded-lg border`}>
+        {/* Responsive Product List: Table on md+, Cards on mobile */}
+        {/* Table for md+ screens */}
+        <div className="hidden md:block overflow-x-auto overflow-y-hidden rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
           <table className={`min-w-full divide-y ${isDarkMode ? 'divide-slate-700' : 'divide-slate-200'} ${isDarkMode ? 'bg-slate-800' : 'bg-white'} rounded-lg`}>
             <thead className={isDarkMode ? 'bg-slate-700/50' : 'bg-slate-100'}>
               <tr>
@@ -443,7 +445,7 @@ const Add: React.FC = () => {
             <tbody className={`divide-y ${isDarkMode ? 'divide-slate-700' : 'divide-slate-200'}`}>
               {isLoading ? (
                 <tr>
-                  <td colSpan={4} style={{ border: 0, padding: 0 }}>
+                  <td colSpan={5} style={{ border: 0, padding: 0 }}>
                     <div className="flex flex-col items-center justify-center min-h-[200px] w-full py-12">
                       <Loader2 className={`w-8 h-8 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'} animate-spin`} />
                       <p className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>Loading products...</p>
@@ -452,7 +454,7 @@ const Add: React.FC = () => {
                 </tr>
               ) : products.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className={`text-center py-8 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>No products found.</td>
+                  <td colSpan={5} className={`text-center py-8 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>No products found.</td>
                 </tr>
               ) :
                 products.map((product, index) => (
@@ -490,6 +492,53 @@ const Add: React.FC = () => {
               }
             </tbody>
           </table>
+        </div>
+        {/* Cards for mobile screens */}
+        <div className="md:hidden flex flex-col gap-4">
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center min-h-[200px] w-full py-12">
+              <Loader2 className={`w-8 h-8 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'} animate-spin`} />
+              <p className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>Loading products...</p>
+            </div>
+          ) : products.length === 0 ? (
+            <div className={`text-center py-8 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>No products found.</div>
+          ) : (
+            products.map((product) => (
+              <div
+                key={product.id}
+                className={`rounded-lg shadow p-4 flex flex-col gap-2 ${isDarkMode ? 'bg-slate-800' : 'bg-white'} cursor-pointer`}
+                onClick={() => setSelectedProduct(product)}
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className={`font-semibold ${isDarkMode ? 'text-blue-300' : 'text-blue-700'}`}>{product.name}</div>
+                    <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{product.unit}</div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={e => { e.stopPropagation(); handleOpenModal(product); }}
+                      className={`${isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'}`}
+                    >
+                      <Edit2 size={16} />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={e => { e.stopPropagation(); setDeleteProductId(product.id); }}
+                      className={`${isDarkMode ? 'text-red-400 hover:text-red-300' : 'text-red-600 hover:text-red-700'}`}
+                      disabled={isDeleting && deleteProductId === product.id}
+                    >
+                      <Trash2 size={16} />
+                    </Button>
+                  </div>
+                </div>
+                <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Barcode: <span className={`font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{product.barcode}</span></div>
+                <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Created: <span className={`font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{format(product.createdAt, 'MMM d, yyyy, h:mm a')}</span></div>
+              </div>
+            ))
+          )}
         </div>
         {/* Delete Confirmation Modal */}
         <Modal

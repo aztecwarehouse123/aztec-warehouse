@@ -684,23 +684,24 @@ const Settings: React.FC = () => {
       {/* User Management Section */}
       {user?.role === 'admin' && (
         <div className={`mt-8 p-6 rounded-lg ${isDarkMode ? 'bg-slate-1000' : 'bg-white'}`}>
-          <h2 className={`text-xl font-semibold mb-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-            User Management
-          </h2>
-          
-          <div className="flex justify-end mb-4">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-4">
+            <h2 className={`text-xl font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'} text-center md:text-left`}>
+              User Management
+            </h2>
             <Button
               onClick={() => setIsAddUserModalOpen(true)}
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 self-center md:self-auto"
             >
               <User size={16} />
               Add New User
             </Button>
           </div>
 
+          {/* Responsive User List: Table on md+, Cards on mobile */}
           <div className={`rounded-lg shadow overflow-hidden ${isDarkMode ? 'bg-slate-700' : 'bg-gray-50'}`}>
-            <div className="overflow-x-auto">
-              <table className={`min-w-full divide-y ${isDarkMode ? 'divide-slate-700' : 'divide-gray-200'}`}>
+            {/* Table for md+ screens */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className={`min-w-full divide-y ${isDarkMode ? 'divide-slate-700' : 'divide-gray-200'}`}> 
                 <thead className={isDarkMode ? 'bg-slate-700' : 'bg-gray-50'}>
                   <tr>
                     <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${isDarkMode ? 'text-slate-300' : 'text-gray-500'}`}>Username</th>
@@ -710,24 +711,24 @@ const Settings: React.FC = () => {
                     <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${isDarkMode ? 'text-slate-300' : 'text-gray-500'}`}>Actions</th>
                   </tr>
                 </thead>
-                <tbody className={`divide-y ${isDarkMode ? 'divide-slate-700 bg-slate-800' : 'divide-gray-200 bg-white'}`}>
+                <tbody className={`divide-y ${isDarkMode ? 'divide-slate-700 bg-slate-800' : 'divide-gray-200 bg-white'}`}> 
                   {users
-                    .filter(user => user.role!== 'admin') // Filter out current user
+                    .filter(user => user.role!== 'admin')
                     .map((user) => (
                     <tr key={user.id} className={isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-gray-50'}>
                       <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>{user.username}</td>
                       <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>{user.email || '-'}</td>
                       <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>{user.name}</td>
                       <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>{user.role}</td>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>
+                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}> 
                         <div className="flex items-center gap-2">
                           <Button 
                             variant="ghost" 
                             size="sm" 
-                          onClick={() => handleEditUser(user)}
+                            onClick={() => handleEditUser(user)}
                             className={`${isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'}`}
-                        >
-                          <Edit2 size={16} />
+                          >
+                            <Edit2 size={16} />
                           </Button>
                           <Button 
                             variant="ghost" 
@@ -743,6 +744,42 @@ const Settings: React.FC = () => {
                   ))}
                 </tbody>
               </table>
+            </div>
+            {/* Cards for mobile screens */}
+            <div className="md:hidden flex flex-col gap-4 p-2">
+              {users.filter(user => user.role!== 'admin').map((user) => (
+                <div
+                  key={user.id}
+                  className={`rounded-lg shadow p-4 flex flex-col gap-2 ${isDarkMode ? 'bg-slate-800' : 'bg-white'}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className={`font-semibold ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>{user.name}</div>
+                      <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>{user.username}</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleEditUser(user)}
+                        className={`${isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'}`}
+                      >
+                        <Edit2 size={16} />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDeleteUser(user.name, user.username)}
+                        className={`${isDarkMode ? 'text-red-400 hover:text-red-300' : 'text-red-600 hover:text-red-700'}`}
+                      >
+                        <Trash2 size={16} />
+                      </Button>
+                    </div>
+                  </div>
+                  <div className={`text-sm ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>{user.email || '-'}</div>
+                  <div className={`text-xs font-medium ${isDarkMode ? 'text-blue-300' : 'text-blue-700'}`}>{user.role}</div>
+                </div>
+              ))}
             </div>
           </div>
 

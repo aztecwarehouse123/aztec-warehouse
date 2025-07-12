@@ -418,7 +418,7 @@ const handleConfirmQuantityUpdate = async () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 gap-4">
         <div>
           <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
             Inbound
@@ -427,14 +427,13 @@ const handleConfirmQuantityUpdate = async () => {
             Manage your inbound stock, track quantities, and monitor product status
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
           {isSelectionMode ? (
             <>
               <Button
                 onClick={handleBulkDelete}
                 variant="danger"
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 w-full sm:w-auto"
                 disabled={isLoading || selectedItems.size === 0}
               >
                 <Trash2 size={16} />
@@ -443,7 +442,7 @@ const handleConfirmQuantityUpdate = async () => {
               <Button
                 onClick={toggleSelectionMode}
                 variant="secondary"
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 w-full sm:w-auto"
               >
                 Cancel
               </Button>
@@ -453,7 +452,7 @@ const handleConfirmQuantityUpdate = async () => {
               <Button
                 onClick={toggleSelectionMode}
                 variant="secondary"
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 w-full sm:w-auto"
               >
                 <CheckSquare size={16} />
                 Select Items
@@ -461,7 +460,7 @@ const handleConfirmQuantityUpdate = async () => {
               <Button
                 variant="primary"
                 onClick={() => setIsAddModalOpen(true)}
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 w-full sm:w-auto"
               >
                 <Plus size={16} />
                 Add New Stock
@@ -498,10 +497,10 @@ const handleConfirmQuantityUpdate = async () => {
             disabled={isLoading}
           >
             <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
-           
           </Button>
       </div>
 
+      {/* Responsive Table/Card List */}
       {isLoading ? (
         <div className={`text-center py-12 ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} rounded-lg border`}>
           <div className="flex flex-col items-center gap-4">
@@ -510,7 +509,9 @@ const handleConfirmQuantityUpdate = async () => {
           </div>
         </div>
       ) : filteredItems.length > 0 ? (
-        <div className="overflow-x-auto overflow-y-hidden">
+        <>
+          {/* Desktop Table */}
+          <div className="hidden md:block overflow-x-auto overflow-y-hidden">
           <table className={`min-w-full divide-y ${isDarkMode ? 'divide-slate-700' : 'divide-slate-200'} ${isDarkMode ? 'bg-slate-800' : 'bg-white'} rounded-lg border ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
             <thead className={isDarkMode ? 'bg-slate-700/50' : 'bg-slate-100'}>
               <tr>
@@ -567,7 +568,6 @@ const handleConfirmQuantityUpdate = async () => {
                     </td>
                   )}
                   <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-blue-400' : 'text-blue-700'} font-medium`}>{item.name}</td>
-                  
                   <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
                     <span className={`px-2 py-1 text-xs font-medium rounded-full ${
                       item.status === 'active' 
@@ -612,9 +612,7 @@ const handleConfirmQuantityUpdate = async () => {
                       <span>{item.quantity}</span>
                     </div>
                   </td>
-                  <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
-                    {format(new Date(item.lastUpdated), 'MMM d, yyyy')}
-                  </td>
+                    <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{format(new Date(item.lastUpdated), 'MMM d, yyyy')}</td>
                   <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'} text-right`}>
                     <div className="flex items-center justify-end gap-2">
                       <button
@@ -636,6 +634,56 @@ const handleConfirmQuantityUpdate = async () => {
             </tbody>
           </table>
         </div>
+          {/* Mobile Card List */}
+          <div className="block md:hidden space-y-4">
+            {filteredItems.map((item, index) => (
+              <div
+                key={item.id}
+                className={`rounded-lg border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} p-4 shadow-sm flex flex-col gap-2`}
+                onClick={() => handleItemClick(item)}
+              >
+                <div className="flex justify-between items-center">
+                  <span className={`font-semibold ${isDarkMode ? 'text-blue-400' : 'text-blue-700'}`}>{item.name}</span>
+                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                    item.status === 'active'
+                      ? 'bg-green-100 text-green-700'
+                      : 'bg-yellow-100 text-yellow-700'
+                  }`}>
+                    {item.status === 'active' ? 'Active' : 'Pending'}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-2 text-xs">
+                  <span className={isDarkMode ? 'text-slate-300' : 'text-slate-600'}>Location: <span className="font-medium">{item.locationCode} - {item.shelfNumber}</span></span>
+                  <span className={isDarkMode ? 'text-slate-300' : 'text-slate-600'}>Qty: <span className="font-medium">{item.quantity}</span></span>
+                  {item.asin && <span className={isDarkMode ? 'text-slate-300' : 'text-slate-600'}>ASIN: <span className="font-medium">{item.asin}</span></span>}
+                  {user?.role === 'admin' && (
+                    <>
+                      <span className={isDarkMode ? 'text-slate-300' : 'text-slate-600'}>Price: <span className="font-medium">{Number(item.price) > 0 ? `£${Number(item.price).toFixed(2)}` : '(Not set)'}</span></span>
+                      <span className={isDarkMode ? 'text-slate-300' : 'text-slate-600'}>Total: <span className="font-medium">{Number(item.quantity * item.price) > 0 ? `£${Number(item.quantity * item.price).toFixed(2)}` : '(Not set)'}</span></span>
+                    </>
+                  )}
+                  <span className={isDarkMode ? 'text-slate-300' : 'text-slate-600'}>Updated: <span className="font-medium">{format(new Date(item.lastUpdated), 'MMM d, yyyy')}</span></span>
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={(e) => { e.stopPropagation(); handleEditClick(e, item); }}
+                  >
+                    <Edit2 size={14} /> Edit
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    onClick={(e) => { e.stopPropagation(); handleDeleteClick(e, item); }}
+                  >
+                    <Trash2 size={14} /> Delete
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
       ) : (
         <div className={`text-center py-12 ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} rounded-lg border`}>
           <p className={isDarkMode ? 'text-slate-400' : 'text-slate-500'}>No stock items found. Try adjusting your search.</p>
