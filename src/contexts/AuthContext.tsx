@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { User } from '../types';
 import { db } from '../config/firebase';
-import { doc, getDoc, collection, addDoc, getDocs } from 'firebase/firestore';
+import { collection, addDoc, getDocs } from 'firebase/firestore';
 
 type AuthContextType = {
   user: User | null;
@@ -27,7 +27,11 @@ type AuthProviderProps = {
 };
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(() => {
+    // Initialize user from localStorage on app start
+    const savedUser = localStorage.getItem('user');
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
   const [isLoading, setIsLoading] = useState(false);
 
   const login = async (username: string, password: string): Promise<boolean> => {
@@ -51,6 +55,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               password: userData.password
             };
             setUser(user);
+            // Save user to localStorage for persistence
+            localStorage.setItem('user', JSON.stringify(user));
 
             // Add activity log
             try {
@@ -84,7 +90,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Store user data for logging before clearing
       const userData = { ...user };
       // Clear user immediately
-    setUser(null);
+      setUser(null);
+      // Clear user from localStorage
+      localStorage.removeItem('user');
       
       // Handle activity logging in the background
       addDoc(collection(db, 'activityLogs'), {

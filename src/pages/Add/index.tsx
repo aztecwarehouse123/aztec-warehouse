@@ -74,18 +74,18 @@ const Add: React.FC = () => {
       } else {
         // Fetch recent 100
         q = query(collection(db, 'scannedProducts'), orderBy('createdAt', 'desc'), limit(100));
-        const snapshot = await getDocs(q);
-        const items = snapshot.docs.map(doc => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            name: data.name,
-            unit: data.unit,
-            barcode: data.barcode,
-            createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(data.createdAt)
-          };
-        });
-        setProducts(items);
+      const snapshot = await getDocs(q);
+      const items = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          name: data.name,
+          unit: data.unit,
+          barcode: data.barcode,
+          createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(data.createdAt)
+        };
+      });
+      setProducts(items);
       }
     } catch {
       setError('Failed to fetch products');
@@ -163,25 +163,28 @@ const Add: React.FC = () => {
     }
     setIsLoading(true);
     try {
+      // Convert product name to uppercase before storing
+      const uppercaseName = form.name.toUpperCase();
+      
       if (editProduct) {
         // Edit mode
         const ref = doc(db, 'scannedProducts', editProduct.id);
         await updateDoc(ref, {
-          name: form.name,
+          name: uppercaseName,
           unit: form.unit,
           barcode: form.barcode
         });
         // Add activity log for edit
         if (user && editProduct) {
           const changes = [];
-          if (editProduct.name !== form.name) changes.push(`name from "${editProduct.name}" to "${form.name}"`);
+          if (editProduct.name !== uppercaseName) changes.push(`name from "${editProduct.name}" to "${uppercaseName}"`);
           if (editProduct.unit !== form.unit) changes.push(`unit from ${editProduct.unit || 'none'} to ${form.unit || 'none'}`);
           if (editProduct.barcode !== form.barcode) changes.push(`barcode from "${editProduct.barcode || 'none'}" to "${form.barcode || 'none'}"`);
           if (changes.length > 0) {
             await addDoc(collection(db, 'activityLogs'), {
               user: user.name,
               role: user.role,
-              detail: `edited product "${form.name}": ${changes.join(', ')}`,
+              detail: `edited product "${uppercaseName}": ${changes.join(', ')}`,
               time: new Date().toISOString()
             });
           }
@@ -189,7 +192,7 @@ const Add: React.FC = () => {
       } else {
         // Add mode
         await addDoc(collection(db, 'scannedProducts'), {
-          name: form.name,
+          name: uppercaseName,
           unit: form.unit,
           barcode: form.barcode,
           createdAt: Timestamp.fromDate(new Date())
@@ -199,7 +202,7 @@ const Add: React.FC = () => {
           await addDoc(collection(db, 'activityLogs'), {
             user: user.name,
             role: user.role,
-            detail: `added new product "${form.name}" with barcode ${form.barcode}`,
+            detail: `added new product "${uppercaseName}" with barcode ${form.barcode}`,
             time: new Date().toISOString()
           });
         }
@@ -277,7 +280,7 @@ const Add: React.FC = () => {
       // Upload to Firebase
       for (const p of products) {
         await addDoc(collection(db, 'scannedProducts'), {
-          name: p.name,
+          name: p.name.toUpperCase(),
           unit: p.unit,
           barcode: p.barcode,
           createdAt: Timestamp.fromDate(new Date())
