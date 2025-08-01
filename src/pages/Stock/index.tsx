@@ -7,6 +7,7 @@ import Select from '../../components/ui/Select';
 import Modal from '../../components/modals/Modal';
 import AddStockForm from '../../components/stock/AddStockForm';
 import EditStockForm from '../../components/stock/EditStockForm';
+import QuickAddStockForm from '../../components/stock/QuickAddStockForm';
 import StockDetailsModal from '../../components/modals/StockDetailsModal';
 import DeleteConfirmationModal from '../../components/modals/DeleteConfirmationModal';
 import { StockItem } from '../../types';
@@ -33,6 +34,7 @@ const Stock: React.FC = () => {
   const { user } = useAuth();
   const [isQuantityConfirmModalOpen, setIsQuantityConfirmModalOpen] = useState(false);
   const [pendingQuantityUpdate, setPendingQuantityUpdate] = useState<{ itemId: string; newQuantity: number } | null>(null);
+  const [isQuickAddModalOpen, setIsQuickAddModalOpen] = useState(false);
 
   // Fetch stock items from Firestore
     const fetchStockItems = async () => {
@@ -458,6 +460,14 @@ const handleConfirmQuantityUpdate = async () => {
                 Select Items
               </Button>
               <Button
+                variant="secondary"
+                onClick={() => setIsQuickAddModalOpen(true)}
+                className="flex items-center gap-2 w-full sm:w-auto"
+              >
+                <Plus size={16} />
+                Quick Add
+              </Button>
+              <Button
                 variant="primary"
                 onClick={() => setIsAddModalOpen(true)}
                 className="flex items-center gap-2 w-full sm:w-auto"
@@ -465,6 +475,7 @@ const handleConfirmQuantityUpdate = async () => {
                 <Plus size={16} />
                 Add New Stock
               </Button>
+              
             </>
           )}
         </div>
@@ -701,6 +712,20 @@ const handleConfirmQuantityUpdate = async () => {
           onSubmit={handleAddStock}
           isLoading={isLoading}
           existingStockItems={items}
+        />
+      </Modal>
+
+      {/* Quick Add Stock Modal */}
+      <Modal
+        isOpen={isQuickAddModalOpen}
+        onClose={() => setIsQuickAddModalOpen(false)}
+        title="Quick Add Stock"
+        size="md"
+      >
+        <QuickAddStockForm 
+          onSubmit={handleAddStock}
+          onClose={() => setIsQuickAddModalOpen(false)}
+          isLoading={isLoading}
         />
       </Modal>
       
