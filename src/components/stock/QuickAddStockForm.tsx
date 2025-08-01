@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Plus, Barcode } from 'lucide-react';
 import Input from '../ui/Input';
 import Button from '../ui/Button';
@@ -174,6 +174,7 @@ const QuickAddStockForm: React.FC<QuickAddStockFormProps> = ({ onSubmit, onClose
   const [barcodeSearchMessage, setBarcodeSearchMessage] = useState<string | null>(null);
   const [isFetchingProductInfo, setIsFetchingProductInfo] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -185,6 +186,28 @@ const QuickAddStockForm: React.FC<QuickAddStockFormProps> = ({ onSubmit, onClose
         delete newErrors[name];
         return newErrors;
       });
+    }
+
+    // Auto-search when barcode is manually entered and is 13 digits
+    if (name === 'barcode' && value.length === 13 && !isFetchingProductInfo) {
+      // Clear any existing timeout
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+      
+             // Add a small delay to avoid searching while user is still typing
+       searchTimeoutRef.current = setTimeout(() => {
+         // Use the current value directly since we know it's 13 digits
+         if (value.length === 13) {
+           fetchBarcodeInfo(value);
+         }
+       }, 500);
+    } else if (name === 'barcode' && value.length !== 13) {
+      // Clear timeout if barcode is not 13 digits
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = null;
+      }
     }
   };
 
@@ -198,7 +221,13 @@ const QuickAddStockForm: React.FC<QuickAddStockFormProps> = ({ onSubmit, onClose
       barcode
     }));
     setBarcodeSearchMessage(null);
+    setFetchError(null);
+    setIsFetchingProductInfo(true);
+    
+    let searchSuccessful = false;
+    
     try {
+      // First, try to fetch from scannedProducts collection
       const q = query(collection(db, 'scannedProducts'), where('barcode', '==', barcode));
       const snapshot = await getDocs(q);
       if (!snapshot.empty) {
@@ -208,21 +237,50 @@ const QuickAddStockForm: React.FC<QuickAddStockFormProps> = ({ onSubmit, onClose
           name: docData.name || prev.name
         }));
         setBarcodeSearchMessage('Product name auto-filled from scanned products.');
+        searchSuccessful = true;
       } else {
-        setBarcodeSearchMessage('No product found for this barcode. Please enter details manually.');
+        // Try external API
+        const proxy = 'https://corsproxy.io/?';
+        const url = `${proxy}https://api.upcitemdb.com/prod/trial/lookup?upc=${barcode}`;
+        const response = await fetch(url);
+        const data = await response.json();
+        if (data && data.items && data.items.length > 0) {
+          const item = data.items[0];
+          setFormData(prev => ({
+            ...prev,
+            name: item.title || prev.name
+          }));
+          setBarcodeSearchMessage('Product name auto-filled from external database.');
+          searchSuccessful = true;
+        } else {
+          //setFetchError('No product info found for this barcode.');
+          setBarcodeSearchMessage('No product found for this barcode. Please enter details manually.');
+        }
       }
     } catch {
+      setFetchError('Failed to fetch product info.');
       setBarcodeSearchMessage('Failed to search for product. Please enter details manually.');
+    } finally {
+      setIsFetchingProductInfo(false);
+      
+      // Fallback: If search was not successful and barcode is 13 digits, trigger the 13-digit logic
+      if (!searchSuccessful && barcode.length === 13) {
+        // Add a small delay to ensure the form state is updated
+        setTimeout(() => {
+          fetchBarcodeInfo(barcode);
+        }, 100);
+      }
     }
   };
 
-  const fetchBarcodeInfo = async () => {
-    if (!formData.barcode || isFetchingProductInfo) return;
+  const fetchBarcodeInfo = async (barcodeToSearch?: string) => {
+    const barcode = barcodeToSearch || formData.barcode;
+    if (!barcode || isFetchingProductInfo) return;
     setFetchError(null);
     setIsFetchingProductInfo(true);
     try {
       // First, try to fetch from scannedProducts collection (like scan button)
-      const q = query(collection(db, 'scannedProducts'), where('barcode', '==', formData.barcode));
+      const q = query(collection(db, 'scannedProducts'), where('barcode', '==', barcode));
       const snapshot = await getDocs(q);
       if (!snapshot.empty) {
         const docData = snapshot.docs[0].data();
@@ -234,7 +292,7 @@ const QuickAddStockForm: React.FC<QuickAddStockFormProps> = ({ onSubmit, onClose
       } else {
         // Try external API
         const proxy = 'https://corsproxy.io/?';
-        const url = `${proxy}https://api.upcitemdb.com/prod/trial/lookup?upc=${formData.barcode}`;
+        const url = `${proxy}https://api.upcitemdb.com/prod/trial/lookup?upc=${barcode}`;
         const response = await fetch(url);
         const data = await response.json();
         if (data && data.items && data.items.length > 0) {
