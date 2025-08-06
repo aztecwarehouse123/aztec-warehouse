@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Package, ChevronUp, ChevronDown, Search } from 'lucide-react';
+import { Package, ChevronUp, ChevronDown, Search, Barcode } from 'lucide-react';
 import { collection, query, getDocs, orderBy, Timestamp, doc, setDoc, addDoc, getDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { useToast } from '../../contexts/ToastContext';
@@ -7,6 +7,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import Modal from '../../components/modals/Modal';
+import BarcodeScanModal from '../../components/modals/BarcodeScanModal';
 import { useAuth } from '../../contexts/AuthContext';
 import { StockItem } from '../../types';
 
@@ -31,6 +32,7 @@ const WarehouseLocations: React.FC = () => {
   const [moveLocation, setMoveLocation] = useState('A1');
   const [moveShelf, setMoveShelf] = useState('0');
   const [moveLoading, setMoveLoading] = useState(false);
+  const [isScanModalOpen, setIsScanModalOpen] = useState(false);
   const { user } = useAuth();
 
   const fetchLocations = async () => {
@@ -155,6 +157,15 @@ const WarehouseLocations: React.FC = () => {
     });
   };
 
+  const handleScan = () => {
+    setIsScanModalOpen(true);
+  };
+
+  const handleBarcodeScanned = (barcode: string) => {
+    setSearchQuery(barcode);
+    setIsScanModalOpen(false);
+  };
+
   const toggleAvailability = async (locationCode: string) => {
     const newValue = !(availability[locationCode] ?? true);
     setAvailability(prev => ({ ...prev, [locationCode]: newValue }));
@@ -257,13 +268,27 @@ const WarehouseLocations: React.FC = () => {
 
       <div className="flex flex-col sm:flex-row gap-4 mb-6">
         <div className="flex-1">
-          <Input
-            type="text"
-            placeholder="Search by location, product name, ASIN or barcode..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            icon={<Search size={16} />}
-          />
+          <div className="relative">
+            <Input
+              type="text"
+              placeholder="Search by location, product name, ASIN or barcode..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              icon={<Search size={16} />}
+              style={{ paddingRight: 48 }}
+            />
+            <button
+              type="button"
+              onClick={handleScan}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center justify-center w-7 h-7 rounded-md transition-colors bg-blue-500 hover:bg-blue-600 focus:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-none p-0"
+              style={{ zIndex: 2 }}
+              title="Scan barcode"
+              tabIndex={0}
+              aria-label="Scan barcode"
+            >
+              <Barcode size={16} className="text-white" />
+            </button>
+          </div>
         </div>
         <div className="w-full sm:w-48">
           <Select
@@ -495,6 +520,12 @@ const WarehouseLocations: React.FC = () => {
           </form>
         )}
       </Modal>
+
+      <BarcodeScanModal
+        isOpen={isScanModalOpen}
+        onClose={() => setIsScanModalOpen(false)}
+        onBarcodeScanned={handleBarcodeScanned}
+      />
     </div>
   );
 };

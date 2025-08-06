@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Edit2, Loader2, RefreshCw } from 'lucide-react';
+import { Search, Edit2, Loader2, RefreshCw, Barcode } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import Modal from '../../components/modals/Modal';
+import BarcodeScanModal from '../../components/modals/BarcodeScanModal';
 import OutboundEditForm from '../../components/stock/OutboundEditForm';
 import StockDetailsModal from '../../components/modals/StockDetailsModal';
 import { StockItem } from '../../types';
@@ -21,6 +22,7 @@ const OutboundStock: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedItem, setSelectedItem] = useState<StockItem | null>(null);
   const [items, setItems] = useState<StockItem[]>([]);
+  const [isScanModalOpen, setIsScanModalOpen] = useState(false);
   const { showToast } = useToast();
   const { isDarkMode } = useTheme();
   const { user } = useAuth();
@@ -158,6 +160,15 @@ const OutboundStock: React.FC = () => {
     setIsEditModalOpen(true);
   };
 
+  const handleScan = () => {
+    setIsScanModalOpen(true);
+  };
+
+  const handleBarcodeScanned = (barcode: string) => {
+    setSearchQuery(barcode);
+    setIsScanModalOpen(false);
+  };
+
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 gap-4">
@@ -170,13 +181,27 @@ const OutboundStock: React.FC = () => {
       {/* Search and Filter Bar */}
       <div className="flex flex-col sm:flex-row gap-4 mb-6">
         <div className="flex-1">
-          <Input
-            type="text"
-            placeholder="Search by name, location, ASIN or barcode..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            icon={<Search size={16} />}
-          />
+          <div className="relative">
+            <Input
+              type="text"
+              placeholder="Search by name, location, ASIN or barcode..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              icon={<Search size={16} />}
+              style={{ paddingRight: 48 }}
+            />
+            <button
+              type="button"
+              onClick={handleScan}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center justify-center w-7 h-7 rounded-md transition-colors bg-blue-500 hover:bg-blue-600 focus:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-none p-0"
+              style={{ zIndex: 2 }}
+              title="Scan barcode"
+              tabIndex={0}
+              aria-label="Scan barcode"
+            >
+              <Barcode size={16} className="text-white" />
+            </button>
+          </div>
         </div>
         <div className="w-full sm:w-48">
           <Select
@@ -365,6 +390,12 @@ const OutboundStock: React.FC = () => {
           item={selectedItem}
         />
       )}
+
+      <BarcodeScanModal
+        isOpen={isScanModalOpen}
+        onClose={() => setIsScanModalOpen(false)}
+        onBarcodeScanned={handleBarcodeScanned}
+      />
     </div>
   );
 };

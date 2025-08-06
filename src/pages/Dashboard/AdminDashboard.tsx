@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Package, ShoppingCart, PoundSterling, AlertCircle, Plus, TrendingDown } from 'lucide-react';
+import { Package, PoundSterling, AlertCircle, Plus, TrendingDown } from 'lucide-react';
 import StatsCard, { StatsCardSkeleton } from '../../components/dashboard/StatsCard';
 import Card from '../../components/ui/Card';
 import { db } from '../../config/firebase';
@@ -12,7 +12,8 @@ interface DashboardStats {
   totalOrders: number;
   totalStock: number;
   totalInventoryValue: number;
-  returnRate: number;
+  todayDamagedProducts: number;
+  yesterdayDamagedProducts: number;
   yesterdayOrders: number;
   yesterdayStockChange: number;
   yesterdayRevenue: number;
@@ -30,12 +31,6 @@ interface ActivityLog {
   time: string;
 }
 
-interface TopProduct {
-  name: string;
-  quantity: number;
-  revenue: number;
-}
-
 interface StockItem {
   id: string;
   name: string;
@@ -44,28 +39,18 @@ interface StockItem {
   shelfNumber: string;
 }
 
-interface RecentOrder {
-  id: string;
-  orderNumber: string;
-  customerName: string;
-  totalAmount: number;
-  createdAt: string;
-}
-
 
 const AdminDashboard: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [recentActivities, setRecentActivities] = useState<ActivityLog[]>([]);
-  const [topProducts, setTopProducts] = useState<TopProduct[]>([]);
   const [criticalStockItems, setCriticalStockItems] = useState<StockItem[]>([]);
   const [lowStockItems, setLowStockItems] = useState<StockItem[]>([]);
-  const [returnedOrders, setReturnedOrders] = useState<RecentOrder[]>([]);
-  const [shippedOrders, setShippedOrders] = useState<RecentOrder[]>([]);
   const [stats, setStats] = useState<DashboardStats>({
     totalOrders: 0,
     totalStock: 0,
     totalInventoryValue: 0,
-    returnRate: 0,
+    todayDamagedProducts: 0,
+    yesterdayDamagedProducts: 0,
     yesterdayOrders: 0,
     yesterdayStockChange: 0,
     yesterdayRevenue: 0,
@@ -77,21 +62,7 @@ const AdminDashboard: React.FC = () => {
   
   const { isDarkMode } = useTheme();
 
-  const formatDate = (date: Date | string | { toDate: () => Date }): string => {
-    try {
-      const dateObj = date as { toDate?: () => Date };
-      if (dateObj && typeof dateObj.toDate === 'function') {
-        return dateObj.toDate().toISOString();
-      }
-      if (date instanceof Date) {
-        return date.toISOString();
-      }
-      return new Date(date as string).toISOString();
-    } catch (error) {
-      console.error('Error formatting date:', error);
-      return new Date().toISOString(); // fallback to current date
-    }
-  };
+
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -165,8 +136,7 @@ const AdminDashboard: React.FC = () => {
         const totalOrders = ordersData.length;
         //const totalRevenue = ordersData.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
         const yesterdayRevenue = yesterdayOrdersData.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
-        const returnedOrders = ordersData.filter(order => order.status === 'returned').length;
-        const returnRate = totalOrders > 0 ? (returnedOrders / totalOrders) * 100 : 0;
+
 
         // Fetch and process stock items
         const stockQuery = query(collection(db, 'inventory'));
@@ -191,33 +161,6 @@ const AdminDashboard: React.FC = () => {
 
         setCriticalStockItems(critical);
         setLowStockItems(low);
-
-        // Process returned orders
-        const returned = ordersData
-          .filter(order => order.status === 'returned')
-          .map(order => ({
-            id: order.id,
-            orderNumber: order.orderNumber,
-            customerName: order.customerName,
-            totalAmount: order.totalAmount,
-            createdAt: formatDate(order.createdAt)
-          }))
-          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-        // Process shipped orders
-        const shipped = ordersData
-          .filter(order => order.status === 'shipped')
-          .map(order => ({
-            id: order.id,
-            orderNumber: order.orderNumber,
-            customerName: order.customerName,
-            totalAmount: order.totalAmount,
-            createdAt: formatDate(order.createdAt)
-          }))
-          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-        setReturnedOrders(returned);
-        setShippedOrders(shipped);
 
         // Calculate total deductions from today's activity logs
         const today = new Date();
@@ -279,11 +222,86 @@ const AdminDashboard: React.FC = () => {
           return sum;
         }, 0);
 
+        // Calculate today's damaged products
+        const todayDamagedProducts = todayLogs.reduce((sum, log) => {
+          const detail = log.detail.toLowerCase();
+          // Check for various damage-related patterns
+          if (/reason:\s*damaged/i.test(detail) || 
+              /damaged/i.test(detail) || 
+              /damageditems/i.test(detail) || 
+              /damaged items/i.test(detail)) {
+            
+            // Try to extract units damaged from various patterns
+            const patterns = [
+              /(\d+)\s*units?\s*damaged/i,
+              /damageditems?:\s*(\d+)/i,
+              /quantity:\s*(\d+)/i,
+              /edited product "[^"]+": quantity from (\d+) to (\d+)/i
+            ];
+            
+            for (const pattern of patterns) {
+              const match = detail.match(pattern);
+              if (match) {
+                if (match.length === 3) {
+                  // For "from X to Y" pattern, calculate the absolute difference
+                  const fromValue = parseInt(match[1]);
+                  const toValue = parseInt(match[2]);
+                  return sum + Math.abs(fromValue - toValue);
+                } else {
+                  return sum + parseInt(match[1]);
+                }
+              }
+            }
+            
+            // If no specific number found, count as 1 incident
+            return sum + 1;
+          }
+          return sum;
+        }, 0);
+
+        // Calculate yesterday's damaged products
+        const yesterdayDamagedProducts = yesterdayLogs.reduce((sum, log) => {
+          const detail = log.detail.toLowerCase();
+          // Check for various damage-related patterns
+          if (/reason:\s*damaged/i.test(detail) || 
+              /damaged/i.test(detail) || 
+              /damageditems/i.test(detail) || 
+              /damaged items/i.test(detail)) {
+            
+            // Try to extract units damaged from various patterns
+            const patterns = [
+              /(\d+)\s*units?\s*damaged/i,
+              /damageditems?:\s*(\d+)/i,
+              /quantity:\s*(\d+)/i,
+              /edited product "[^"]+": quantity from (\d+) to (\d+)/i
+            ];
+            
+            for (const pattern of patterns) {
+              const match = detail.match(pattern);
+              if (match) {
+                if (match.length === 3) {
+                  // For "from X to Y" pattern, calculate the absolute difference
+                  const fromValue = parseInt(match[1]);
+                  const toValue = parseInt(match[2]);
+                  return sum + Math.abs(fromValue - toValue);
+                } else {
+                  return sum + parseInt(match[1]);
+                }
+              }
+            }
+            
+            // If no specific number found, count as 1 incident
+            return sum + 1;
+          }
+          return sum;
+        }, 0);
+
         setStats({
           totalOrders,
           totalStock,
           totalInventoryValue,
-          returnRate,
+          todayDamagedProducts,
+          yesterdayDamagedProducts,
           yesterdayOrders,
           yesterdayStockChange,
           yesterdayRevenue,
@@ -319,46 +337,10 @@ const AdminDashboard: React.FC = () => {
       }
     };
 
-    const fetchTopProducts = async () => {
-      try {
-        const ordersQuery = query(collection(db, 'orders'));
-        const snapshot = await getDocs(ordersQuery);
-        
-        // Aggregate product data from all orders
-        const productMap = new Map<string, { quantity: number; revenue: number }>();
-        
-        snapshot.docs.forEach(doc => {
-          const order = doc.data() as Order;
-          order.items.forEach(item => {
-            const existing = productMap.get(item.productName) || { quantity: 0, revenue: 0 };
-            // Calculate revenue by multiplying quantity with unit price
-            const itemRevenue = item.quantity * item.unitPrice;
-            productMap.set(item.productName, {
-              quantity: existing.quantity + item.quantity,
-              revenue: existing.revenue + itemRevenue
-            });
-          });
-        });
-        
-        // Convert to array and sort by quantity
-        const products = Array.from(productMap.entries())
-          .map(([name, data]) => ({
-            name,
-            quantity: data.quantity,
-            revenue: data.revenue
-          }))
-          .sort((a, b) => b.quantity - a.quantity)
-          .slice(0, 5);
-        
-        setTopProducts(products);
-      } catch (error) {
-        console.error('Error fetching top products:', error);
-      }
-    };
+
 
     fetchStats();
     fetchRecentActivities();
-    fetchTopProducts();
   }, []);
 
   // Loading skeleton for table rows
@@ -404,17 +386,7 @@ const AdminDashboard: React.FC = () => {
                 label: stats.yesterdayOrders === 1 ? 'order yesterday' : 'orders yesterday'
               }}
             />*/}
-        <StatsCard 
-              title="Total Units Deducted Today" 
-              value={stats.totalDeductions}
-              icon={<TrendingDown size={24} className="text-blue-600" />}
-              change={{ 
-                value: stats.yesterdayDeductions,
-                isPositive: stats.totalDeductions >= stats.yesterdayDeductions,
-                label: stats.yesterdayDeductions === 1 ? 'unit deducted yesterday' : 'units deducted yesterday'
-              }}
-        />
-        <StatsCard 
+            <StatsCard 
               title="Total Stock" 
               value={stats.totalStock}
               icon={<Package size={24} className="text-blue-600" />}
@@ -426,6 +398,28 @@ const AdminDashboard: React.FC = () => {
                        stats.todayStockAdditions === 1 ? 'unit added today' : 'units added today'
               }}
         />
+        <StatsCard 
+              title="Total Units Deducted Today" 
+              value={stats.totalDeductions}
+              icon={<TrendingDown size={24} className="text-blue-600" />}
+              change={{ 
+                value: stats.yesterdayDeductions,
+                isPositive: stats.totalDeductions >= stats.yesterdayDeductions,
+                label: stats.yesterdayDeductions === 1 ? 'unit deducted yesterday' : 'units deducted yesterday'
+              }}
+        />
+        <StatsCard 
+              title="Damaged Products Today" 
+              value={stats.todayDamagedProducts}
+              icon={<AlertCircle size={24} className="text-red-600" />}
+              change={{ 
+                value: stats.yesterdayDamagedProducts,
+                isPositive: stats.todayDamagedProducts <= stats.yesterdayDamagedProducts,
+                label: stats.yesterdayDamagedProducts === 0 ? 'no damage yesterday' : 
+                       stats.yesterdayDamagedProducts === 1 ? 'unit damaged yesterday' : 'units damaged yesterday'
+              }}
+            />
+        
         <StatsCard 
               title="Total Inventory Value" 
               value={stats.totalInventoryValue}
@@ -440,16 +434,7 @@ const AdminDashboard: React.FC = () => {
                        `£ added today`
               }}
         />
-        <StatsCard 
-              title="Return Rate" 
-              value={`${stats.returnRate.toFixed(1)}%`}
-              icon={<AlertCircle size={24} className="text-blue-600" />}
-              change={{ 
-                value: returnedOrders.length,
-                isPositive: false,
-                label: 'returns this month'
-              }}
-            />
+        
             
           </>
         )}
