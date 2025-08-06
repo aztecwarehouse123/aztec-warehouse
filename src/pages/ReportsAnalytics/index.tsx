@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { db } from '../../config/firebase';
 import { collection, query, where, getDocs, Timestamp, orderBy } from 'firebase/firestore';
-import { format, subDays, startOfDay, endOfDay } from 'date-fns';
+import { format, subDays } from 'date-fns';
 import { XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { Download, Package, TrendingDown, PoundSterling, AlertCircle } from 'lucide-react';
 import Select from '../../components/ui/Select';
@@ -30,7 +30,7 @@ interface DashboardStats {
 const ReportsAnalytics: React.FC = () => {
   const [timeRange, setTimeRange] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const [dateRange, setDateRange] = useState<'7d' | '1m' | '3m' | '6m'>('7d');
-  const [orders, setOrders] = useState<Order[]>([]);
+
   const [inventory, setInventory] = useState<StockItem[]>([]);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
   const [stats, setStats] = useState<DashboardStats>({
@@ -51,7 +51,7 @@ const ReportsAnalytics: React.FC = () => {
   const { user } = useAuth();
 
   // Fetch orders and inventory based on date range
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
       let startDate: Date;
@@ -117,7 +117,6 @@ const ReportsAnalytics: React.FC = () => {
       const totalStock = inventoryData.reduce((sum, item) => sum + (item.quantity || 0), 0);
       const totalInventoryValue = inventoryData.reduce((sum, item) => sum + ((item.quantity || 0) * (item.price || 0)), 0);
       const totalOrders = ordersData.length;
-      const totalDamagedProducts = inventoryData.reduce((sum, item) => sum + (item.damagedItems || 0), 0);
 
       // Calculate yesterday's data
       const yesterdayStart = subDays(new Date(), 1);
@@ -283,18 +282,9 @@ const ReportsAnalytics: React.FC = () => {
       
       const periodDamagedProducts = periodDamagedData.incidents;
 
-      // Get period label for titles
-      const getPeriodLabel = () => {
-        switch (dateRange) {
-          case '7d': return 'Last 7 Days';
-          case '1m': return 'Last Month';
-          case '3m': return 'Last 3 Months';
-          case '6m': return 'Last 6 Months';
-          default: return 'Last 7 Days';
-        }
-      };
 
-      setOrders(ordersData);
+
+
       setInventory(inventoryData);
       setActivityLogs(activityData);
       setStats({
@@ -315,11 +305,17 @@ const ReportsAnalytics: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [dateRange]);
 
   useEffect(() => {
     fetchData();
-  }, [dateRange, timeRange]);
+  }, [fetchData]);
+
+  // Re-render charts when timeRange changes (affects chart grouping)
+  useEffect(() => {
+    // Charts will re-render automatically when timeRange changes
+    // No need to refetch data, just trigger re-render
+  }, [timeRange]);
 
   // Redirect non-admin users
   if (!user || user.role !== 'admin') {
@@ -567,19 +563,7 @@ const ReportsAnalytics: React.FC = () => {
                          dateRange === '1m' ? 'Last Month' : 
                          dateRange === '3m' ? 'Last 3 Months' : 'Last 6 Months';
       
-      // Orders data
-      const orderHeaders = ['Date', 'Order Number', 'Customer', 'Status', 'Total Amount', 'Items'];
-      const orderData = orders.map(order => [
-      format(order.createdAt, 'yyyy-MM-dd HH:mm:ss'),
-      order.orderNumber,
-      order.customerName,
-      order.status,
-      order.totalAmount,
-        order.items.map(item => `${item.productName} (${item.quantity})`).join('; ')
-      ]);
-
       // Inventory data
-      const inventoryHeaders = ['Product Name', 'Quantity', 'Price', 'Location', 'Status', 'Damaged Items'];
       const inventoryData = inventory.map(item => [
         item.name,
         item.quantity,
@@ -587,15 +571,6 @@ const ReportsAnalytics: React.FC = () => {
         `${item.locationCode}-${item.shelfNumber}`,
         item.status,
         item.damagedItems
-      ]);
-
-      // Activity logs data
-      const activityHeaders = ['Date', 'User', 'Role', 'Activity'];
-      const activityData = activityLogs.map(log => [
-        format(new Date(log.time), 'yyyy-MM-dd HH:mm:ss'),
-        log.user,
-        log.role,
-        log.detail
       ]);
 
       // Get current page data (exactly what's shown on the page)
@@ -878,7 +853,7 @@ const ReportsAnalytics: React.FC = () => {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-4 md:space-y-6">
       <style>
         {`
           @keyframes fadeInUp {
@@ -896,36 +871,42 @@ const ReportsAnalytics: React.FC = () => {
           }
         `}
       </style>
-      <div className="flex justify-between items-center">
-        <div>
-        <h1 className={`text-2xl font-semibold ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>Reports and Analytics</h1>
-          <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} mt-1`}>Admin Dashboard - Comprehensive warehouse insights</p>
+      
+      {/* Header Section */}
+      <div className="space-y-4">
+        {/* Title */}
+        <div className="text-center md:text-left">
+          <h1 className={`text-xl md:text-2xl font-semibold ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>Reports and Analytics</h1>
+          <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} mt-1 text-sm md:text-base`}>Admin Dashboard - Comprehensive warehouse insights</p>
         </div>
-        <div className="flex gap-4 items-center">
+        
+        {/* Controls - All buttons in one line on mobile and desktop */}
+        <div className="flex flex-wrap gap-2 justify-center md:justify-end items-center">
+          {/* Export Buttons */}
         <div className="flex gap-2">
           <button
             onClick={exportToCSV}
-            className={`inline-flex items-center px-3 py-2 border shadow-sm text-sm leading-4 font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 animate-fade-in-up ${
+              className={`inline-flex items-center px-2 md:px-3 py-2 border shadow-sm text-xs md:text-sm leading-4 font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 animate-fade-in-up ${
               isDarkMode 
                 ? 'border-slate-600 text-slate-200 bg-slate-700 hover:bg-slate-600' 
                 : 'border-slate-300 text-slate-700 bg-white hover:bg-slate-50'
             }`}
             style={{ animationDelay: '200ms' }}
           >
-            <Download className="h-4 w-4 mr-2" />
-            Export CSV
+              <Download className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
+              <span className="hidden sm:inline">Export </span>CSV
           </button>
           <button
             onClick={exportToPDF}
-            className={`inline-flex items-center px-3 py-2 border shadow-sm text-sm leading-4 font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 animate-fade-in-up ${
+              className={`inline-flex items-center px-2 md:px-3 py-2 border shadow-sm text-xs md:text-sm leading-4 font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 animate-fade-in-up ${
               isDarkMode 
                 ? 'border-slate-600 text-slate-200 bg-slate-700 hover:bg-slate-600' 
                 : 'border-slate-300 text-slate-700 bg-white hover:bg-slate-50'
             }`}
             style={{ animationDelay: '400ms' }}
           >
-            <Download className="h-4 w-4 mr-2" />
-            Export PDF
+              <Download className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
+              <span className="hidden sm:inline">Export </span>PDF
           </button>
       </div>
 
@@ -939,27 +920,27 @@ const ReportsAnalytics: React.FC = () => {
             { value: 'weekly', label: 'Weekly' },
             { value: 'monthly', label: 'Monthly' }
           ]}
-          className="animate-fade-in-up"
+              className="animate-fade-in-up text-xs md:text-sm"
           style={{ animationDelay: '100ms' }}
         />
         <Select
           value={dateRange}
               onChange={(e) => setDateRange(e.target.value as '7d' | '1m' | '3m' | '6m')}
           options={[
-            { value: '7d', label: 'Last 7 Days' },
-                { value: '1m', label: 'Last Month' },
-                { value: '3m', label: 'Last 3 Months' },
-                { value: '6m', label: 'Last 6 Months' }
-          ]}
-          className="animate-fade-in-up"
+                { value: '7d', label: '7 Days' },
+                { value: '1m', label: '1 Month' },
+                { value: '3m', label: '3 Months' },
+                { value: '6m', label: '6 Months' }
+              ]}
+              className="animate-fade-in-up text-xs md:text-sm"
           style={{ animationDelay: '300ms' }}
         />
-      </div>
+          </div>
         </div>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         {isLoading ? (
           <>
             <StatsCardSkeleton />
@@ -1003,11 +984,11 @@ const ReportsAnalytics: React.FC = () => {
       ) : (
         <>
           {/* Charts */}
-          <div className="space-y-6">
+          <div className="space-y-4 md:space-y-6">
             {/* Inbound Products Trends */}
-            <div className={`${isDarkMode ? 'bg-slate-800' : 'bg-white'} p-4 rounded-lg shadow-sm`}>
-              <h3 className={`text-lg font-medium ${isDarkMode ? 'text-white' : 'text-slate-800'} mb-4`}>Inbound Products - Daily Additions & Units</h3>
-              <div className="h-80">
+            <div className={`${isDarkMode ? 'bg-slate-800' : 'bg-white'} p-3 md:p-4 rounded-lg shadow-sm`}>
+              <h3 className={`text-base md:text-lg font-medium ${isDarkMode ? 'text-white' : 'text-slate-800'} mb-3 md:mb-4`}>Inbound Products - Daily Additions & Units</h3>
+              <div className="h-64 md:h-80">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={getInboundProductsData()}>
                     <CartesianGrid strokeDasharray="3 3" stroke={isDarkMode ? '#334155' : '#e2e8f0'} />
@@ -1041,9 +1022,9 @@ const ReportsAnalytics: React.FC = () => {
             </div>
 
             {/* Outbound Products Trends */}
-            <div className={`${isDarkMode ? 'bg-slate-800' : 'bg-white'} p-4 rounded-lg shadow-sm`}>
-              <h3 className={`text-lg font-medium ${isDarkMode ? 'text-white' : 'text-slate-800'} mb-4`}>Outbound Products - Daily Deductions</h3>
-              <div className="h-80">
+            <div className={`${isDarkMode ? 'bg-slate-800' : 'bg-white'} p-3 md:p-4 rounded-lg shadow-sm`}>
+              <h3 className={`text-base md:text-lg font-medium ${isDarkMode ? 'text-white' : 'text-slate-800'} mb-3 md:mb-4`}>Outbound Products - Daily Deductions</h3>
+              <div className="h-64 md:h-80">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={getOutboundProductsData()}>
                     <CartesianGrid strokeDasharray="3 3" stroke={isDarkMode ? '#334155' : '#e2e8f0'} />
@@ -1064,9 +1045,9 @@ const ReportsAnalytics: React.FC = () => {
             </div>
 
             {/* Damaged Products Trends */}
-            <div className={`${isDarkMode ? 'bg-slate-800' : 'bg-white'} p-4 rounded-lg shadow-sm`}>
-              <h3 className={`text-lg font-medium ${isDarkMode ? 'text-white' : 'text-slate-800'} mb-4`}>Damaged Products - Daily Incidents & Units</h3>
-              <div className="h-80">
+            <div className={`${isDarkMode ? 'bg-slate-800' : 'bg-white'} p-3 md:p-4 rounded-lg shadow-sm`}>
+              <h3 className={`text-base md:text-lg font-medium ${isDarkMode ? 'text-white' : 'text-slate-800'} mb-3 md:mb-4`}>Damaged Products - Daily Incidents & Units</h3>
+              <div className="h-64 md:h-80">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={getDamagedProductsData()}>
                     <CartesianGrid strokeDasharray="3 3" stroke={isDarkMode ? '#334155' : '#e2e8f0'} />
