@@ -109,10 +109,37 @@ const WarehouseLocations: React.FC = () => {
 
   const locationSummaries = allLocationCodes.reduce((acc, code) => {
     const products = locations.filter(loc => loc.locationCode === code);
+    
+    // Merge products with the same identifying information (name, asin, barcode, location, shelf)
+    const mergedProducts = products.reduce((merged, product) => {
+      const existingIndex = merged.findIndex(existing => 
+        existing.name === product.name &&
+        normalize(existing.asin) === normalize(product.asin) &&
+        normalize(existing.barcode) === normalize(product.barcode) &&
+        existing.locationCode === product.locationCode &&
+        existing.shelfNumber === product.shelfNumber
+      );
+      
+      if (existingIndex >= 0) {
+        // Merge quantities and keep the most recent lastUpdated
+        merged[existingIndex] = {
+          ...merged[existingIndex],
+          quantity: merged[existingIndex].quantity + product.quantity,
+          lastUpdated: merged[existingIndex].lastUpdated > product.lastUpdated 
+            ? merged[existingIndex].lastUpdated 
+            : product.lastUpdated
+        };
+      } else {
+        merged.push(product);
+      }
+      
+      return merged;
+    }, [] as StockItem[]);
+    
     acc[code] = {
       locationCode: code,
-      totalStock: products.reduce((sum, loc) => sum + loc.quantity, 0),
-      products
+      totalStock: mergedProducts.reduce((sum, loc) => sum + loc.quantity, 0),
+      products: mergedProducts
     };
     return acc;
   }, {} as Record<string, LocationSummary>);
@@ -178,7 +205,7 @@ const WarehouseLocations: React.FC = () => {
     }
   };
 
-  function sanitizeStockData(data: Record<string, any>) {
+  function sanitizeStockData(data: Record<string, unknown>) {
     const clean = { ...data };
     Object.keys(clean).forEach(key => {
       if (clean[key] === undefined) clean[key] = null;
@@ -186,7 +213,7 @@ const WarehouseLocations: React.FC = () => {
     return clean;
   }
 
-  function normalize(val) {
+  function normalize(val: string | null | undefined): string {
     return val === undefined || val === null ? '' : val;
   }
 
@@ -384,7 +411,24 @@ const WarehouseLocations: React.FC = () => {
                       <p className={`font-bold text-2xl ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>{summary.totalStock} units</p>
                     </div>
                     <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
-                      {summary.products.length} product{summary.products.length !== 1 ? 's' : ''}
+                      {searchQuery.trim() 
+                        ? summary.products.filter(product => {
+                            const searchLower = searchQuery.toLowerCase();
+                            return product.name.toLowerCase().includes(searchLower) ||
+                              (product.asin && product.asin.split(',').some(asin => asin.trim().toLowerCase().includes(searchLower))) ||
+                              (product.barcode && product.barcode.toLowerCase().includes(searchLower)) ||
+                              (product.shelfNumber && product.shelfNumber.toString().toLowerCase().includes(searchLower));
+                          }).length
+                        : summary.products.length
+                      } product{(searchQuery.trim() 
+                        ? summary.products.filter(product => {
+                            const searchLower = searchQuery.toLowerCase();
+                            return product.name.toLowerCase().includes(searchLower) ||
+                              (product.asin && product.asin.split(',').some(asin => asin.trim().toLowerCase().includes(searchLower))) ||
+                              (product.barcode && product.barcode.toLowerCase().includes(searchLower)) ||
+                              (product.shelfNumber && product.shelfNumber.toString().toLowerCase().includes(searchLower));
+                          }).length
+                        : summary.products.length) !== 1 ? 's' : ''}
                     </span>
                   </div>
                 </div>
@@ -392,12 +436,35 @@ const WarehouseLocations: React.FC = () => {
                 {isExpanded && (
                   <div className="p-4 space-y-4 overflow-hidden transition-all duration-300 ease-in-out">
                     <h4 className={`font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                      {summary.products.length === 0
+                      {searchQuery.trim() 
+                        ? summary.products.filter(product => {
+                            const searchLower = searchQuery.toLowerCase();
+                            return product.name.toLowerCase().includes(searchLower) ||
+                              (product.asin && product.asin.split(',').some(asin => asin.trim().toLowerCase().includes(searchLower))) ||
+                              (product.barcode && product.barcode.toLowerCase().includes(searchLower)) ||
+                              (product.shelfNumber && product.shelfNumber.toString().toLowerCase().includes(searchLower));
+                          }).length === 0
+                        : summary.products.length === 0
                         ? 'No products in this location'
+                        : searchQuery.trim()
+                        ? 'Matching products in this location:'
                         : 'Products in this location:'}
                     </h4>
                     <div className="space-y-4">
-                      {summary.products.map(location => {
+                      {summary.products
+                        .filter(location => {
+                          // If there's a search query, only show products that match
+                          if (searchQuery.trim()) {
+                            const searchLower = searchQuery.toLowerCase();
+                            return location.name.toLowerCase().includes(searchLower) ||
+                              (location.asin && location.asin.split(',').some(asin => asin.trim().toLowerCase().includes(searchLower))) ||
+                              (location.barcode && location.barcode.toLowerCase().includes(searchLower)) ||
+                              (location.shelfNumber && location.shelfNumber.toString().toLowerCase().includes(searchLower));
+                          }
+                          // If no search query, show all products
+                          return true;
+                        })
+                        .map(location => {
                         const percentageOfTotal = summary.totalStock === 0 ? 0 : (location.quantity / summary.totalStock) * 100;
                         const searchLower = searchQuery.toLowerCase();
                         const isMatch = 
