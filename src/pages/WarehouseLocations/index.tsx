@@ -33,6 +33,7 @@ const WarehouseLocations: React.FC = () => {
   const [moveShelf, setMoveShelf] = useState('0');
   const [moveLoading, setMoveLoading] = useState(false);
   const [isScanModalOpen, setIsScanModalOpen] = useState(false);
+  const [lastNotifiedQuery, setLastNotifiedQuery] = useState('');
   const { user } = useAuth();
 
   const fetchLocations = async () => {
@@ -83,6 +84,8 @@ const WarehouseLocations: React.FC = () => {
     setIsLoading(true);
     Promise.all([fetchLocations(), fetchAvailability()]).finally(() => setIsLoading(false));
   }, []);
+
+
 
   const allLocationCodes = [
     'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8',
@@ -172,6 +175,45 @@ const WarehouseLocations: React.FC = () => {
       return 0;
     });
 
+  // Show search result notifications when results are displayed
+  useEffect(() => {
+    if (searchQuery.trim() && searchQuery !== lastNotifiedQuery) {
+      const searchResults = filteredAndSortedSummaries.filter(summary => {
+        const searchLower = searchQuery.toLowerCase();
+        return summary.products.some(product => 
+          product.name.toLowerCase().includes(searchLower) ||
+          (product.asin && product.asin.split(',').some(asin => asin.trim().toLowerCase().includes(searchLower))) ||
+          (product.barcode && product.barcode.toLowerCase().includes(searchLower)) ||
+          (product.shelfNumber && product.shelfNumber.toString().toLowerCase().includes(searchLower))
+        );
+      });
+      
+      // Only show notification if there are actual results to display
+      if (searchResults.length > 0) {
+        const foundProducts = searchResults.flatMap(summary => 
+          summary.products.filter(product => {
+            const searchLower = searchQuery.toLowerCase();
+            return product.name.toLowerCase().includes(searchLower) ||
+              (product.asin && product.asin.split(',').some(asin => asin.trim().toLowerCase().includes(searchLower))) ||
+              (product.barcode && product.barcode.toLowerCase().includes(searchLower)) ||
+              (product.shelfNumber && product.shelfNumber.toString().toLowerCase().includes(searchLower));
+          })
+        );
+        
+        const locations = [...new Set(foundProducts.map(p => `${p.locationCode}-${p.shelfNumber}`))];
+        showToast(`Product found! Located at: ${locations.join(', ')}`, 'success');
+        setLastNotifiedQuery(searchQuery);
+      } else if (searchQuery.trim() && searchQuery !== lastNotifiedQuery) {
+        // Show "not found" notification only when there's a search but no results
+        showToast('Product not found in any location', 'error');
+        setLastNotifiedQuery(searchQuery);
+      }
+    } else if (!searchQuery.trim() && lastNotifiedQuery) {
+      // Clear the last notified query when search is cleared
+      setLastNotifiedQuery('');
+    }
+  }, [filteredAndSortedSummaries, searchQuery, showToast, lastNotifiedQuery]);
+
   const toggleLocation = (locationCode: string) => {
     setExpandedLocations(prev => {
       const newSet = new Set(prev);
@@ -257,7 +299,7 @@ const WarehouseLocations: React.FC = () => {
             lastUpdated: new Date()
           }), { merge: true });
         } else {
-          const newDocFields = Object.fromEntries(Object.entries(moveProduct).filter(([key]) => key !== 'id'));
+          const { id, ...newDocFields } = moveProduct as StockItem;
           await addDoc(collection(db, 'inventory'), sanitizeStockData({
             ...newDocFields,
             quantity: moveQuantity,
