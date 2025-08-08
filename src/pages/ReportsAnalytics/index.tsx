@@ -149,9 +149,47 @@ const ReportsAnalytics: React.FC = () => {
           statsStartDate = subDays(statsEndDate, 7);
       }
 
-      const periodLogs = activityData.filter(log => {
+      // First filter logs by date range
+      const dateFilteredLogs = activityData.filter(log => {
         const logDate = new Date(log.time);
         return logDate >= statsStartDate && logDate <= statsEndDate;
+      });
+
+      // Then filter logs to only include activities for products that exist in current inventory
+      const periodLogs = dateFilteredLogs.filter(log => {
+        // Check for new product additions
+        const newProductMatch = log.detail.match(/added new product "([^"]+)" with total quantity (\d+)/);
+        if (newProductMatch) {
+          const [, productName] = newProductMatch;
+          return inventoryData.some(item => item.name === productName);
+        }
+        
+        // Check for quantity updates in existing products
+        const quantityUpdateMatch = log.detail.match(/edited product "([^"]+)": quantity from (\d+) to (\d+)/);
+        if (quantityUpdateMatch) {
+          const [, productName] = quantityUpdateMatch;
+          return inventoryData.some(item => item.name === productName);
+        }
+        
+        // Check for deductions (these should be included regardless as they affect current inventory)
+        const deductionMatch = log.detail.match(/(\d+) units deducted from stock/);
+        if (deductionMatch) {
+          return true; // Include all deductions as they affect current inventory
+        }
+        
+        // Check for damaged products (include these as they affect current inventory)
+        const damagedPatterns = [
+          /Reason: damaged/i,
+          /damaged/i,
+          /damagedItems/i,
+          /damaged items/i
+        ];
+        if (damagedPatterns.some(pattern => pattern.test(log.detail))) {
+          return true; // Include damaged product activities
+        }
+        
+        // Include other activities that might be relevant
+        return true;
       });
 
       // Calculate previous period for comparison
@@ -159,9 +197,47 @@ const ReportsAnalytics: React.FC = () => {
       const previousStartDate = new Date(statsStartDate.getTime() - periodDuration);
       const previousEndDate = new Date(statsStartDate.getTime());
 
-      const previousPeriodLogs = activityData.filter(log => {
+      // Filter previous period logs by date range first
+      const previousDateFilteredLogs = activityData.filter(log => {
         const logDate = new Date(log.time);
         return logDate >= previousStartDate && logDate <= previousEndDate;
+      });
+
+      // Then filter to only include activities for products that exist in current inventory
+      const previousPeriodLogs = previousDateFilteredLogs.filter(log => {
+        // Check for new product additions
+        const newProductMatch = log.detail.match(/added new product "([^"]+)" with total quantity (\d+)/);
+        if (newProductMatch) {
+          const [, productName] = newProductMatch;
+          return inventoryData.some(item => item.name === productName);
+        }
+        
+        // Check for quantity updates in existing products
+        const quantityUpdateMatch = log.detail.match(/edited product "([^"]+)": quantity from (\d+) to (\d+)/);
+        if (quantityUpdateMatch) {
+          const [, productName] = quantityUpdateMatch;
+          return inventoryData.some(item => item.name === productName);
+        }
+        
+        // Check for deductions (these should be included regardless as they affect current inventory)
+        const deductionMatch = log.detail.match(/(\d+) units deducted from stock/);
+        if (deductionMatch) {
+          return true; // Include all deductions as they affect current inventory
+        }
+        
+        // Check for damaged products (include these as they affect current inventory)
+        const damagedPatterns = [
+          /Reason: damaged/i,
+          /damaged/i,
+          /damagedItems/i,
+          /damaged items/i
+        ];
+        if (damagedPatterns.some(pattern => pattern.test(log.detail))) {
+          return true; // Include damaged product activities
+        }
+        
+        // Include other activities that might be relevant
+        return true;
       });
 
       const totalDeductions = periodLogs.reduce((sum: number, log: ActivityLog) => {
@@ -176,19 +252,27 @@ const ReportsAnalytics: React.FC = () => {
 
       const periodStockAdditions = periodLogs.reduce((sum: number, log: ActivityLog) => {
         // Check for new product additions
-        const newProductMatch = log.detail.match(/added new product "[^"]+" with total quantity (\d+)/);
+        const newProductMatch = log.detail.match(/added new product "([^"]+)" with total quantity (\d+)/);
         if (newProductMatch) {
-          return sum + parseInt(newProductMatch[1]);
+          const [, productName, quantity] = newProductMatch;
+          // Only count if the product still exists in current inventory
+          const existingProduct = inventoryData.find(item => item.name === productName);
+          if (existingProduct) {
+            return sum + parseInt(quantity);
+          }
         }
         
         // Check for quantity increases in existing products
-        const quantityUpdateMatch = log.detail.match(/edited product "[^"]+": quantity from (\d+) to (\d+)/);
+        const quantityUpdateMatch = log.detail.match(/edited product "([^"]+)": quantity from (\d+) to (\d+)/);
         if (quantityUpdateMatch) {
-          const oldQuantity = parseInt(quantityUpdateMatch[1]);
-          const newQuantity = parseInt(quantityUpdateMatch[2]);
-          const increase = newQuantity - oldQuantity;
-          if (increase > 0) {
-            return sum + increase;
+          const [, productName, oldQuantity, newQuantity] = quantityUpdateMatch;
+          // Only count if the product still exists in current inventory
+          const existingProduct = inventoryData.find(item => item.name === productName);
+          if (existingProduct) {
+            const increase = parseInt(newQuantity) - parseInt(oldQuantity);
+            if (increase > 0) {
+              return sum + increase;
+            }
           }
         }
         
@@ -328,8 +412,55 @@ const ReportsAnalytics: React.FC = () => {
     const data: { date: string; activities: number; units: number; uniqueProducts: number }[] = [];
     const groupedProducts = new Map<string, { activities: number; units: number; uniqueProducts: Set<string> }>();
 
-    // Process activity logs to find product additions and quantity increases
-    activityLogs.forEach(log => {
+    // Calculate date range for filtering logs
+    const statsEndDate = new Date();
+    let statsStartDate: Date;
+
+    switch (dateRange) {
+      case '7d':
+        statsStartDate = subDays(statsEndDate, 7);
+        break;
+      case '1m':
+        statsStartDate = subDays(statsEndDate, 30);
+        break;
+      case '3m':
+        statsStartDate = subDays(statsEndDate, 90);
+        break;
+      case '6m':
+        statsStartDate = subDays(statsEndDate, 180);
+        break;
+      default:
+        statsStartDate = subDays(statsEndDate, 7);
+    }
+
+    // First filter logs by date range
+    const dateFilteredLogs = activityLogs.filter(log => {
+      const logDate = new Date(log.time);
+      return logDate >= statsStartDate && logDate <= statsEndDate;
+    });
+
+    // Then filter to only include activities for products that exist in current inventory
+    const filteredLogs = dateFilteredLogs.filter(log => {
+      // Check for new product additions
+      const newProductMatch = log.detail.match(/added new product "([^"]+)" with total quantity (\d+)/);
+      if (newProductMatch) {
+        const [, productName] = newProductMatch;
+        return inventory.some(item => item.name === productName);
+      }
+      
+      // Check for quantity updates in existing products
+      const quantityUpdateMatch = log.detail.match(/edited product "([^"]+)": quantity from (\d+) to (\d+)/);
+      if (quantityUpdateMatch) {
+        const [, productName] = quantityUpdateMatch;
+        return inventory.some(item => item.name === productName);
+      }
+      
+      // Include other activities that might be relevant
+      return true;
+    });
+
+    // Process filtered activity logs to find product additions and quantity increases
+    filteredLogs.forEach(log => {
       let unitsAdded = 0;
       let isInboundActivity = false;
       let productName = '';
@@ -337,39 +468,47 @@ const ReportsAnalytics: React.FC = () => {
       // Check for new product additions
       const newProductMatch = log.detail.match(/added new product "([^"]+)" with total quantity (\d+)/);
       if (newProductMatch) {
-        unitsAdded = parseInt(newProductMatch[2]);
-        productName = newProductMatch[1];
-        isInboundActivity = true;
+        const [, name, quantity] = newProductMatch;
+        // Only count if the product still exists in current inventory
+        const existingProduct = inventory.find(item => item.name === name);
+        if (existingProduct) {
+          unitsAdded = parseInt(quantity);
+          productName = name;
+          isInboundActivity = true;
+        }
       }
       
       // Check for quantity increases in existing products
       const quantityUpdateMatch = log.detail.match(/edited product "([^"]+)": quantity from (\d+) to (\d+)/);
       if (quantityUpdateMatch) {
-        const oldQuantity = parseInt(quantityUpdateMatch[2]);
-        const newQuantity = parseInt(quantityUpdateMatch[3]);
-        const increase = newQuantity - oldQuantity;
-        if (increase > 0) {
-          unitsAdded = increase;
-          productName = quantityUpdateMatch[1];
-          isInboundActivity = true;
+        const [, name, oldQuantity, newQuantity] = quantityUpdateMatch;
+        // Only count if the product still exists in current inventory
+        const existingProduct = inventory.find(item => item.name === name);
+        if (existingProduct) {
+          const increase = parseInt(newQuantity) - parseInt(oldQuantity);
+          if (increase > 0) {
+            unitsAdded = increase;
+            productName = name;
+            isInboundActivity = true;
+          }
         }
       }
       
       if (isInboundActivity) {
         const logDate = new Date(log.time);
-      let dateKey: string;
+        let dateKey: string;
 
-      switch (timeRange) {
-        case 'daily':
+        switch (timeRange) {
+          case 'daily':
             dateKey = format(logDate, 'MMM dd');
-          break;
-        case 'weekly':
+            break;
+          case 'weekly':
             dateKey = format(logDate, "'Week' w");
-          break;
-        case 'monthly':
+            break;
+          case 'monthly':
             dateKey = format(logDate, 'MMM yyyy');
-          break;
-      }
+            break;
+        }
 
         const current = groupedProducts.get(dateKey) || { activities: 0, units: 0, uniqueProducts: new Set<string>() };
         current.uniqueProducts.add(productName);
@@ -401,8 +540,47 @@ const ReportsAnalytics: React.FC = () => {
     const data: { date: string; products: number }[] = [];
     const groupedProducts = new Map<string, number>();
 
-    // Process activity logs to find product deductions
-    activityLogs.forEach(log => {
+    // Calculate date range for filtering logs
+    const statsEndDate = new Date();
+    let statsStartDate: Date;
+
+    switch (dateRange) {
+      case '7d':
+        statsStartDate = subDays(statsEndDate, 7);
+        break;
+      case '1m':
+        statsStartDate = subDays(statsEndDate, 30);
+        break;
+      case '3m':
+        statsStartDate = subDays(statsEndDate, 90);
+        break;
+      case '6m':
+        statsStartDate = subDays(statsEndDate, 180);
+        break;
+      default:
+        statsStartDate = subDays(statsEndDate, 7);
+    }
+
+    // First filter logs by date range
+    const dateFilteredLogs = activityLogs.filter(log => {
+      const logDate = new Date(log.time);
+      return logDate >= statsStartDate && logDate <= statsEndDate;
+    });
+
+    // Then filter to only include activities for products that exist in current inventory
+    const filteredLogs = dateFilteredLogs.filter(log => {
+      // Check for deductions (these should be included as they affect current inventory)
+      const deductionMatch = log.detail.match(/(\d+) units deducted from stock/);
+      if (deductionMatch) {
+        return true; // Include all deductions as they affect current inventory
+      }
+      
+      // Include other activities that might be relevant
+      return true;
+    });
+
+    // Process filtered activity logs to find product deductions
+    filteredLogs.forEach(log => {
       const match = log.detail.match(/(\d+) units deducted from stock/);
       if (match) {
         const logDate = new Date(log.time);
@@ -443,16 +621,52 @@ const ReportsAnalytics: React.FC = () => {
     const data: { date: string; products: number; units: number }[] = [];
     const groupedProducts = new Map<string, { incidents: number; units: number }>();
 
-    // Process activity logs to find damaged product activities
-    console.log('Processing activity logs for damaged products:', activityLogs.slice(0, 5)); // Debug: show first 5 logs
-    
-    // Log all activity logs that contain "damaged" for debugging
-    const damagedLogs = activityLogs.filter(log => 
-      log.detail.toLowerCase().includes('damaged')
-    );
-    console.log('All logs containing "damaged":', damagedLogs);
-    
-    activityLogs.forEach(log => {
+    // Calculate date range for filtering logs
+    const statsEndDate = new Date();
+    let statsStartDate: Date;
+
+    switch (dateRange) {
+      case '7d':
+        statsStartDate = subDays(statsEndDate, 7);
+        break;
+      case '1m':
+        statsStartDate = subDays(statsEndDate, 30);
+        break;
+      case '3m':
+        statsStartDate = subDays(statsEndDate, 90);
+        break;
+      case '6m':
+        statsStartDate = subDays(statsEndDate, 180);
+        break;
+      default:
+        statsStartDate = subDays(statsEndDate, 7);
+    }
+
+    // First filter logs by date range
+    const dateFilteredLogs = activityLogs.filter(log => {
+      const logDate = new Date(log.time);
+      return logDate >= statsStartDate && logDate <= statsEndDate;
+    });
+
+    // Then filter to only include activities for products that exist in current inventory
+    const filteredLogs = dateFilteredLogs.filter(log => {
+      // Check for damaged products (include these as they affect current inventory)
+      const damagedPatterns = [
+        /Reason: damaged/i,
+        /damaged/i,
+        /damagedItems/i,
+        /damaged items/i
+      ];
+      if (damagedPatterns.some(pattern => pattern.test(log.detail))) {
+        return true; // Include damaged product activities
+      }
+      
+      // Include other activities that might be relevant
+      return true;
+    });
+
+    // Process filtered activity logs to find damaged product activities
+    filteredLogs.forEach(log => {
       // Check for multiple patterns that indicate damaged products
       const damagedPatterns = [
         /Reason: damaged/i,
@@ -464,7 +678,6 @@ const ReportsAnalytics: React.FC = () => {
       const isDamagedActivity = damagedPatterns.some(pattern => pattern.test(log.detail));
       
       if (isDamagedActivity) {
-        console.log('Found damaged activity:', log.detail); // Debug: show matched logs
         const logDate = new Date(log.time);
         let dateKey: string;
 
@@ -489,7 +702,6 @@ const ReportsAnalytics: React.FC = () => {
         
         if (primaryMatch) {
           unitsDamaged = parseInt(primaryMatch[1]);
-          console.log(`Extracted ${unitsDamaged} units from damaged deduction: "${log.detail}"`);
         } else {
           // Fallback patterns for other damaged product scenarios
           const fallbackPatterns = [
@@ -518,16 +730,14 @@ const ReportsAnalytics: React.FC = () => {
               }
               
               if (unitsDamaged > 0) {
-                console.log(`Extracted ${unitsDamaged} units from fallback pattern: "${log.detail}"`);
                 break;
               }
             }
           }
         }
         
-        // If we still can't find units, log the detail for debugging
+        // If we still can't find units, use fallback
         if (unitsDamaged === 0) {
-          console.log(`Could not extract units from damaged activity: "${log.detail}"`);
           unitsDamaged = 1; // Fallback to 1 unit
         }
 
