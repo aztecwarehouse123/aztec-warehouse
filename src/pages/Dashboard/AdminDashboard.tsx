@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Package, PoundSterling, AlertCircle, Plus, TrendingDown } from 'lucide-react';
+import { Package, PoundSterling, AlertCircle, Plus, TrendingDown, RefreshCw } from 'lucide-react';
 import StatsCard, { StatsCardSkeleton } from '../../components/dashboard/StatsCard';
 import Card from '../../components/ui/Card';
+import Button from '../../components/ui/Button';
 import { db } from '../../config/firebase';
 import { collection, query, orderBy, limit, getDocs, Timestamp, where } from 'firebase/firestore';
 import { subDays, formatDistanceToNow, startOfDay, endOfDay } from 'date-fns';
@@ -64,283 +65,284 @@ const AdminDashboard: React.FC = () => {
 
 
 
+  const fetchStats = async () => {
+    setIsLoading(true);
+    try {
+      const endDate = new Date();
+      const startDate = subDays(endDate, 30); // Last 30 days
+      const yesterdayStart = subDays(endDate, 1);
+      const yesterdayEnd = endDate;
+
+      // Fetch orders for last 30 days
+      const ordersQuery = query(
+        collection(db, 'orders'),
+        where('createdAt', '>=', Timestamp.fromDate(startDate)),
+        where('createdAt', '<=', Timestamp.fromDate(endDate))
+      );
+
+      // Fetch yesterday's orders
+      const yesterdayOrdersQuery = query(
+        collection(db, 'orders'),
+        where('createdAt', '>=', Timestamp.fromDate(yesterdayStart)),
+        where('createdAt', '<=', Timestamp.fromDate(yesterdayEnd))
+      );
+
+      // Fetch inventory changes
+      const inventoryQuery = query(collection(db, 'inventory'));
+      const yesterdayInventoryQuery = query(
+        collection(db, 'inventory'),
+        where('lastUpdated', '>=', Timestamp.fromDate(yesterdayStart)),
+        where('lastUpdated', '<=', Timestamp.fromDate(yesterdayEnd))
+      );
+
+      const [ordersSnapshot, yesterdayOrdersSnapshot, inventorySnapshot, yesterdayInventorySnapshot] = await Promise.all([
+        getDocs(ordersQuery),
+        getDocs(yesterdayOrdersQuery),
+        getDocs(inventoryQuery),
+        getDocs(yesterdayInventoryQuery)
+      ]);
+
+      const ordersData = ordersSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Order[];
+
+      const yesterdayOrdersData = yesterdayOrdersSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Order[];
+
+      const yesterdayOrders = yesterdayOrdersSnapshot.docs.length;
+
+      // Calculate total stock
+      const totalStock = inventorySnapshot.docs.reduce((sum, doc) => {
+        const data = doc.data();
+        return sum + (data.quantity || 0);
+      }, 0);
+
+      // Calculate yesterday's stock changes
+      const yesterdayStockChange = yesterdayInventorySnapshot.docs.reduce((sum, doc) => {
+        const data = doc.data();
+        return sum + (data.quantityChange || 0);
+      }, 0);
+
+      // Calculate total inventory value
+      const totalInventoryValue = inventorySnapshot.docs.reduce((sum, doc) => {
+        const data = doc.data();
+        return sum + ((data.quantity || 0) * (data.price || 0));
+      }, 0);
+
+      // Calculate statistics
+      const totalOrders = ordersData.length;
+      //const totalRevenue = ordersData.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
+      const yesterdayRevenue = yesterdayOrdersData.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
+
+
+      // Fetch and process stock items
+      const stockQuery = query(collection(db, 'inventory'));
+      const stockSnapshot = await getDocs(stockQuery);
+      const stockItems = stockSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as StockItem[];
+
+      // Separate critical and low stock items
+      // Critical: quantity <= 10
+      // Low: quantity > 10 && quantity <= 25
+      const critical = stockItems.filter(item => item.quantity <= 10);
+      const low = stockItems.filter(item => 
+        item.quantity > 10 && 
+        item.quantity <= 25
+      );
+
+      console.log('All stock items:', stockItems);
+      console.log('Critical items:', critical);
+      console.log('Low stock items:', low);
+
+      setCriticalStockItems(critical);
+      setLowStockItems(low);
+
+      // Calculate total deductions from today's activity logs
+      const today = new Date();
+      const startOfToday = startOfDay(today);
+      const endOfToday = endOfDay(today);
+      const startOfYesterday = startOfDay(subDays(today, 1));
+      const endOfYesterday = endOfDay(subDays(today, 1));
+      
+      // Fetch today's logs
+      const todayLogsQuery = query(
+        collection(db, 'activityLogs'),
+        where('time', '>=', startOfToday.toISOString()),
+        where('time', '<=', endOfToday.toISOString())
+      );
+      
+      // Fetch yesterday's logs
+      const yesterdayLogsQuery = query(
+        collection(db, 'activityLogs'),
+        where('time', '>=', startOfYesterday.toISOString()),
+        where('time', '<=', endOfYesterday.toISOString())
+      );
+      
+      const [todayLogsSnapshot, yesterdayLogsSnapshot] = await Promise.all([
+        getDocs(todayLogsQuery),
+        getDocs(yesterdayLogsQuery)
+      ]);
+      
+      const todayLogs = todayLogsSnapshot.docs.map(doc => doc.data());
+      const yesterdayLogs = yesterdayLogsSnapshot.docs.map(doc => doc.data());
+      
+      const totalDeductions = todayLogs.reduce((sum, log) => {
+        const match = log.detail.match(/(\d+) units deducted/);
+        return sum + (match ? parseInt(match[1]) : 0);
+      }, 0);
+
+      const yesterdayDeductions = yesterdayLogs.reduce((sum, log) => {
+        const match = log.detail.match(/(\d+) units deducted/);
+        return sum + (match ? parseInt(match[1]) : 0);
+      }, 0);
+
+      // Calculate today's stock additions and their value
+      const todayStockAdditions = todayLogs.reduce((sum, log) => {
+        const match = log.detail.match(/added new product "[^"]+" with total quantity (\d+)/);
+        return sum + (match ? parseInt(match[1]) : 0);
+      }, 0);
+
+      // Calculate today's inventory value additions
+      const todayInventoryValueAdditions = todayLogs.reduce((sum, log) => {
+        const match = log.detail.match(/added new product "([^"]+)" with total quantity (\d+)/);
+        if (match) {
+          const [, productName, quantity] = match;
+          // Find the product in inventory to get its price
+          const product = inventorySnapshot.docs.find(doc => doc.data().name === productName);
+          if (product) {
+            const price = product.data().price || 0;
+            return sum + (parseInt(quantity) * price);
+          }
+        }
+        return sum;
+      }, 0);
+
+      // Calculate today's damaged products
+      const todayDamagedProducts = todayLogs.reduce((sum, log) => {
+        const detail = log.detail.toLowerCase();
+        // Check for various damage-related patterns
+        if (/reason:\s*damaged/i.test(detail) || 
+            /damaged/i.test(detail) || 
+            /damageditems/i.test(detail) || 
+            /damaged items/i.test(detail)) {
+          
+          // Try to extract units damaged from various patterns
+          const patterns = [
+            /(\d+)\s*units?\s*damaged/i,
+            /damageditems?:\s*(\d+)/i,
+            /quantity:\s*(\d+)/i,
+            /edited product "[^"]+": quantity from (\d+) to (\d+)/i
+          ];
+          
+          for (const pattern of patterns) {
+            const match = detail.match(pattern);
+            if (match) {
+              if (match.length === 3) {
+                // For "from X to Y" pattern, calculate the absolute difference
+                const fromValue = parseInt(match[1]);
+                const toValue = parseInt(match[2]);
+                return sum + Math.abs(fromValue - toValue);
+              } else {
+                return sum + parseInt(match[1]);
+              }
+            }
+          }
+          
+          // If no specific number found, count as 1 incident
+          return sum + 1;
+        }
+        return sum;
+      }, 0);
+
+      // Calculate yesterday's damaged products
+      const yesterdayDamagedProducts = yesterdayLogs.reduce((sum, log) => {
+        const detail = log.detail.toLowerCase();
+        // Check for various damage-related patterns
+        if (/reason:\s*damaged/i.test(detail) || 
+            /damaged/i.test(detail) || 
+            /damageditems/i.test(detail) || 
+            /damaged items/i.test(detail)) {
+          
+          // Try to extract units damaged from various patterns
+          const patterns = [
+            /(\d+)\s*units?\s*damaged/i,
+            /damageditems?:\s*(\d+)/i,
+            /quantity:\s*(\d+)/i,
+            /edited product "[^"]+": quantity from (\d+) to (\d+)/i
+          ];
+          
+          for (const pattern of patterns) {
+            const match = detail.match(pattern);
+            if (match) {
+              if (match.length === 3) {
+                // For "from X to Y" pattern, calculate the absolute difference
+                const fromValue = parseInt(match[1]);
+                const toValue = parseInt(match[2]);
+                return sum + Math.abs(fromValue - toValue);
+              } else {
+                return sum + parseInt(match[1]);
+              }
+            }
+          }
+          
+          // If no specific number found, count as 1 incident
+          return sum + 1;
+        }
+        return sum;
+      }, 0);
+
+      setStats({
+        totalOrders,
+        totalStock,
+        totalInventoryValue,
+        todayDamagedProducts,
+        yesterdayDamagedProducts,
+        yesterdayOrders,
+        yesterdayStockChange,
+        yesterdayRevenue,
+        totalDeductions,
+        yesterdayDeductions,
+        todayStockAdditions,
+        todayInventoryValueAdditions
+      });
+    } catch (error) {
+      console.error('Error fetching stats:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const fetchRecentActivities = async () => {
+    try {
+      const activitiesQuery = query(
+        collection(db, 'activityLogs'),
+        orderBy('time', 'desc'),
+        limit(5)
+      );
+      
+      const snapshot = await getDocs(activitiesQuery);
+      const activities = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as ActivityLog[];
+      
+      setRecentActivities(activities);
+    } catch (error) {
+      console.error('Error fetching recent activities:', error);
+    }
+  };
+
+  const refreshDashboard = async () => {
+    await Promise.all([fetchStats(), fetchRecentActivities()]);
+  };
+
   useEffect(() => {
-    const fetchStats = async () => {
-      setIsLoading(true);
-      try {
-        const endDate = new Date();
-        const startDate = subDays(endDate, 30); // Last 30 days
-        const yesterdayStart = subDays(endDate, 1);
-        const yesterdayEnd = endDate;
-
-        // Fetch orders for last 30 days
-        const ordersQuery = query(
-          collection(db, 'orders'),
-          where('createdAt', '>=', Timestamp.fromDate(startDate)),
-          where('createdAt', '<=', Timestamp.fromDate(endDate))
-        );
-
-        // Fetch yesterday's orders
-        const yesterdayOrdersQuery = query(
-          collection(db, 'orders'),
-          where('createdAt', '>=', Timestamp.fromDate(yesterdayStart)),
-          where('createdAt', '<=', Timestamp.fromDate(yesterdayEnd))
-        );
-
-        // Fetch inventory changes
-        const inventoryQuery = query(collection(db, 'inventory'));
-        const yesterdayInventoryQuery = query(
-          collection(db, 'inventory'),
-          where('lastUpdated', '>=', Timestamp.fromDate(yesterdayStart)),
-          where('lastUpdated', '<=', Timestamp.fromDate(yesterdayEnd))
-        );
-
-        const [ordersSnapshot, yesterdayOrdersSnapshot, inventorySnapshot, yesterdayInventorySnapshot] = await Promise.all([
-          getDocs(ordersQuery),
-          getDocs(yesterdayOrdersQuery),
-          getDocs(inventoryQuery),
-          getDocs(yesterdayInventoryQuery)
-        ]);
-
-        const ordersData = ordersSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as Order[];
-
-        const yesterdayOrdersData = yesterdayOrdersSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as Order[];
-
-        const yesterdayOrders = yesterdayOrdersSnapshot.docs.length;
-
-        // Calculate total stock
-        const totalStock = inventorySnapshot.docs.reduce((sum, doc) => {
-          const data = doc.data();
-          return sum + (data.quantity || 0);
-        }, 0);
-
-        // Calculate yesterday's stock changes
-        const yesterdayStockChange = yesterdayInventorySnapshot.docs.reduce((sum, doc) => {
-          const data = doc.data();
-          return sum + (data.quantityChange || 0);
-        }, 0);
-
-        // Calculate total inventory value
-        const totalInventoryValue = inventorySnapshot.docs.reduce((sum, doc) => {
-          const data = doc.data();
-          return sum + ((data.quantity || 0) * (data.price || 0));
-        }, 0);
-
-        // Calculate statistics
-        const totalOrders = ordersData.length;
-        //const totalRevenue = ordersData.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
-        const yesterdayRevenue = yesterdayOrdersData.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
-
-
-        // Fetch and process stock items
-        const stockQuery = query(collection(db, 'inventory'));
-        const stockSnapshot = await getDocs(stockQuery);
-        const stockItems = stockSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as StockItem[];
-
-        // Separate critical and low stock items
-        // Critical: quantity <= 10
-        // Low: quantity > 10 && quantity <= 25
-        const critical = stockItems.filter(item => item.quantity <= 10);
-        const low = stockItems.filter(item => 
-          item.quantity > 10 && 
-          item.quantity <= 25
-        );
-
-        console.log('All stock items:', stockItems);
-        console.log('Critical items:', critical);
-        console.log('Low stock items:', low);
-
-        setCriticalStockItems(critical);
-        setLowStockItems(low);
-
-        // Calculate total deductions from today's activity logs
-        const today = new Date();
-        const startOfToday = startOfDay(today);
-        const endOfToday = endOfDay(today);
-        const startOfYesterday = startOfDay(subDays(today, 1));
-        const endOfYesterday = endOfDay(subDays(today, 1));
-        
-        // Fetch today's logs
-        const todayLogsQuery = query(
-          collection(db, 'activityLogs'),
-          where('time', '>=', startOfToday.toISOString()),
-          where('time', '<=', endOfToday.toISOString())
-        );
-        
-        // Fetch yesterday's logs
-        const yesterdayLogsQuery = query(
-          collection(db, 'activityLogs'),
-          where('time', '>=', startOfYesterday.toISOString()),
-          where('time', '<=', endOfYesterday.toISOString())
-        );
-        
-        const [todayLogsSnapshot, yesterdayLogsSnapshot] = await Promise.all([
-          getDocs(todayLogsQuery),
-          getDocs(yesterdayLogsQuery)
-        ]);
-        
-        const todayLogs = todayLogsSnapshot.docs.map(doc => doc.data());
-        const yesterdayLogs = yesterdayLogsSnapshot.docs.map(doc => doc.data());
-        
-        const totalDeductions = todayLogs.reduce((sum, log) => {
-          const match = log.detail.match(/(\d+) units deducted/);
-          return sum + (match ? parseInt(match[1]) : 0);
-        }, 0);
-
-        const yesterdayDeductions = yesterdayLogs.reduce((sum, log) => {
-          const match = log.detail.match(/(\d+) units deducted/);
-          return sum + (match ? parseInt(match[1]) : 0);
-        }, 0);
-
-        // Calculate today's stock additions and their value
-        const todayStockAdditions = todayLogs.reduce((sum, log) => {
-          const match = log.detail.match(/added new product "[^"]+" with total quantity (\d+)/);
-          return sum + (match ? parseInt(match[1]) : 0);
-        }, 0);
-
-        // Calculate today's inventory value additions
-        const todayInventoryValueAdditions = todayLogs.reduce((sum, log) => {
-          const match = log.detail.match(/added new product "([^"]+)" with total quantity (\d+)/);
-          if (match) {
-            const [, productName, quantity] = match;
-            // Find the product in inventory to get its price
-            const product = inventorySnapshot.docs.find(doc => doc.data().name === productName);
-            if (product) {
-              const price = product.data().price || 0;
-              return sum + (parseInt(quantity) * price);
-            }
-          }
-          return sum;
-        }, 0);
-
-        // Calculate today's damaged products
-        const todayDamagedProducts = todayLogs.reduce((sum, log) => {
-          const detail = log.detail.toLowerCase();
-          // Check for various damage-related patterns
-          if (/reason:\s*damaged/i.test(detail) || 
-              /damaged/i.test(detail) || 
-              /damageditems/i.test(detail) || 
-              /damaged items/i.test(detail)) {
-            
-            // Try to extract units damaged from various patterns
-            const patterns = [
-              /(\d+)\s*units?\s*damaged/i,
-              /damageditems?:\s*(\d+)/i,
-              /quantity:\s*(\d+)/i,
-              /edited product "[^"]+": quantity from (\d+) to (\d+)/i
-            ];
-            
-            for (const pattern of patterns) {
-              const match = detail.match(pattern);
-              if (match) {
-                if (match.length === 3) {
-                  // For "from X to Y" pattern, calculate the absolute difference
-                  const fromValue = parseInt(match[1]);
-                  const toValue = parseInt(match[2]);
-                  return sum + Math.abs(fromValue - toValue);
-                } else {
-                  return sum + parseInt(match[1]);
-                }
-              }
-            }
-            
-            // If no specific number found, count as 1 incident
-            return sum + 1;
-          }
-          return sum;
-        }, 0);
-
-        // Calculate yesterday's damaged products
-        const yesterdayDamagedProducts = yesterdayLogs.reduce((sum, log) => {
-          const detail = log.detail.toLowerCase();
-          // Check for various damage-related patterns
-          if (/reason:\s*damaged/i.test(detail) || 
-              /damaged/i.test(detail) || 
-              /damageditems/i.test(detail) || 
-              /damaged items/i.test(detail)) {
-            
-            // Try to extract units damaged from various patterns
-            const patterns = [
-              /(\d+)\s*units?\s*damaged/i,
-              /damageditems?:\s*(\d+)/i,
-              /quantity:\s*(\d+)/i,
-              /edited product "[^"]+": quantity from (\d+) to (\d+)/i
-            ];
-            
-            for (const pattern of patterns) {
-              const match = detail.match(pattern);
-              if (match) {
-                if (match.length === 3) {
-                  // For "from X to Y" pattern, calculate the absolute difference
-                  const fromValue = parseInt(match[1]);
-                  const toValue = parseInt(match[2]);
-                  return sum + Math.abs(fromValue - toValue);
-                } else {
-                  return sum + parseInt(match[1]);
-                }
-              }
-            }
-            
-            // If no specific number found, count as 1 incident
-            return sum + 1;
-          }
-          return sum;
-        }, 0);
-
-        setStats({
-          totalOrders,
-          totalStock,
-          totalInventoryValue,
-          todayDamagedProducts,
-          yesterdayDamagedProducts,
-          yesterdayOrders,
-          yesterdayStockChange,
-          yesterdayRevenue,
-          totalDeductions,
-          yesterdayDeductions,
-          todayStockAdditions,
-          todayInventoryValueAdditions
-        });
-      } catch (error) {
-        console.error('Error fetching stats:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    const fetchRecentActivities = async () => {
-      try {
-        const activitiesQuery = query(
-          collection(db, 'activityLogs'),
-          orderBy('time', 'desc'),
-          limit(5)
-        );
-        
-        const snapshot = await getDocs(activitiesQuery);
-        const activities = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as ActivityLog[];
-        
-        setRecentActivities(activities);
-      } catch (error) {
-        console.error('Error fetching recent activities:', error);
-      }
-    };
-
-
-
-    fetchStats();
-    fetchRecentActivities();
+    refreshDashboard();
   }, []);
 
   // Loading skeleton for table rows
@@ -359,9 +361,19 @@ const AdminDashboard: React.FC = () => {
 
   return (
     <div className={`space-y-6 ${isDarkMode ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-800'}`}>
-      <div>
-        <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>Admin Dashboard</h1>
-        <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} mt-1`}>View your warehouse performance at a glance</p>
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>Admin Dashboard</h1>
+          <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} mt-1`}>View your warehouse performance at a glance</p>
+        </div>
+        <Button
+          variant="secondary"
+          onClick={refreshDashboard}
+          className={`flex items-center gap-2 ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+          disabled={isLoading}
+        >
+          <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
+        </Button>
       </div>
       
       {/* Stats Cards */}

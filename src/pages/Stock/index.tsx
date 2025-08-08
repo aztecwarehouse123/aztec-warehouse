@@ -10,6 +10,7 @@ import EditStockForm from '../../components/stock/EditStockForm';
 import QuickAddStockForm from '../../components/stock/QuickAddStockForm';
 import StockDetailsModal from '../../components/modals/StockDetailsModal';
 import DeleteConfirmationModal from '../../components/modals/DeleteConfirmationModal';
+import LocationConfirmationModal from '../../components/modals/LocationConfirmationModal';
 import { StockItem } from '../../types';
 import { useToast } from '../../contexts/ToastContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -35,6 +36,14 @@ const Stock: React.FC = () => {
   const [isQuantityConfirmModalOpen, setIsQuantityConfirmModalOpen] = useState(false);
   const [pendingQuantityUpdate, setPendingQuantityUpdate] = useState<{ itemId: string; newQuantity: number } | null>(null);
   const [isQuickAddModalOpen, setIsQuickAddModalOpen] = useState(false);
+  const [isLocationConfirmModalOpen, setIsLocationConfirmModalOpen] = useState(false);
+  const [pendingStockData, setPendingStockData] = useState<Omit<StockItem, 'id'>[] | null>(null);
+  const [locationConfirmationData, setLocationConfirmationData] = useState<{
+    locationCode: string;
+    shelfNumber: string;
+    existingProducts: StockItem[];
+    newProductName: string;
+  } | null>(null);
 
   // Fetch stock items from Firestore
     const fetchStockItems = async () => {
@@ -106,7 +115,46 @@ const Stock: React.FC = () => {
     return 0;
   });
 
+  const checkLocationForExistingProducts = (locationCode: string, shelfNumber: string): StockItem[] => {
+    return items.filter(item => 
+      item.locationCode === locationCode && item.shelfNumber === shelfNumber
+    );
+  };
+
   const handleAddStock = async (data: Omit<StockItem, 'id'>[]) => {
+    // Check if any of the locations have existing products
+    const locationsWithProducts: { locationCode: string; shelfNumber: string; products: StockItem[] }[] = [];
+    
+    for (const item of data) {
+      const existingProducts = checkLocationForExistingProducts(item.locationCode, item.shelfNumber);
+      if (existingProducts.length > 0) {
+        locationsWithProducts.push({
+          locationCode: item.locationCode,
+          shelfNumber: item.shelfNumber,
+          products: existingProducts
+        });
+      }
+    }
+
+    // If there are locations with existing products, show confirmation modal
+    if (locationsWithProducts.length > 0) {
+      const firstLocation = locationsWithProducts[0];
+      setLocationConfirmationData({
+        locationCode: firstLocation.locationCode,
+        shelfNumber: firstLocation.shelfNumber,
+        existingProducts: firstLocation.products,
+        newProductName: data[0].name
+      });
+      setPendingStockData(data);
+      setIsLocationConfirmModalOpen(true);
+      return;
+    }
+
+    // If no existing products, proceed with adding
+    await performAddStock(data);
+  };
+
+  const performAddStock = async (data: Omit<StockItem, 'id'>[]) => {
     setIsLoading(true);
     
     try {
@@ -144,6 +192,7 @@ const Stock: React.FC = () => {
       // Update local state
       setItems(prev => [...prev, ...newItems]);
       setIsAddModalOpen(false);
+      setIsQuickAddModalOpen(false);
       showToast('Stock items added successfully', 'success');
     } catch (error) {
       console.error('Error adding stock:', error);
@@ -151,6 +200,21 @@ const Stock: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleLocationConfirm = async () => {
+    if (pendingStockData) {
+      await performAddStock(pendingStockData);
+      setIsLocationConfirmModalOpen(false);
+      setPendingStockData(null);
+      setLocationConfirmationData(null);
+    }
+  };
+
+  const handleLocationCancel = () => {
+    setIsLocationConfirmModalOpen(false);
+    setPendingStockData(null);
+    setLocationConfirmationData(null);
   };
 
   const handleEditStock = async (data: StockItem, originalItem: StockItem) => {
@@ -805,6 +869,20 @@ const handleConfirmQuantityUpdate = async () => {
             </div>
         </div>
         </Modal>
+
+      {/* Location Confirmation Modal */}
+      {locationConfirmationData && (
+        <LocationConfirmationModal
+          isOpen={isLocationConfirmModalOpen}
+          onClose={handleLocationCancel}
+          onConfirm={handleLocationConfirm}
+          onCancel={handleLocationCancel}
+          locationCode={locationConfirmationData.locationCode}
+          shelfNumber={locationConfirmationData.shelfNumber}
+          existingProducts={locationConfirmationData.existingProducts}
+          newProductName={locationConfirmationData.newProductName}
+        />
+      )}
     </div>
   );
 };

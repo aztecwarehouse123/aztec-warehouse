@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Moon, Sun, Edit2, Trash2 } from 'lucide-react';
+import { User, Moon, Sun, Edit2, Trash2, RefreshCw } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -49,23 +49,27 @@ const Settings: React.FC = () => {
   });
 
   // Fetch all users when component mounts
-  useEffect(() => {
-    const fetchUsers = async () => {
-      if (user?.role === 'admin') {
-        try {
-          const usersSnapshot = await getDocs(collection(db, 'users'));
-          const usersData = usersSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          })) as UserType[];
-          setUsers(usersData);
-        } catch (error) {
-          console.error('Error fetching users:', error);
-          showToast('Error fetching users', 'error');
-        }
+  const fetchUsers = async () => {
+    if (user?.role === 'admin') {
+      setIsLoading(true);
+      try {
+        const usersSnapshot = await getDocs(collection(db, 'users'));
+        const usersData = usersSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as UserType[];
+        setUsers(usersData);
+        console.log('fetched users')
+      } catch (error) {
+        console.error('Error fetching users:', error);
+        showToast('Error fetching users', 'error');
+      } finally {
+        setIsLoading(false);
       }
-    };
+    }
+  };
 
+  useEffect(() => {
     fetchUsers();
   }, [user?.role, showToast]);
 
@@ -462,17 +466,29 @@ const Settings: React.FC = () => {
           <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>Settings</h1>
           <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} mt-1`}>Update your profile information</p>
         </div>
-        <button
-          onClick={toggleDarkMode}
-          className={`p-2 rounded-lg transition-colors ${
-            isDarkMode 
-              ? 'text-yellow-400 hover:bg-slate-700' 
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
-          aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-        >
-          {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
-        </button>
+        <div className="flex items-center gap-2">
+          {user?.role === 'admin' && (
+            <Button
+              variant="secondary"
+              onClick={fetchUsers}
+              className={`flex items-center gap-2 ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+              disabled={isLoading}
+            >
+              <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
+            </Button>
+          )}
+          <button
+            onClick={toggleDarkMode}
+            className={`p-2 rounded-lg transition-colors ${
+              isDarkMode 
+                ? 'text-yellow-400 hover:bg-slate-700' 
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+            aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
+          </button>
+        </div>
       </div>
 
       {/* Edit User Modal */}

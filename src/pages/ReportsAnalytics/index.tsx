@@ -3,8 +3,9 @@ import { db } from '../../config/firebase';
 import { collection, query, where, getDocs, Timestamp, orderBy } from 'firebase/firestore';
 import { format, subDays } from 'date-fns';
 import { XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
-import { Download, Package, TrendingDown, PoundSterling, AlertCircle } from 'lucide-react';
+import { Download, Package, TrendingDown, PoundSterling, AlertCircle, RefreshCw } from 'lucide-react';
 import Select from '../../components/ui/Select';
+import Button from '../../components/ui/Button';
 import StatsCard, { StatsCardSkeleton } from '../../components/dashboard/StatsCard';
 import { Order, StockItem, ActivityLog } from '../../types';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -1145,6 +1146,14 @@ const ReportsAnalytics: React.FC = () => {
               className="animate-fade-in-up text-xs md:text-sm"
           style={{ animationDelay: '300ms' }}
         />
+        <Button
+          variant="secondary"
+          onClick={fetchData}
+          className={`flex items-center gap-2 ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+          disabled={isLoading}
+        >
+          <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
+        </Button>
           </div>
         </div>
       </div>

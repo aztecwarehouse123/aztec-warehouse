@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Package, ChevronUp, ChevronDown, Search, Barcode } from 'lucide-react';
+import { Package, ChevronUp, ChevronDown, Search, Barcode, RefreshCw } from 'lucide-react';
 import { collection, query, getDocs, orderBy, Timestamp, doc, setDoc, addDoc, getDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { useToast } from '../../contexts/ToastContext';
@@ -10,6 +10,7 @@ import Modal from '../../components/modals/Modal';
 import BarcodeScanModal from '../../components/modals/BarcodeScanModal';
 import { useAuth } from '../../contexts/AuthContext';
 import { StockItem } from '../../types';
+import Button from '../../components/ui/Button';
 
 interface LocationSummary {
   locationCode: string;
@@ -37,6 +38,7 @@ const WarehouseLocations: React.FC = () => {
   const { user } = useAuth();
 
   const fetchLocations = async () => {
+    setIsLoading(true);
     try {
       const q = query(collection(db, 'inventory'), orderBy('locationCode'));
       const snapshot = await getDocs(q);
@@ -63,6 +65,8 @@ const WarehouseLocations: React.FC = () => {
     } catch (error) {
       console.error('Error fetching locations:', error);
       showToast('Failed to fetch locations. Please try again.', 'error');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -370,6 +374,14 @@ const WarehouseLocations: React.FC = () => {
             ]}
           />
         </div>
+        <Button
+          variant="secondary"
+          onClick={fetchLocations}
+          className={`flex items-center gap-2 ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+          disabled={isLoading}
+        >
+          <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
+        </Button>
       </div>
 
       {isLoading ? (
