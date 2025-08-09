@@ -241,13 +241,13 @@ const AdminDashboard: React.FC = () => {
           
           for (const pattern of patterns) {
             const match = detail.match(pattern);
-            if (match) {
-              if (match.length === 3) {
+              if (match) {
+                if (match.length === 3) {
                 // For "from X to Y" pattern, calculate the absolute difference
-                const fromValue = parseInt(match[1]);
-                const toValue = parseInt(match[2]);
+                  const fromValue = parseInt(match[1]);
+                  const toValue = parseInt(match[2]);
                 return sum + Math.abs(fromValue - toValue);
-              } else {
+                } else {
                 return sum + parseInt(match[1]);
               }
             }
@@ -278,13 +278,13 @@ const AdminDashboard: React.FC = () => {
           
           for (const pattern of patterns) {
             const match = detail.match(pattern);
-            if (match) {
-              if (match.length === 3) {
+              if (match) {
+                if (match.length === 3) {
                 // For "from X to Y" pattern, calculate the absolute difference
-                const fromValue = parseInt(match[1]);
-                const toValue = parseInt(match[2]);
+                  const fromValue = parseInt(match[1]);
+                  const toValue = parseInt(match[2]);
                 return sum + Math.abs(fromValue - toValue);
-              } else {
+                } else {
                 return sum + parseInt(match[1]);
               }
             }

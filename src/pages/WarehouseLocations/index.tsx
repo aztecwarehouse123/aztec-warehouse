@@ -111,7 +111,14 @@ const WarehouseLocations: React.FC = () => {
     'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', 'Q8',
     'R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8',
     'S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8',
-    'T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8'
+    'T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8',
+    'U1', 'U2', 'U3', 'U4', 'U5', 'U6', 'U7', 'U8',
+    'V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8',
+    'W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'W7', 'W8',
+    'X1', 'X2', 'X3', 'X4', 'X5', 'X6', 'X7', 'X8',
+    'Y1', 'Y2', 'Y3', 'Y4', 'Y5', 'Y6', 'Y7', 'Y8',
+    'Z1', 'Z2', 'Z3', 'Z4', 'Z5', 'Z6', 'Z7', 'Z8',
+    'Awaiting Location'
   ];
 
   const locationSummaries = allLocationCodes.reduce((acc, code) => {
@@ -167,11 +174,17 @@ const WarehouseLocations: React.FC = () => {
       if (sortBy === 'totalStock') {
         return b.totalStock - a.totalStock;
       } else if (sortBy === 'locationCode') {
+        // Special handling for 'Awaiting Location' - always show first
+        if (a.locationCode === 'Awaiting Location') return -1;
+        if (b.locationCode === 'Awaiting Location') return 1;
         return a.locationCode.localeCompare(b.locationCode);
       } else if (sortBy === 'availability') {
         const availA = availability[a.locationCode] !== false;
         const availB = availability[b.locationCode] !== false;
         if (availA === availB) {
+          // Special handling for 'Awaiting Location' - always show first
+          if (a.locationCode === 'Awaiting Location') return -1;
+          if (b.locationCode === 'Awaiting Location') return 1;
           return a.locationCode.localeCompare(b.locationCode);
         }
         return availA ? -1 : 1;
@@ -421,7 +434,7 @@ const WarehouseLocations: React.FC = () => {
                         <Package className={`w-5 h-5 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`} />
                       </div>
                       <h3 className={`text-lg font-medium ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
-                        Location {summary.locationCode}
+                        {summary.locationCode === 'Awaiting Location' ? 'Awaiting Location' : `Location ${summary.locationCode}`}
                       </h3>
                     </div>
                     <div className="flex items-center gap-2 ml-2">

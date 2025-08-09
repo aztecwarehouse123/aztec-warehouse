@@ -24,4 +24,6 @@ git push origin main
 npm run build
 npm run deploy
 
+OR run ./deploy.sh
+
 "homepage": "https://aztecwarehouse123.github.io/aztec-warehouse",
