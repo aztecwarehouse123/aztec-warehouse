@@ -5,10 +5,11 @@ import Button from '../ui/Button';
 import Select from '../ui/Select';
 import { StockItem } from '../../types';
 import BarcodeScanModal from '../modals/BarcodeScanModal';
+import AddProductModal from '../modals/AddProductModal';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { db } from '../../config/firebase';
-import { collection, query, where, getDocs, addDoc, Timestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import ConfirmationModal from '../modals/ConfirmationModal';
 import Modal from '../modals/Modal';
 
@@ -29,7 +30,6 @@ interface FormData {
   barcode?: string;
   fulfillmentType: 'fba' | 'mf';
   storeName: string;
-  unit?: string;
 }
 
 interface LocationEntry {
@@ -277,8 +277,7 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
     status: 'pending',
     damagedItems: '0',
     fulfillmentType: 'fba',
-    storeName: 'supply & serve', // Default to first store
-    unit: ''
+    storeName: 'supply & serve' // Default to first store
   });
 
   const [locationEntries, setLocationEntries] = useState<LocationEntry[]>([
@@ -300,6 +299,7 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
   const [duplicateInfo, setDuplicateInfo] = useState<{name: string, location: string} | null>(null);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [isAddProductModalOpen, setIsAddProductModalOpen] = useState(false);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -546,75 +546,14 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
     setDuplicateInfo(null);
   };
 
-  const handleAddProduct = async () => {
-    if (!formData.name.trim() || !formData.barcode?.trim()) {
-      setErrors(prev => ({
-        ...prev,
-        name: !formData.name.trim() ? 'Product name is required' : '',
-        barcode: !formData.barcode?.trim() ? 'Barcode is required' : ''
-      }));
-      return;
-    }
+  const handleAddProduct = () => {
+    setIsAddProductModalOpen(true);
+  };
 
-    try {
-      // Add to scannedProducts collection
-      await addDoc(collection(db, 'scannedProducts'), {
-        name: formData.name.toUpperCase(),
-        unit: formData.unit || '',
-        barcode: formData.barcode,
-        createdAt: Timestamp.fromDate(new Date())
-      });
-
-      // Add activity log
-      if (user) {
-        await addDoc(collection(db, 'activityLogs'), {
-          user: user.name,
-          role: user.role,
-          detail: `added new product "${formData.name.toUpperCase()}" with barcode ${formData.barcode}`,
-          time: new Date().toISOString()
-        });
-      }
-
-      // Show success message
-      setSuccessMessage(`Product "${formData.name.toUpperCase()}" has been successfully added to the database!`);
-      setIsSuccessModalOpen(true);
-
-      // Clear form data completely
-      setFormData({
-        name: '',
-        price: '',
-        supplier: supplierOptions[0].value,
-        asin: '',
-        status: 'pending',
-        damagedItems: '0',
-        fulfillmentType: 'fba',
-        storeName: 'supply & serve',
-        unit: ''
-      });
-
-      // Clear location entries
-      setLocationEntries([
-        { locationCode: 'A1', shelfNumber: '0', quantity: '' }
-      ]);
-
-      // Clear all errors
-      setErrors({});
-
-      // Clear other states
-      setShowOtherStoreInput(false);
-      setOtherStoreName('');
-      setShowOtherSupplierInput(false);
-      setOtherSupplier('');
-      setBarcodeSearchMessage(null);
-      setFetchError(null);
-
-    } catch (error) {
-      console.error('Error adding product:', error);
-      setErrors(prev => ({
-        ...prev,
-        general: 'Failed to add product. Please try again.'
-      }));
-    }
+  const handleProductAdded = () => {
+    // Show success message
+    setSuccessMessage('Product has been successfully added to the database!');
+    setIsSuccessModalOpen(true);
   };
 
   return (
@@ -815,19 +754,6 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            
-            
-            <Input
-            label="Unit"
-            name="unit"
-            value={formData.unit || ''}
-            onChange={handleChange}
-            placeholder="e.g. 350ML, 75GM, 1PC"
-            fullWidth
-          />
-            
-          </div>
           <div>
             <Select
             label="Store Name"
@@ -902,6 +828,12 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
         isOpen={isScanModalOpen}
         onClose={() => setIsScanModalOpen(false)}
         onBarcodeScanned={handleBarcodeScanned}
+      />
+
+      <AddProductModal
+        isOpen={isAddProductModalOpen}
+        onClose={() => setIsAddProductModalOpen(false)}
+        onSuccess={handleProductAdded}
       />
 
       <ConfirmationModal

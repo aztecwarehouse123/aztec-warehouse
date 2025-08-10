@@ -24,60 +24,60 @@ export interface StockItem {
   storeName: string; // Store name where the item is from
 }
 
-export type OrderStatus = 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'returned' | 'completed';
+// export type OrderStatus = 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'returned' | 'completed';
 
-export type Order = {
-  id: string;
-  orderNumber: string;
-  customerName: string;
-  items: OrderItem[];
-  status: OrderStatus;
-  createdAt: Date;
-  updatedAt: Date;
-  shippingAddress: Address;
-  billingAddress: Address;
-  paymentMethod: string;
-  totalAmount: number;
-  notes?: string;
-  shippedTime?: Date | null; // Optional field for shipped date/time, can be null to signal deletion
-};
+// export type Order = {
+//   id: string;
+//   orderNumber: string;
+//   customerName: string;
+//   items: OrderItem[];
+//   status: OrderStatus;
+//   createdAt: Date;
+//   updatedAt: Date;
+//   shippingAddress: Address;
+//   billingAddress: Address;
+//   paymentMethod: string;
+//   totalAmount: number;
+//   notes?: string;
+//   shippedTime?: Date | null; // Optional field for shipped date/time, can be null to signal deletion
+// };
 
-export type OrderItem = {
-  id: string;
-  productId: string;
-  productName: string;
-  quantity: number;
-  unitPrice: number;
-  totalPrice: number;
-};
+// export type OrderItem = {
+//   id: string;
+//   productId: string;
+//   productName: string;
+//   quantity: number;
+//   unitPrice: number;
+//   totalPrice: number;
+// };
 
-export type Address = {
-  street: string;
-  city: string;
-  state: string;
-  zipCode: string;
-  country: string;
-};
+// export type Address = {
+//   street: string;
+//   city: string;
+//   state: string;
+//   zipCode: string;
+//   country: string;
+// };
 
-export type ChartData = {
-  name: string;
-  value: number;
-};
+// export type ChartData = {
+//   name: string;
+//   value: number;
+// };
 
-export type SalesData = {
-  date: string;
-  amount: number;
-};
+// export type SalesData = {
+//   date: string;
+//   amount: number;
+// };
 
-export type TopProduct = {
-  id: string;
-  name: string;
-  quantity: number;
-  revenue: number;
-  image?: string;
-};
+// export type TopProduct = {
+//   id: string;
+//   name: string;
+//   quantity: number;
+//   revenue: number;
+//   image?: string;
+// };
 
-export type StockCategory = 'electronics' | 'clothing' | 'furniture' | 'food' | 'other';
+// export type StockCategory = 'electronics' | 'clothing' | 'furniture' | 'food' | 'other';
 
 export type ActivityLog = {
   id: string;
