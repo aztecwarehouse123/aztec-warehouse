@@ -221,7 +221,22 @@ const Add: React.FC = () => {
     if (!deleteProductId) return;
     setIsDeleting(true);
     try {
+      // Get product details before deleting for logging
+      const productToDelete = products.find(p => p.id === deleteProductId);
+      
+      // Delete the product
       await deleteDoc(doc(db, 'scannedProducts', deleteProductId));
+      
+      // Add activity log for delete
+      if (user && productToDelete) {
+        await addDoc(collection(db, 'activityLogs'), {
+          user: user.name,
+          role: user.role,
+          detail: `deleted product "${productToDelete.name}" with barcode ${productToDelete.barcode}`,
+          time: new Date().toISOString()
+        });
+      }
+      
       setDeleteProductId(null);
       fetchProducts();
     } catch {
@@ -286,6 +301,17 @@ const Add: React.FC = () => {
           createdAt: Timestamp.fromDate(new Date())
         });
       }
+      
+      // Add activity log for bulk upload
+      if (user) {
+        await addDoc(collection(db, 'activityLogs'), {
+          user: user.name,
+          role: user.role,
+          detail: `bulk uploaded ${products.length} products from file "${file.name}"`,
+          time: new Date().toISOString()
+        });
+      }
+      
       setToast({ type: 'success', message: `Uploaded ${products.length} products successfully!` });
       console.log(`Uploaded ${products.length} products successfully!`);
       fetchProducts();

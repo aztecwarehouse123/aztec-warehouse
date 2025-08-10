@@ -510,6 +510,8 @@ const updateInventoryQuantities = async (items: OrderItem[], decrease: boolean) 
    console.log('Updating inventory quantities...', items, decrease);
    // Example using batch write (requires implementation based on your inventory structure)
    const batch = writeBatch(db);
+   const updatedItems: { productName: string; quantity: number; action: string }[] = [];
+   
    for (const item of items) {
      const itemRef = doc(db, 'inventory', item.productId);
      // Fetch current quantity to avoid race conditions if necessary
@@ -518,9 +520,30 @@ const updateInventoryQuantities = async (items: OrderItem[], decrease: boolean) 
        const currentQuantity = itemDoc.data().quantity;
        const newQuantity = decrease ? currentQuantity - item.quantity : currentQuantity + item.quantity;
        batch.update(itemRef, { quantity: newQuantity });
+       
+       updatedItems.push({
+         productName: item.productName,
+         quantity: item.quantity,
+         action: decrease ? 'deducted' : 'restored'
+       });
      }
    }
    await batch.commit();
+   
+   // Add activity log for inventory updates
+   if (updatedItems.length > 0) {
+     const action = decrease ? 'deducted from' : 'restored to';
+     const itemsList = updatedItems.map(item => 
+       `${item.quantity} units of "${item.productName}"`
+     ).join(', ');
+     
+     await addDoc(collection(db, 'activityLogs'), {
+       user: user?.name,
+       role: user?.role,
+       detail: `${action} inventory: ${itemsList}`,
+       time: new Date().toISOString()
+     });
+   }
 };
 
 export default Orders;
