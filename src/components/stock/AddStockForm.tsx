@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Plus, Barcode, Trash2 } from 'lucide-react';
+import { Plus, Barcode, Trash2, CheckCircle } from 'lucide-react';
 import Input from '../ui/Input';
 import Button from '../ui/Button';
 import Select from '../ui/Select';
@@ -8,8 +8,9 @@ import BarcodeScanModal from '../modals/BarcodeScanModal';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { db } from '../../config/firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, Timestamp } from 'firebase/firestore';
 import ConfirmationModal from '../modals/ConfirmationModal';
+import Modal from '../modals/Modal';
 
 
 interface AddStockFormProps {
@@ -28,6 +29,7 @@ interface FormData {
   barcode?: string;
   fulfillmentType: 'fba' | 'mf';
   storeName: string;
+  unit?: string;
 }
 
 interface LocationEntry {
@@ -275,7 +277,8 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
     status: 'pending',
     damagedItems: '0',
     fulfillmentType: 'fba',
-    storeName: 'supply & serve' // Default to first store
+    storeName: 'supply & serve', // Default to first store
+    unit: ''
   });
 
   const [locationEntries, setLocationEntries] = useState<LocationEntry[]>([
@@ -295,6 +298,8 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
   const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
   const [pendingStockData, setPendingStockData] = useState<Omit<StockItem, 'id'>[] | null>(null);
   const [duplicateInfo, setDuplicateInfo] = useState<{name: string, location: string} | null>(null);
+  const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -541,6 +546,77 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
     setDuplicateInfo(null);
   };
 
+  const handleAddProduct = async () => {
+    if (!formData.name.trim() || !formData.barcode?.trim()) {
+      setErrors(prev => ({
+        ...prev,
+        name: !formData.name.trim() ? 'Product name is required' : '',
+        barcode: !formData.barcode?.trim() ? 'Barcode is required' : ''
+      }));
+      return;
+    }
+
+    try {
+      // Add to scannedProducts collection
+      await addDoc(collection(db, 'scannedProducts'), {
+        name: formData.name.toUpperCase(),
+        unit: formData.unit || '',
+        barcode: formData.barcode,
+        createdAt: Timestamp.fromDate(new Date())
+      });
+
+      // Add activity log
+      if (user) {
+        await addDoc(collection(db, 'activityLogs'), {
+          user: user.name,
+          role: user.role,
+          detail: `added new product "${formData.name.toUpperCase()}" with barcode ${formData.barcode}`,
+          time: new Date().toISOString()
+        });
+      }
+
+      // Show success message
+      setSuccessMessage(`Product "${formData.name.toUpperCase()}" has been successfully added to the database!`);
+      setIsSuccessModalOpen(true);
+
+      // Clear form data completely
+      setFormData({
+        name: '',
+        price: '',
+        supplier: supplierOptions[0].value,
+        asin: '',
+        status: 'pending',
+        damagedItems: '0',
+        fulfillmentType: 'fba',
+        storeName: 'supply & serve',
+        unit: ''
+      });
+
+      // Clear location entries
+      setLocationEntries([
+        { locationCode: 'A1', shelfNumber: '0', quantity: '' }
+      ]);
+
+      // Clear all errors
+      setErrors({});
+
+      // Clear other states
+      setShowOtherStoreInput(false);
+      setOtherStoreName('');
+      setShowOtherSupplierInput(false);
+      setOtherSupplier('');
+      setBarcodeSearchMessage(null);
+      setFetchError(null);
+
+    } catch (error) {
+      console.error('Error adding product:', error);
+      setErrors(prev => ({
+        ...prev,
+        general: 'Failed to add product. Please try again.'
+      }));
+    }
+  };
+
   return (
     <>
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -594,6 +670,8 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
               />
             )}
         </div>
+
+        
 
         
 
@@ -691,18 +769,8 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
             />
           )}
         </div>
-
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Input
-            label="ASIN (seperated by commas, if multiple)"
-            name="asin"
-            value={formData.asin}
-            onChange={handleChange}
-            placeholder="Enter Amazon ASIN"
-            fullWidth
-          />
-          <div className="space-y-2">
-            <div className="flex gap-2 relative w-full">
+        <div className="flex gap-2 relative w-full">
               <Input
                 label="Barcode"
                 name="barcode"
@@ -712,6 +780,7 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
                 fullWidth
                 style={{ paddingRight: 44 }}
               />
+              
               <button
                 type="button"
                 onClick={() => fetchBarcodeInfo()}
@@ -722,20 +791,43 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
                 aria-label="Fetch product info by barcode"
                 disabled={isFetchingProductInfo}
               >
+                
                 {isFetchingProductInfo ? <svg className="animate-spin text-blue-500" width="18" height="18" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> : <Barcode size={18} className="text-blue-500" />}
               </button>
+              
             </div>
+          <Input
+            label="ASIN (seperated by commas, if multiple)"
+            name="asin"
+            value={formData.asin}
+            onChange={handleChange}
+            placeholder="Enter Amazon ASIN"
+            fullWidth
+          />
+          
             {fetchError && (
               <div className="text-red-500 text-sm">{fetchError} Please enter details manually.</div>
             )}
             {barcodeSearchMessage && (
               <div className="flex items-center text-xs mt-1 text-green-600 dark:text-green-400 pl-1">{barcodeSearchMessage}</div>
             )}
-          </div>
-        
+            
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            
+            
+            <Input
+            label="Unit"
+            name="unit"
+            value={formData.unit || ''}
+            onChange={handleChange}
+            placeholder="e.g. 350ML, 75GM, 1PC"
+            fullWidth
+          />
+            
+          </div>
           <div>
             <Select
             label="Store Name"
@@ -757,7 +849,10 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
               ]}
             />
           </div>
-          {showOtherStoreInput && (
+        </div>
+
+        {showOtherStoreInput && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className={`block text-sm font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-700'} mb-1`}>
                 Other Store Name
@@ -770,14 +865,22 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
                 required={showOtherStoreInput}
               />
             </div>
-          )}
-        </div>
+          </div>
+        )}
         
         <div className="flex items-center justify-end gap-4 pt-2">
           <div className="flex gap-2">
             <Button 
               type="submit" 
               isLoading={isLoading}
+              icon={<Plus size={18} />}
+            >
+              Add Inventory
+            </Button>
+            <Button
+              type="button"
+              onClick={handleAddProduct}
+              variant="primary"
               icon={<Plus size={18} />}
             >
               Add Product
@@ -811,6 +914,28 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
         confirmLabel="Yes"
         cancelLabel="No"
       />
+
+      <Modal
+        isOpen={isSuccessModalOpen}
+        onClose={() => setIsSuccessModalOpen(false)}
+        title="Success!"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 text-green-600">
+            <CheckCircle size={24} />
+            <p className={isDarkMode ? 'text-slate-200' : 'text-slate-700'}>{successMessage}</p>
+          </div>
+          <div className="flex justify-end pt-4">
+            <Button
+              variant="primary"
+              onClick={() => setIsSuccessModalOpen(false)}
+            >
+              OK
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </>
   );
 };
