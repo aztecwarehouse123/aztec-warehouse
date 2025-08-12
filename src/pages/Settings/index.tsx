@@ -27,9 +27,10 @@ const Settings: React.FC = () => {
     name: '',
     password: '',
     confirmPassword: '',
-    role: 'inbound'
+    role: 'staff'
   });
   const [addUserErrors, setAddUserErrors] = useState<Record<string, string>>({});
+  const [userEditErrors, setUserEditErrors] = useState<Record<string, string>>({});
   const [showConfirmDeleteModal, setShowConfirmDeleteModal] = useState(false);
   const [userToDelete, setUserToDelete] = useState<{ username: string; name: string } | null>(null);
   const [formData, setFormData] = useState({
@@ -59,7 +60,7 @@ const Settings: React.FC = () => {
           ...doc.data()
         })) as UserType[];
         setUsers(usersData);
-        console.log('fetched users')
+        console.log('Fetched users:', usersData.map(u => ({ id: u.id, username: u.username, name: u.name })));
       } catch (error) {
         console.error('Error fetching users:', error);
         showToast('Error fetching users', 'error');
@@ -217,7 +218,9 @@ const Settings: React.FC = () => {
   };
 
   const handleEditUser = (user: UserType) => {
+    console.log('Editing user:', user);
     setEditingUser(user);
+    setUserEditErrors({}); // Clear previous errors
     setUserEditForm({
       username: user.username,
       email: user.email,
@@ -233,6 +236,15 @@ const Settings: React.FC = () => {
       ...prev,
       [name]: value
     }));
+    
+    // Clear error when field is edited
+    if (userEditErrors[name]) {
+      setUserEditErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[name];
+        return newErrors;
+      });
+    }
   };
 
   const handleUpdateUser = async () => {
@@ -240,32 +252,85 @@ const Settings: React.FC = () => {
 
     try {
       setIsLoading(true);
-      setErrors({});
+      setUserEditErrors({}); // Clear previous errors
+
+      // Validate required fields
+      if (!userEditForm.username.trim()) {
+        setUserEditErrors({ username: 'Username is required' });
+        return;
+      }
+      
+      if (!userEditForm.name.trim()) {
+        setUserEditErrors({ name: 'Name is required' });
+        return;
+      }
 
       // Validate passwords match if either is filled
       if (userEditForm.newPassword || userEditForm.confirmPassword) {
         if (userEditForm.newPassword !== userEditForm.confirmPassword) {
-          setErrors({ confirmPassword: 'Passwords do not match' });
+          setUserEditErrors({ confirmPassword: 'Passwords do not match' });
           return;
         }
         if (userEditForm.newPassword.length < 6) {
-          setErrors({ newPassword: 'Password must be at least 6 characters' });
+          setUserEditErrors({ newPassword: 'Password must be at least 6 characters' });
           return;
         }
       }
 
+      console.log('Updating user:', editingUser.id);
+      console.log('Editing user object:', editingUser);
+      console.log('Update data:', {
+        username: userEditForm.username,
+        email: userEditForm.email,
+        name: userEditForm.name,
+        password: userEditForm.newPassword ? '***' : 'unchanged'
+      });
+
       const userRef = doc(db, 'users', editingUser.id);
+      console.log('User reference:', userRef.path);
+      
       const updateData: Partial<UserType> = {
         username: userEditForm.username,
         email: userEditForm.email,
-        name: userEditForm.name
+        name: userEditForm.name,
+        role: editingUser.role // Preserve the existing role
       };
 
       if (userEditForm.newPassword) {
         updateData.password = userEditForm.newPassword;
       }
 
-      await updateDoc(userRef, updateData);
+      console.log('Attempting to update document with data:', updateData);
+      try {
+        await updateDoc(userRef, updateData);
+        console.log('User updated successfully in Firestore');
+      } catch (updateError) {
+        console.error('Failed to update by ID, trying to find by username:', updateError);
+        
+        // Fallback: try to find the user by username
+        const usersQuery = query(collection(db, 'users'), where('username', '==', editingUser.username));
+        const userSnapshot = await getDocs(usersQuery);
+        
+        if (!userSnapshot.empty) {
+          const actualUserDoc = userSnapshot.docs[0];
+          console.log('Found user by username, actual ID:', actualUserDoc.id);
+          
+          const actualUserRef = doc(db, 'users', actualUserDoc.id);
+          await updateDoc(actualUserRef, updateData);
+          console.log('User updated successfully using fallback method');
+          
+          // Update the local state with the correct ID
+          setUsers(prevUsers => 
+            prevUsers.map(u => 
+              u.username === editingUser.username 
+                ? { ...u, id: actualUserDoc.id, ...updateData }
+                : u
+            )
+          );
+        } else {
+          throw new Error('User not found by username either');
+        }
+      }
 
       // Log the activity
       await addDoc(collection(db, 'activityLogs'), {
@@ -288,6 +353,11 @@ const Settings: React.FC = () => {
       setEditingUser(null);
     } catch (error) {
       console.error('Error updating user:', error);
+      console.error('Error details:', {
+        editingUser: editingUser,
+        userEditForm: userEditForm,
+        error: error
+      });
       showToast('Failed to update user', 'error');
     } finally {
       setIsLoading(false);
@@ -397,7 +467,7 @@ const Settings: React.FC = () => {
         name: '',
         password: '',
         confirmPassword: '',
-        role: 'inbound'
+        role: 'staff'
       });
       setIsAddUserModalOpen(false);
       
@@ -495,7 +565,10 @@ const Settings: React.FC = () => {
       {editingUser && (
         <Modal
           isOpen={!!editingUser}
-          onClose={() => setEditingUser(null)}
+          onClose={() => {
+            setEditingUser(null);
+            setUserEditErrors({});
+          }}
           title="Edit User"
           size="md"
         >
@@ -505,7 +578,7 @@ const Settings: React.FC = () => {
                 name="username"
                 value={userEditForm.username}
                 onChange={handleUserEditChange}
-                error={errors.username}
+                error={userEditErrors.username}
               />
               <Input
                 label="Email"
@@ -513,34 +586,37 @@ const Settings: React.FC = () => {
                 type="email"
                 value={userEditForm.email}
                 onChange={handleUserEditChange}
-                error={errors.email}
+                error={userEditErrors.email}
               />
               <Input
                 label="Name"
                 name="name"
                 value={userEditForm.name}
                 onChange={handleUserEditChange}
-                error={errors.name}
+                error={userEditErrors.name}
               />
               <PasswordInput
                 label="New Password"
                 name="newPassword"
                 value={userEditForm.newPassword}
                 onChange={handleUserEditChange}
-                error={errors.newPassword}
+                error={userEditErrors.newPassword}
               />
               <PasswordInput
                 label="Confirm Password"
                 name="confirmPassword"
                 value={userEditForm.confirmPassword}
                 onChange={handleUserEditChange}
-                error={errors.confirmPassword}
+                error={userEditErrors.confirmPassword}
               />
             </div>
             <div className="mt-6 flex justify-end space-x-3">
               <Button
                 variant="secondary"
-                onClick={() => setEditingUser(null)}
+                onClick={() => {
+                  setEditingUser(null);
+                  setUserEditErrors({});
+                }}
                 disabled={isLoading}
               >
                 Cancel
@@ -729,19 +805,19 @@ const Settings: React.FC = () => {
                 </thead>
                 <tbody className={`divide-y ${isDarkMode ? 'divide-slate-700 bg-slate-800' : 'divide-gray-200 bg-white'}`}> 
                   {users
-                    .filter(user => user.role!== 'admin')
-                    .map((user) => (
-                    <tr key={user.id} className={isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-gray-50'}>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>{user.username}</td>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>{user.email || '-'}</td>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>{user.name}</td>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>{user.role}</td>
+                    .filter(userItem => userItem.id !== user?.id)
+                    .map((userItem) => (
+                    <tr key={userItem.id} className={isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-gray-50'}>
+                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>{userItem.username}</td>
+                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>{userItem.email || '-'}</td>
+                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>{userItem.name}</td>
+                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>{userItem.role}</td>
                       <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}> 
                         <div className="flex items-center gap-2">
                           <Button 
                             variant="ghost" 
                             size="sm" 
-                            onClick={() => handleEditUser(user)}
+                            onClick={() => handleEditUser(userItem)}
                             className={`${isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'}`}
                           >
                             <Edit2 size={16} />
@@ -749,7 +825,7 @@ const Settings: React.FC = () => {
                           <Button 
                             variant="ghost" 
                             size="sm" 
-                            onClick={() => handleDeleteUser(user.name, user.username)}
+                            onClick={() => handleDeleteUser(userItem.name, userItem.username)}
                             className={`${isDarkMode ? 'text-red-400 hover:text-red-300' : 'text-red-600 hover:text-red-700'}`}
                           >
                             <Trash2 size={16} />
@@ -763,21 +839,21 @@ const Settings: React.FC = () => {
             </div>
             {/* Cards for mobile screens */}
             <div className="md:hidden flex flex-col gap-4 p-2">
-              {users.filter(user => user.role!== 'admin').map((user) => (
+              {users.filter(userItem => userItem.id !== user?.id).map((userItem) => (
                 <div
-                  key={user.id}
+                  key={userItem.id}
                   className={`rounded-lg shadow p-4 flex flex-col gap-2 ${isDarkMode ? 'bg-slate-800' : 'bg-white'}`}
                 >
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className={`font-semibold ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>{user.name}</div>
-                      <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>{user.username}</div>
+                      <div className={`font-semibold ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>{userItem.name}</div>
+                      <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>{userItem.username}</div>
                     </div>
                     <div className="flex items-center gap-2">
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleEditUser(user)}
+                        onClick={() => handleEditUser(userItem)}
                         className={`${isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'}`}
                       >
                         <Edit2 size={16} />
@@ -785,15 +861,15 @@ const Settings: React.FC = () => {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleDeleteUser(user.name, user.username)}
+                        onClick={() => handleDeleteUser(userItem.name, userItem.username)}
                         className={`${isDarkMode ? 'text-red-400 hover:text-red-300' : 'text-red-600 hover:text-red-700'}`}
                       >
                         <Trash2 size={16} />
                       </Button>
                     </div>
                   </div>
-                  <div className={`text-sm ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>{user.email || '-'}</div>
-                  <div className={`text-xs font-medium ${isDarkMode ? 'text-blue-300' : 'text-blue-700'}`}>{user.role}</div>
+                  <div className={`text-sm ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>{userItem.email || '-'}</div>
+                  <div className={`text-xs font-medium ${isDarkMode ? 'text-blue-300' : 'text-blue-700'}`}>{userItem.role}</div>
                 </div>
               ))}
             </div>
@@ -846,8 +922,7 @@ const Settings: React.FC = () => {
                   value={addUserFormData.role}
                   onChange={handleAddUserChange}
                   options={[
-                    { value: 'inbound', label: 'Inbound' },
-                    { value: 'outbound', label: 'Outbound' },
+                    { value: 'admin', label: 'Admin' },
                     { value: 'staff', label: 'Staff' },
                   ]}
                   fullWidth

@@ -796,22 +796,24 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
         
         <div className="flex items-center justify-end gap-4 pt-2">
           <div className="flex gap-2">
-            <Button 
-              type="submit" 
-              isLoading={isLoading}
-              icon={<Plus size={18} />}
-            >
-              Add Inventory
-            </Button>
+            
             <Button
               type="button"
               onClick={handleAddProduct}
               variant="primary"
               icon={<Plus size={18} />}
             >
-              Add Product
+              Add New Product
             </Button>
-            <Button
+            <Button 
+              type="submit" 
+              isLoading={isLoading}
+              variant="success"
+              icon={<Plus size={18} />}
+            >
+              Confirm
+            </Button>
+            {/* <Button
                 type="button"
                 onClick={handleScan}
                 variant="primary"
@@ -819,7 +821,7 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
                 className="whitespace-nowrap"
               >
                 Scan
-              </Button>
+              </Button> */}
           </div>
         </div>
       </form>

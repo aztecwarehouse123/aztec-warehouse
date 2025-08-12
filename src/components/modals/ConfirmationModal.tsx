@@ -48,7 +48,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
             {cancelLabel}
           </Button>
           <Button
-            variant="primary"
+            variant="success"
             onClick={onConfirm}
             isLoading={isLoading}
           >

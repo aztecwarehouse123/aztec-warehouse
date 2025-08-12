@@ -35,13 +35,13 @@ function App() {
       
       <Route path="/" element={<AppLayout />}>
         <Route index element={
-          <ProtectedRoute allowedRoles={['admin', 'inbound','outbound']}>
+          <ProtectedRoute allowedRoles={['admin', 'staff']}>
             <Dashboard />
           </ProtectedRoute>
         } />
 
         <Route path="stock" element={
-          <ProtectedRoute allowedRoles={['admin','inbound','staff']}>
+          <ProtectedRoute allowedRoles={['admin','staff']}>
             <Stock />
           </ProtectedRoute>
         } />
@@ -51,7 +51,7 @@ function App() {
           </ProtectedRoute>
         } />
         <Route path="outbound-stock" element={
-          <ProtectedRoute allowedRoles={['admin','outbound','staff']}>
+          <ProtectedRoute allowedRoles={['admin','staff']}>
             <OutboundStock />
           </ProtectedRoute>
         } />
@@ -72,12 +72,12 @@ function App() {
           </ProtectedRoute>
         } />
         <Route path="settings" element={
-          <ProtectedRoute allowedRoles={['admin', 'inbound', 'outbound', 'staff']}>
+          <ProtectedRoute allowedRoles={['admin', 'staff']}>
             <Settings />
           </ProtectedRoute>
         } />
         <Route path="add" element={
-          <ProtectedRoute allowedRoles={['admin','inbound','staff']}>
+          <ProtectedRoute allowedRoles={['admin','staff']}>
             <Add />
           </ProtectedRoute>
         } />

@@ -246,7 +246,7 @@ const OutboundDashboard2: React.FC = () => {
                 options={[
                   { value: 'all', label: 'All Roles' },
                   { value: 'admin', label: 'Admin' },
-                  { value: 'outbound', label: 'Outbound' }
+                  { value: 'staff', label: 'Staff' }
                 ]}
                 className="w-40"
               />

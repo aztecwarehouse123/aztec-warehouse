@@ -110,8 +110,7 @@ const WarehouseOperations: React.FC = () => {
   const roleFilterOptions = [
     { value: 'all', label: 'All Roles' },
     { value: 'admin', label: 'Admin' },
-    { value: 'inbound', label: 'Inbound' },
-    { value: 'outbound', label: 'Outbound' }
+    { value: 'staff', label: 'Staff' }
   ];
 
   const exportToCSV = () => {
