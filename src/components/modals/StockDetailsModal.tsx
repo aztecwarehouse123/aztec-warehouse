@@ -65,6 +65,11 @@ const StockDetailsModal: React.FC<StockDetailsModalProps> = ({
               )}
               
               <div>
+                <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Unit</p>
+                <p className={`font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{item.unit || '-'}</p>
+              </div>
+              
+              <div>
                 <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Supplier</p>
                 <p className={`font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{item.supplier}</p>
               </div>

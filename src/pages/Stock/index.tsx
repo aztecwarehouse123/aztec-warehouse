@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Edit2, Trash2, Loader2, CheckSquare, RefreshCw } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Loader2, CheckSquare, RefreshCw, ChevronDown } from 'lucide-react';
 import { motion } from 'framer-motion';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
@@ -44,6 +44,10 @@ const Stock: React.FC = () => {
     existingProducts: StockItem[];
     newProductName: string;
   } | null>(null);
+  const [storeFilter, setStoreFilter] = useState<{ storeName: string; fulfillmentType: string } | null>(null);
+  const [isStoreFilterOpen, setIsStoreFilterOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'pending'>('all');
+  const [isStatusFilterOpen, setIsStatusFilterOpen] = useState(false);
 
   // Fetch stock items from Firestore
     const fetchStockItems = async () => {
@@ -74,12 +78,32 @@ const Stock: React.FC = () => {
     fetchStockItems();
   }, [showToast]);
 
+  // Close store filter dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (!target.closest('.store-filter-dropdown')) {
+        setIsStoreFilterOpen(false);
+      }
+      if (!target.closest('.status-filter-dropdown')) {
+        setIsStatusFilterOpen(false);
+      }
+    };
+
+    if (isStoreFilterOpen || isStatusFilterOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isStoreFilterOpen, isStatusFilterOpen]);
+
   const sortOptions = [
     { value: 'name', label: 'Name (A-Z)' },
     { value: 'quantity', label: 'Quantity (High-Low)' },
     { value: 'price', label: 'Price (High-Low)' },
-    { value: 'date', label: 'Date Updated' },
-    { value: 'status', label: 'Status (Pending - Active)' }
+    { value: 'date', label: 'Date Updated' }
   ];
 
   // Filter and sort items
@@ -96,7 +120,18 @@ const Stock: React.FC = () => {
     // Handle barcode search
     const matchesBarcode = item.barcode ? item.barcode.toLowerCase().includes(searchLower) : false;
     
-    return matchesName || matchesLocation || matchesAsin || matchesBarcode;
+    // Handle store and fulfillment type filter
+    const predefinedStores = ['supply & serve', 'APHY', 'AZTEC', 'ZK'];
+    const matchesStoreFilter = storeFilter 
+      ? (storeFilter.storeName === 'other' 
+          ? !predefinedStores.includes(item.storeName) && item.fulfillmentType === storeFilter.fulfillmentType
+          : item.storeName === storeFilter.storeName && item.fulfillmentType === storeFilter.fulfillmentType)
+      : true;
+    
+    // Handle status filter
+    const matchesStatusFilter = statusFilter === 'all' || item.status === statusFilter;
+    
+    return (matchesName || matchesLocation || matchesAsin || matchesBarcode) && matchesStoreFilter && matchesStatusFilter;
   }).sort((a, b) => {
     if (sortBy === 'name') {
       return a.name.localeCompare(b.name);
@@ -106,11 +141,6 @@ const Stock: React.FC = () => {
       return b.price - a.price;
     } else if (sortBy === 'date') {
       return new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime();
-    } else if (sortBy === 'status') {
-      // Sort by status: active first, then pending
-      if (a.status === 'pending' && b.status === 'active') return -1;
-      if (a.status === 'active' && b.status === 'pending') return 1;
-      return 0;
     }
     return 0;
   });
@@ -264,6 +294,10 @@ const Stock: React.FC = () => {
         if (data.storeName !== originalItem.storeName) {
             changes.storeName = data.storeName;
             logChanges.push(`store name from "${originalItem.storeName}" to "${data.storeName}"`);
+        }
+        if (data.unit !== originalItem.unit) {
+            changes.unit = data.unit;
+            logChanges.push(`unit from "${originalItem.unit || 'none'}" to "${data.unit || 'none'}"`);
         }
 
 
@@ -565,6 +599,116 @@ const handleConfirmQuantityUpdate = async () => {
             options={sortOptions}
           />
         </div>
+        <div className="relative status-filter-dropdown">
+          <Button
+            variant="secondary"
+            onClick={() => setIsStatusFilterOpen(!isStatusFilterOpen)}
+            className={`flex items-center gap-2 ${statusFilter !== 'all' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' : ''}`}
+          >
+            {statusFilter === 'all' ? 'Status Filter' : statusFilter === 'active' ? 'Active' : 'Pending'}
+            <ChevronDown size={16} />
+          </Button>
+          {isStatusFilterOpen && (
+            <div className={`absolute top-full left-0 mt-1 w-32 z-50 rounded-lg border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-lg`}>
+              <div className="p-2">
+                <div className={`text-sm font-medium mb-2 ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>Filter by Status</div>
+                <div 
+                  className={`px-3 py-2 text-sm cursor-pointer rounded transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-700' : 'text-slate-700 hover:bg-slate-100'} ${statusFilter === 'all' ? (isDarkMode ? 'bg-slate-700' : 'bg-slate-100') : ''}`}
+                  onClick={() => {
+                    setStatusFilter('all');
+                    setIsStatusFilterOpen(false);
+                  }}
+                >
+                  All
+                </div>
+                <div 
+                  className={`px-3 py-2 text-sm cursor-pointer rounded transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-700' : 'text-slate-700 hover:bg-slate-100'} ${statusFilter === 'active' ? (isDarkMode ? 'bg-slate-700' : 'bg-slate-100') : ''}`}
+                  onClick={() => {
+                    setStatusFilter('active');
+                    setIsStatusFilterOpen(false);
+                  }}
+                >
+                  Active
+                </div>
+                <div 
+                  className={`px-3 py-2 text-sm cursor-pointer rounded transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-700' : 'text-slate-700 hover:bg-slate-100'} ${statusFilter === 'pending' ? (isDarkMode ? 'bg-slate-700' : 'bg-slate-100') : ''}`}
+                  onClick={() => {
+                    setStatusFilter('pending');
+                    setIsStatusFilterOpen(false);
+                  }}
+                >
+                  Pending
+                </div>
+                <div className={`border-t ${isDarkMode ? 'border-slate-700' : 'border-slate-200'} mt-2 pt-2`}>
+                  <button
+                    className={`w-full text-left px-3 py-2 text-sm cursor-pointer rounded transition-colors ${isDarkMode ? 'text-red-400 hover:bg-slate-700' : 'text-red-600 hover:bg-slate-100'}`}
+                    onClick={() => {
+                      setStatusFilter('all');
+                      setIsStatusFilterOpen(false);
+                    }}
+                  >
+                    Clear Filter
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="relative store-filter-dropdown">
+          <Button
+            variant="secondary"
+            onClick={() => setIsStoreFilterOpen(!isStoreFilterOpen)}
+            className={`flex items-center gap-2 ${storeFilter ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' : ''}`}
+          >
+            {storeFilter ? `${storeFilter.storeName === 'other' ? 'Other' : storeFilter.storeName} - ${storeFilter.fulfillmentType.toUpperCase()}` : 'Store Filter'}
+            <ChevronDown size={16} />
+          </Button>
+          {isStoreFilterOpen && (
+            <div className={`absolute top-full left-0 mt-1 w-64 z-50 rounded-lg border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-lg`}>
+              <div className="p-2">
+                <div className={`text-sm font-medium mb-2 ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>Filter by Store & Type</div>
+                {['supply & serve', 'APHY', 'AZTEC', 'ZK', 'other'].map((storeName) => (
+                  <div key={storeName} className="group relative">
+                    <div className={`px-3 py-2 text-sm cursor-pointer rounded transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-700' : 'text-slate-700 hover:bg-slate-100'} ${storeFilter?.storeName === storeName ? (isDarkMode ? 'bg-slate-700' : 'bg-slate-100') : ''}`}>
+                      {storeName}
+                    </div>
+                    <div className={`absolute right-full top-0 mr-1 hidden group-hover:block w-24 ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border rounded-lg shadow-lg`}>
+                      <div 
+                        className={`px-3 py-2 text-sm cursor-pointer transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-700' : 'text-slate-700 hover:bg-slate-100'} ${storeFilter?.storeName === storeName && storeFilter?.fulfillmentType === 'fba' ? (isDarkMode ? 'bg-slate-700' : 'bg-slate-100') : ''}`}
+                        onClick={() => {
+                          setStoreFilter({ storeName, fulfillmentType: 'fba' });
+                          setIsStoreFilterOpen(false);
+                        }}
+                      >
+                        FBA
+                      </div>
+                      <div 
+                        className={`px-3 py-2 text-sm cursor-pointer transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-700' : 'text-slate-700 hover:bg-slate-100'} ${storeFilter?.storeName === storeName && storeFilter?.fulfillmentType === 'mf' ? (isDarkMode ? 'bg-slate-700' : 'bg-slate-100') : ''}`}
+                        onClick={() => {
+                          setStoreFilter({ storeName, fulfillmentType: 'mf' });
+                          setIsStoreFilterOpen(false);
+                        }}
+                      >
+                        MF
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <div className={`border-t ${isDarkMode ? 'border-slate-700' : 'border-slate-200'} mt-2 pt-2`}>
+                  <button
+                    className={`w-full text-left px-3 py-2 text-sm cursor-pointer rounded transition-colors ${isDarkMode ? 'text-red-400 hover:bg-slate-700' : 'text-red-600 hover:bg-slate-100'}`}
+                    onClick={() => {
+                      setStoreFilter(null);
+                      setIsStoreFilterOpen(false);
+                    }}
+                  >
+                    Clear Filter
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
         <Button
             variant="secondary"
             onClick={fetchStockItems}
@@ -605,6 +749,7 @@ const handleConfirmQuantityUpdate = async () => {
                 )}
                 <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Name</th>
                 <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Status</th>
+                <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>FT</th>
                 <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Location</th>
                 <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>ASIN</th>
                 {user?.role === 'admin' && (
@@ -652,6 +797,15 @@ const handleConfirmQuantityUpdate = async () => {
                       {item.status === 'active' ? 'Active' : 'Pending'}
                     </span>
                   </td>
+                  <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                      item.fulfillmentType === 'fba' 
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-orange-100 text-orange-700'
+                    }`}>
+                      {item.fulfillmentType.toUpperCase()}
+                    </span>
+                  </td>
                   <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{item.locationCode} - {item.shelfNumber}</td>
                   <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
                     {item.asin ? (
@@ -675,7 +829,7 @@ const handleConfirmQuantityUpdate = async () => {
                   <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'} text-right`}>
                     <div className="flex items-center justify-end gap-2">
                       {item.quantity <= 10 && (
-                        <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-red-100 text-red-700">
+                        <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-red-100 text-red-700 text-center">
                           Critical Low
                         </span>
                       )}
@@ -711,7 +865,7 @@ const handleConfirmQuantityUpdate = async () => {
         </div>
           {/* Mobile Card List */}
           <div className="block md:hidden space-y-4">
-            {filteredItems.map((item, index) => (
+            {filteredItems.map((item) => (
               <div
                 key={item.id}
                 className={`rounded-lg border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} p-4 shadow-sm flex flex-col gap-2`}
@@ -719,13 +873,22 @@ const handleConfirmQuantityUpdate = async () => {
               >
                 <div className="flex justify-between items-center">
                   <span className={`font-semibold ${isDarkMode ? 'text-blue-400' : 'text-blue-700'}`}>{item.name}</span>
-                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                    item.status === 'active'
-                      ? 'bg-green-100 text-green-700'
-                      : 'bg-yellow-100 text-yellow-700'
-                  }`}>
-                    {item.status === 'active' ? 'Active' : 'Pending'}
-                  </span>
+                  <div className="flex gap-2">
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                      item.status === 'active'
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-yellow-100 text-yellow-700'
+                    }`}>
+                      {item.status === 'active' ? 'Active' : 'Pending'}
+                    </span>
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                      item.fulfillmentType === 'fba'
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-orange-100 text-orange-700'
+                    }`}>
+                      {item.fulfillmentType.toUpperCase()}
+                    </span>
+                  </div>
                 </div>
                 <div className="flex flex-wrap gap-2 text-xs">
                   <span className={isDarkMode ? 'text-slate-300' : 'text-slate-600'}>Location: <span className="font-medium">{item.locationCode} - {item.shelfNumber}</span></span>
@@ -840,7 +1003,8 @@ const handleConfirmQuantityUpdate = async () => {
           setSelectedItems(new Set());
         }}
         onConfirm={handleBulkDelete}
-        itemCount={selectedItems.size}
+        title="Delete Selected Items"
+        message={`Are you sure you want to delete ${selectedItems.size} selected item${selectedItems.size > 1 ? 's' : ''}? This action cannot be undone.`}
         isLoading={isLoading}
       />
       <Modal

@@ -12,6 +12,7 @@ export interface StockItem {
   name: string;
   quantity: number;
   price: number;
+  unit: string | null; // Unit of measurement (e.g., ML, GM, PC, etc.)
   supplier: string | null;
   lastUpdated: Date;
   locationCode: string;

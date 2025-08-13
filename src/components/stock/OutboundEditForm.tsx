@@ -16,7 +16,7 @@ const predefinedStores = ['supply & serve', 'APHY', 'AZTEC', 'ZK'];
 
 const OutboundEditForm: React.FC<OutboundEditFormProps> = ({ item, onSubmit, isLoading }) => {
   const [deductQuantity, setDeductQuantity] = useState<string>('');
-  const [reason, setReason] = useState<string>('');
+  const [reason, setReason] = useState<string>('stock sold');
   const [otherReason, setOtherReason] = useState<string>('');
   const storeOptions = predefinedStores.includes(item.storeName)
     ? predefinedStores

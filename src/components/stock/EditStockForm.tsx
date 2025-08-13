@@ -11,6 +11,7 @@ interface FormData {
   name: string;
   quantity: string;
   price: string;
+  unit: string;
   supplier?: string;
   locationCode: string;
   shelfNumber: string;
@@ -281,6 +282,7 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
     name: item.name,
     quantity: item.quantity.toString(),
     price: item.price.toString(),
+    unit: item.unit || '',
     supplier: initialSupplier,
     locationCode: item.locationCode,
     shelfNumber: item.shelfNumber,
@@ -339,6 +341,7 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
           name: formData.name,
           quantity: parseInt(formData.quantity),
           price: user?.role === 'admin' ? parseFloat(formData.price) : item.price,
+          unit: formData.unit || null,
           supplier: formData.supplier === 'other' ? otherSupplier : formData.supplier || null,
           locationCode: formData.locationCode,
           shelfNumber: formData.shelfNumber,
@@ -443,6 +446,25 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
             fullWidth
           />
         )}
+        <Input
+          label="Unit (Optional)"
+          name="unit"
+          value={formData.unit}
+          onChange={handleChange}
+          placeholder="e.g. ML, GM, PC, etc."
+          fullWidth
+        />
+        <Select
+          label="Fulfillment Type"
+          name="fulfillmentType"
+          value={formData.fulfillmentType}
+          onChange={handleChange}
+          options={[
+            { value: 'fba', label: 'FBA' },
+            { value: 'mf', label: 'MF' }
+          ]}
+          fullWidth
+        />
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -495,17 +517,7 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Select
-          label="Fulfillment Type"
-          name="fulfillmentType"
-          value={formData.fulfillmentType}
-          onChange={handleChange}
-          options={[
-            { value: 'fba', label: 'FBA' },
-            { value: 'mf', label: 'MF' }
-          ]}
-          fullWidth
-        />
+        
         <div>
           <Select
             label="Supplier"
@@ -518,21 +530,7 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
           />
           
         </div>
-       
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {showOtherSupplierInput && (
-            <Input
-              label="Other Supplier"
-              value={otherSupplier}
-              onChange={e => setOtherSupplier(e.target.value)}
-              placeholder="Enter supplier name"
-              required={showOtherSupplierInput}
-              fullWidth
-            />
-          )}
-      <div>
+        <div>
           <label className={`block text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'} mb-1`}>
             Store Name
           </label>
@@ -556,7 +554,36 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
           />
           
         </div>
+       
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {showOtherSupplierInput && (
+            <Input
+              label="Other Supplier"
+              value={otherSupplier}
+              onChange={e => setOtherSupplier(e.target.value)}
+              placeholder="Enter supplier name"
+              required={showOtherSupplierInput}
+              fullWidth
+            />
+          )}
+      
         {showOtherStoreInput && !showOtherSupplierInput && (
+          <div>
+            <label className={`block text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'} mb-1`}>
+              Other Store Name
+            </label>
+            <Input
+              type="text"
+              value={otherStoreName}
+              onChange={(e) => setOtherStoreName(e.target.value)}
+              placeholder="Enter store name"
+              required={showOtherStoreInput}
+            />
+          </div>
+        )}
+        {showOtherStoreInput && showOtherSupplierInput && (
           <div>
             <label className={`block text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'} mb-1`}>
               Other Store Name
@@ -576,20 +603,7 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
       </div>
 
       <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-      {showOtherStoreInput && showOtherSupplierInput && (
-          <div>
-            <label className={`block text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'} mb-1`}>
-              Other Store Name
-            </label>
-            <Input
-              type="text"
-              value={otherStoreName}
-              onChange={(e) => setOtherStoreName(e.target.value)}
-              placeholder="Enter store name"
-              required={showOtherStoreInput}
-            />
-          </div>
-        )}
+      
       </div>
       
       

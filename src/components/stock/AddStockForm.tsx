@@ -23,6 +23,7 @@ interface AddStockFormProps {
 interface FormData {
   name: string;
   price: string;
+  unit: string;
   supplier: string;
   asin: string;
   status: 'pending' | 'active';
@@ -272,6 +273,7 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
   const [formData, setFormData] = useState<FormData>({
     name: '',
     price: '',
+    unit: '',
     supplier: supplierOptions[0].value, // Default to first supplier
     asin: '',
     status: 'pending',
@@ -383,9 +385,10 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
         const docData = snapshot.docs[0].data();
         setFormData(prev => ({
           ...prev,
-          name: docData.name || prev.name
+          name: docData.name || prev.name,
+          unit: docData.unit || prev.unit
         }));
-        setBarcodeSearchMessage('Product name auto-filled from scanned products.');
+        setBarcodeSearchMessage('Product name and unit auto-filled from scanned products.');
         searchSuccessful = true;
       } else {
         // Try external API
@@ -434,9 +437,10 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
         const docData = snapshot.docs[0].data();
         setFormData(prev => ({
           ...prev,
-          name: docData.name || prev.name
+          name: docData.name || prev.name,
+          unit: docData.unit || prev.unit
         }));
-        setBarcodeSearchMessage('Product name auto-filled from scanned products.');
+        setBarcodeSearchMessage('Product name and unit auto-filled from scanned products.');
         setIsFetchingProductInfo(false);
         return;
       }
@@ -490,6 +494,7 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
         name: formData.name,
         quantity: parseInt(entry.quantity),
         price: user?.role === 'admin' ? parseFloat(formData.price) : 0,
+        unit: formData.unit || null,
         supplier: supplier === 'other' ? otherSupplier : supplier,
         locationCode: entry.locationCode,
         shelfNumber: entry.shelfNumber,
@@ -598,6 +603,14 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
               fullWidth
             />
           )}
+          {!showOtherSupplierInput && (<Input
+            label="Unit (Optional)"
+            name="unit"
+            value={formData.unit}
+            onChange={handleChange}
+            placeholder="e.g. ML, GM, PC, etc."
+            fullWidth
+          />)}
           {showOtherSupplierInput && (
               <Input
                 label="Other Supplier"
@@ -608,6 +621,18 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
                 fullWidth
               />
             )}
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          
+            {showOtherSupplierInput && (<Input
+            label="Unit (Optional)"
+            name="unit"
+            value={formData.unit}
+            onChange={handleChange}
+            placeholder="e.g. ML, GM, PC, etc."
+            fullWidth
+          />)}
         </div>
 
         
