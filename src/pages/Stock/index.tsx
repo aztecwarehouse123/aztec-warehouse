@@ -599,6 +599,7 @@ const handleConfirmQuantityUpdate = async () => {
             options={sortOptions}
           />
         </div>
+        
         <div className="relative status-filter-dropdown">
           <Button
             variant="secondary"
