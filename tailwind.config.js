@@ -3,6 +3,9 @@ export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     extend: {
+      screens: {
+        'xs': '475px',
+      },
       keyframes: {
         'slide-in': {
           '0%': { transform: 'translateX(100%)', opacity: '0' },

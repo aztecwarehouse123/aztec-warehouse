@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Barcode } from 'lucide-react';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import Select from '../ui/Select';
 import { StockItem } from '../../types';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
+import BarcodeScanModal from '../modals/BarcodeScanModal';
 
 interface FormData {
   name: string;
@@ -20,6 +21,7 @@ interface FormData {
   damagedItems: string;
   fulfillmentType: 'fba' | 'mf';
   storeName: string;
+  barcode?: string;
 }
 
 interface EditStockFormProps {
@@ -290,12 +292,14 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
     status: item.status,
     damagedItems: item.damagedItems.toString(),
     fulfillmentType: item.fulfillmentType,
-    storeName: isCustomStore ? 'other' : (item.storeName || 'supply & serve')
+    storeName: isCustomStore ? 'other' : (item.storeName || 'supply & serve'),
+    barcode: item.barcode || ''
   });
   const [showOtherStoreInput, setShowOtherStoreInput] = useState(isCustomStore);
   const [otherStoreName, setOtherStoreName] = useState(isCustomStore ? initialStoreName : '');
   const [showOtherSupplierInput, setShowOtherSupplierInput] = useState(initialSupplier === 'other');
   const [otherSupplier, setOtherSupplier] = useState(initialOtherSupplier);
+  const [isBarcodeScanModalOpen, setIsBarcodeScanModalOpen] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -331,6 +335,14 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
     }));
   };
 
+  const handleBarcodeScanned = (barcode: string) => {
+    setFormData(prev => ({
+      ...prev,
+      barcode
+    }));
+    setIsBarcodeScanModalOpen(false);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -351,7 +363,7 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
           fulfillmentType: formData.fulfillmentType,
           lastUpdated: new Date(),
           storeName: formData.storeName === 'other' ? otherStoreName : formData.storeName,
-          barcode: item.barcode
+          barcode: formData.barcode || null
         };
 
         await onSubmit(data, item);
@@ -490,6 +502,31 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="flex gap-2 relative w-full">
+          <Input
+            label="Barcode"
+            name="barcode"
+            value={formData.barcode || ''}
+            onChange={handleChange}
+            placeholder="Enter barcode manually"
+            fullWidth
+            style={{ paddingRight: 44 }}
+            disabled={user?.role !== 'admin'}
+          />
+          {user?.role === 'admin' && (
+            <button
+              type="button"
+              onClick={() => setIsBarcodeScanModalOpen(true)}
+              className="absolute right-2 top-1/2 -translate-y-1 flex items-center justify-center w-8 h-8 rounded-md transition bg-transparent hover:bg-blue-50 focus:bg-blue-100 outline-none border-none p-0"
+              style={{ zIndex: 2 }}
+              title="Scan barcode"
+              tabIndex={0}
+              aria-label="Scan barcode"
+            >
+              <Barcode size={18} className="text-blue-500" />
+            </button>
+          )}
+        </div>
         <Input
           label="ASIN"
           name="asin"
@@ -498,23 +535,11 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
           placeholder="Enter Amazon ASIN"
           fullWidth
         />
-        <div>
-          <Input
-            label="Damaged Items"
-            name="damagedItems"
-            type="number"
-            value={formData.damagedItems}
-            onChange={handleChange}
-            placeholder="Enter number of damaged items"
-            min="0"
-            fullWidth
-            className={validationMessage ? 'border-red-500 focus:border-red-500' : ''}
-          />
-          {validationMessage && (
-            <p className="mt-1 text-sm text-red-500">{validationMessage}</p>
-          )}
-        </div>
       </div>
+      
+      {/* <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        
+      </div> */}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         
@@ -558,6 +583,7 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+     
       {showOtherSupplierInput && (
             <Input
               label="Other Supplier"
@@ -597,6 +623,22 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
             />
           </div>
         )}
+         <div>
+          <Input
+            label="Damaged Items"
+            name="damagedItems"
+            type="number"
+            value={formData.damagedItems}
+            onChange={handleChange}
+            placeholder="Enter number of damaged items"
+            min="0"
+            fullWidth
+            className={validationMessage ? 'border-red-500 focus:border-red-500' : ''}
+          />
+          {validationMessage && (
+            <p className="mt-1 text-sm text-red-500">{validationMessage}</p>
+          )}
+        </div>
         
         
         
@@ -616,6 +658,12 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
           Update Product
         </Button>
       </div>
+      
+      <BarcodeScanModal
+        isOpen={isBarcodeScanModalOpen}
+        onClose={() => setIsBarcodeScanModalOpen(false)}
+        onBarcodeScanned={handleBarcodeScanned}
+      />
     </form>
   );
 };

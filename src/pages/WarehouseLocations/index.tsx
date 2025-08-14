@@ -22,7 +22,8 @@ const WarehouseLocations: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [locations, setLocations] = useState<StockItem[]>([]);
   const [expandedLocations, setExpandedLocations] = useState<Set<string>>(new Set());
-  const [searchQuery, setSearchQuery] = useState('');
+  const [productSearchQuery, setProductSearchQuery] = useState('');
+  const [locationSearchQuery, setLocationSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('locationCode');
   const [availability, setAvailability] = useState<Record<string, boolean>>({});
   const { showToast } = useToast();
@@ -34,7 +35,8 @@ const WarehouseLocations: React.FC = () => {
   const [moveShelf, setMoveShelf] = useState('0');
   const [moveLoading, setMoveLoading] = useState(false);
   const [isScanModalOpen, setIsScanModalOpen] = useState(false);
-  const [lastNotifiedQuery, setLastNotifiedQuery] = useState('');
+  const [lastNotifiedProductQuery, setLastNotifiedProductQuery] = useState('');
+  // const [lastNotifiedLocationQuery, setLastNotifiedLocationQuery] = useState('');
   const { user } = useAuth();
 
   const fetchLocations = async () => {
@@ -160,15 +162,22 @@ const WarehouseLocations: React.FC = () => {
 
   const filteredAndSortedSummaries = Object.values(locationSummaries)
     .filter(summary => {
-      const searchLower = searchQuery.toLowerCase();
-      const matchesLocationCode = summary.locationCode.toLowerCase().includes(searchLower);
-      const matchesProductName = summary.products.some(product => 
-        product.name.toLowerCase().includes(searchLower) ||
-        (product.asin && product.asin.split(',').some(asin => asin.trim().toLowerCase().includes(searchLower))) ||
-        (product.barcode && product.barcode.toLowerCase().includes(searchLower)) ||
-        (product.shelfNumber && product.shelfNumber.toString().toLowerCase().includes(searchLower))
-      );
-      return matchesLocationCode || matchesProductName;
+      const productSearchLower = productSearchQuery.toLowerCase();
+      const locationSearchLower = locationSearchQuery.toLowerCase();
+      
+      // Filter by location search
+      const matchesLocationCode = locationSearchLower === '' || 
+        summary.locationCode.toLowerCase().includes(locationSearchLower);
+      
+      // Filter by product search (name, barcode, ASIN only)
+      const matchesProductSearch = productSearchLower === '' || 
+        summary.products.some(product => 
+          product.name.toLowerCase().includes(productSearchLower) ||
+          (product.asin && product.asin.split(',').some(asin => asin.trim().toLowerCase().includes(productSearchLower))) ||
+          (product.barcode && product.barcode.toLowerCase().includes(productSearchLower))
+        );
+      
+      return matchesLocationCode && matchesProductSearch;
     })
     .sort((a, b) => {
       if (sortBy === 'totalStock') {
@@ -194,14 +203,14 @@ const WarehouseLocations: React.FC = () => {
 
   // Show search result notifications when results are displayed
   useEffect(() => {
-    if (searchQuery.trim() && searchQuery !== lastNotifiedQuery) {
+    // Handle product search notifications
+    if (productSearchQuery.trim() && productSearchQuery !== lastNotifiedProductQuery) {
       const searchResults = filteredAndSortedSummaries.filter(summary => {
-        const searchLower = searchQuery.toLowerCase();
+        const searchLower = productSearchQuery.toLowerCase();
         return summary.products.some(product => 
           product.name.toLowerCase().includes(searchLower) ||
           (product.asin && product.asin.split(',').some(asin => asin.trim().toLowerCase().includes(searchLower))) ||
-          (product.barcode && product.barcode.toLowerCase().includes(searchLower)) ||
-          (product.shelfNumber && product.shelfNumber.toString().toLowerCase().includes(searchLower))
+          (product.barcode && product.barcode.toLowerCase().includes(searchLower))
         );
       });
       
@@ -209,27 +218,26 @@ const WarehouseLocations: React.FC = () => {
       if (searchResults.length > 0) {
         const foundProducts = searchResults.flatMap(summary => 
           summary.products.filter(product => {
-            const searchLower = searchQuery.toLowerCase();
+            const searchLower = productSearchQuery.toLowerCase();
             return product.name.toLowerCase().includes(searchLower) ||
               (product.asin && product.asin.split(',').some(asin => asin.trim().toLowerCase().includes(searchLower))) ||
-              (product.barcode && product.barcode.toLowerCase().includes(searchLower)) ||
-              (product.shelfNumber && product.shelfNumber.toString().toLowerCase().includes(searchLower));
+              (product.barcode && product.barcode.toLowerCase().includes(searchLower));
           })
         );
         
         const locations = [...new Set(foundProducts.map(p => `${p.locationCode}-${p.shelfNumber}`))];
         showToast(`Product found! Located at: ${locations.join(', ')}`, 'success');
-        setLastNotifiedQuery(searchQuery);
-      } else if (searchQuery.trim() && searchQuery !== lastNotifiedQuery) {
+        setLastNotifiedProductQuery(productSearchQuery);
+      } else if (productSearchQuery.trim() && productSearchQuery !== lastNotifiedProductQuery) {
         // Show "not found" notification only when there's a search but no results
         showToast('Product not found in any location', 'error');
-        setLastNotifiedQuery(searchQuery);
+        setLastNotifiedProductQuery(productSearchQuery);
       }
-    } else if (!searchQuery.trim() && lastNotifiedQuery) {
+    } else if (!productSearchQuery.trim() && lastNotifiedProductQuery) {
       // Clear the last notified query when search is cleared
-      setLastNotifiedQuery('');
+      setLastNotifiedProductQuery('');
     }
-  }, [filteredAndSortedSummaries, searchQuery, showToast, lastNotifiedQuery]);
+  }, [filteredAndSortedSummaries, productSearchQuery, showToast, lastNotifiedProductQuery]);
 
   const toggleLocation = (locationCode: string) => {
     setExpandedLocations(prev => {
@@ -248,7 +256,7 @@ const WarehouseLocations: React.FC = () => {
   };
 
   const handleBarcodeScanned = (barcode: string) => {
-    setSearchQuery(barcode);
+    setProductSearchQuery(barcode);
     setIsScanModalOpen(false);
   };
 
@@ -357,9 +365,9 @@ const WarehouseLocations: React.FC = () => {
           <div className="relative">
             <Input
               type="text"
-              placeholder="Search by location, product name, ASIN or barcode..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by product name, ASIN or barcode..."
+              value={productSearchQuery}
+              onChange={(e) => setProductSearchQuery(e.target.value)}
               icon={<Search size={16} />}
               style={{ paddingRight: 48 }}
             />
@@ -375,6 +383,15 @@ const WarehouseLocations: React.FC = () => {
               <Barcode size={16} className="text-white" />
             </button>
           </div>
+        </div>
+        <div className="flex-1">
+          <Input
+            type="text"
+            placeholder="Search by location code..."
+            value={locationSearchQuery}
+            onChange={(e) => setLocationSearchQuery(e.target.value)}
+            icon={<Search size={16} />}
+          />
         </div>
         <div className="w-full sm:w-48">
           <Select
@@ -478,22 +495,20 @@ const WarehouseLocations: React.FC = () => {
                       <p className={`font-bold text-2xl ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>{summary.totalStock} units</p>
                     </div>
                     <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
-                      {searchQuery.trim() 
+                      {productSearchQuery.trim() 
                         ? summary.products.filter(product => {
-                            const searchLower = searchQuery.toLowerCase();
+                            const searchLower = productSearchQuery.toLowerCase();
                             return product.name.toLowerCase().includes(searchLower) ||
                               (product.asin && product.asin.split(',').some(asin => asin.trim().toLowerCase().includes(searchLower))) ||
-                              (product.barcode && product.barcode.toLowerCase().includes(searchLower)) ||
-                              (product.shelfNumber && product.shelfNumber.toString().toLowerCase().includes(searchLower));
+                              (product.barcode && product.barcode.toLowerCase().includes(searchLower));
                           }).length
                         : summary.products.length
-                      } product{(searchQuery.trim() 
+                      } product{(productSearchQuery.trim() 
                         ? summary.products.filter(product => {
-                            const searchLower = searchQuery.toLowerCase();
+                            const searchLower = productSearchQuery.toLowerCase();
                             return product.name.toLowerCase().includes(searchLower) ||
                               (product.asin && product.asin.split(',').some(asin => asin.trim().toLowerCase().includes(searchLower))) ||
-                              (product.barcode && product.barcode.toLowerCase().includes(searchLower)) ||
-                              (product.shelfNumber && product.shelfNumber.toString().toLowerCase().includes(searchLower));
+                              (product.barcode && product.barcode.toLowerCase().includes(searchLower));
                           }).length
                         : summary.products.length) !== 1 ? 's' : ''}
                     </span>
@@ -503,42 +518,39 @@ const WarehouseLocations: React.FC = () => {
                 {isExpanded && (
                   <div className="p-4 space-y-4 overflow-hidden transition-all duration-300 ease-in-out">
                     <h4 className={`font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                      {searchQuery.trim() 
+                      {productSearchQuery.trim() 
                         ? summary.products.filter(product => {
-                            const searchLower = searchQuery.toLowerCase();
+                            const searchLower = productSearchQuery.toLowerCase();
                             return product.name.toLowerCase().includes(searchLower) ||
                               (product.asin && product.asin.split(',').some(asin => asin.trim().toLowerCase().includes(searchLower))) ||
-                              (product.barcode && product.barcode.toLowerCase().includes(searchLower)) ||
-                              (product.shelfNumber && product.shelfNumber.toString().toLowerCase().includes(searchLower));
+                              (product.barcode && product.barcode.toLowerCase().includes(searchLower));
                           }).length === 0
                         : summary.products.length === 0
                         ? 'No products in this location'
-                        : searchQuery.trim()
+                        : productSearchQuery.trim()
                         ? 'Matching products in this location:'
                         : 'Products in this location:'}
                     </h4>
                     <div className="space-y-4">
                       {summary.products
                         .filter(location => {
-                          // If there's a search query, only show products that match
-                          if (searchQuery.trim()) {
-                            const searchLower = searchQuery.toLowerCase();
+                          // If there's a product search query, only show products that match
+                          if (productSearchQuery.trim()) {
+                            const searchLower = productSearchQuery.toLowerCase();
                             return location.name.toLowerCase().includes(searchLower) ||
                               (location.asin && location.asin.split(',').some(asin => asin.trim().toLowerCase().includes(searchLower))) ||
-                              (location.barcode && location.barcode.toLowerCase().includes(searchLower)) ||
-                              (location.shelfNumber && location.shelfNumber.toString().toLowerCase().includes(searchLower));
+                              (location.barcode && location.barcode.toLowerCase().includes(searchLower));
                           }
-                          // If no search query, show all products
+                          // If no product search query, show all products
                           return true;
                         })
                         .map(location => {
                         const percentageOfTotal = summary.totalStock === 0 ? 0 : (location.quantity / summary.totalStock) * 100;
-                        const searchLower = searchQuery.toLowerCase();
+                        const searchLower = productSearchQuery.toLowerCase();
                         const isMatch = 
                           location.name.toLowerCase().includes(searchLower) ||
                           (location.asin && location.asin.split(',').some(asin => asin.trim().toLowerCase().includes(searchLower))) ||
-                          (location.barcode && location.barcode.toLowerCase().includes(searchLower)) ||
-                          (location.shelfNumber && location.shelfNumber.toString().toLowerCase().includes(searchLower));
+                          (location.barcode && location.barcode.toLowerCase().includes(searchLower));
 
                         return (
                           <div 

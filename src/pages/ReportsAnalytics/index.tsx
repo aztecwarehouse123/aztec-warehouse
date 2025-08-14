@@ -5,9 +5,10 @@ import { format, subDays } from 'date-fns';
 import { XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { Download, Package, TrendingDown, PoundSterling, AlertCircle, RefreshCw } from 'lucide-react';
 import Select from '../../components/ui/Select';
+import DateRangePicker from '../../components/ui/DateRangePicker';
 import Button from '../../components/ui/Button';
 import StatsCard, { StatsCardSkeleton } from '../../components/dashboard/StatsCard';
-import { Order, StockItem, ActivityLog } from '../../types';
+import { StockItem, ActivityLog } from '../../types';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
@@ -30,9 +31,11 @@ interface DashboardStats {
 
 const ReportsAnalytics: React.FC = () => {
   const [timeRange, setTimeRange] = useState<'daily' | 'weekly' | 'monthly'>('daily');
-  const [dateRange, setDateRange] = useState<'7d' | '1m' | '3m' | '6m'>('7d');
+  const [startDate, setStartDate] = useState<Date | null>(subDays(new Date(), 7));
+  const [endDate, setEndDate] = useState<Date | null>(new Date());
 
   const [inventory, setInventory] = useState<StockItem[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
   const [stats, setStats] = useState<DashboardStats>({
     totalOrders: 0,
@@ -55,31 +58,14 @@ const ReportsAnalytics: React.FC = () => {
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-      let startDate: Date;
-      const endDate = new Date();
-
-      switch (dateRange) {
-        case '7d':
-          startDate = subDays(endDate, 7);
-          break;
-        case '1m':
-          startDate = subDays(endDate, 30);
-          break;
-        case '3m':
-          startDate = subDays(endDate, 90);
-          break;
-        case '6m':
-          startDate = subDays(endDate, 180);
-          break;
-        default:
-          startDate = subDays(endDate, 7);
-      }
+      const endDateValue = endDate || new Date();
+      const startDateValue = startDate || subDays(endDateValue, 7);
 
       // Fetch orders
       const ordersQuery = query(
         collection(db, 'orders'),
-        where('createdAt', '>=', Timestamp.fromDate(startDate)),
-        where('createdAt', '<=', Timestamp.fromDate(endDate))
+        where('createdAt', '>=', Timestamp.fromDate(startDateValue)),
+        where('createdAt', '<=', Timestamp.fromDate(endDateValue))
       );
 
       const ordersSnapshot = await getDocs(ordersQuery);
@@ -89,7 +75,7 @@ const ReportsAnalytics: React.FC = () => {
         createdAt: doc.data().createdAt?.toDate(),
         updatedAt: doc.data().updatedAt?.toDate(),
         shippedTime: doc.data().shippedTime?.toDate()
-      })) as Order[];
+      })) as any[]; // Changed from Order[] to any[]
 
       // Fetch inventory data
       const inventoryQuery = query(collection(db, 'inventory'));
@@ -103,18 +89,24 @@ const ReportsAnalytics: React.FC = () => {
       })) as StockItem[];
 
       // Fetch activity logs
-      const activityQuery = query(
+      const logsQuery = query(
         collection(db, 'activityLogs'),
+        where('time', '>=', startDateValue.toISOString()),
+        where('time', '<=', endDateValue.toISOString()),
         orderBy('time', 'desc')
       );
 
-      const activitySnapshot = await getDocs(activityQuery);
-      const activityData = activitySnapshot.docs.map(doc => ({
+      const logsSnapshot = await getDocs(logsQuery);
+      const logsData = logsSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       })) as ActivityLog[];
 
-      // Calculate stats similar to AdminDashboard
+      setActivityLogs(logsData);
+      setInventory(inventoryData);
+      setOrders(ordersData);
+
+      // Calculate stats based on the custom date range
       const totalStock = inventoryData.reduce((sum, item) => sum + (item.quantity || 0), 0);
       const totalInventoryValue = inventoryData.reduce((sum, item) => sum + ((item.quantity || 0) * (item.price || 0)), 0);
       const totalOrders = ordersData.length;
@@ -130,33 +122,16 @@ const ReportsAnalytics: React.FC = () => {
       const yesterdayRevenue = yesterdayOrdersData.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
 
       // Calculate activity data based on selected date range
-      const statsEndDate = new Date();
-      let statsStartDate: Date;
+      const statsEndDate = endDate || new Date();
+      const statsStartDate = startDate || subDays(statsEndDate, 7);
 
-      switch (dateRange) {
-        case '7d':
-          statsStartDate = subDays(statsEndDate, 7);
-          break;
-        case '1m':
-          statsStartDate = subDays(statsEndDate, 30);
-          break;
-        case '3m':
-          statsStartDate = subDays(statsEndDate, 90);
-          break;
-        case '6m':
-          statsStartDate = subDays(statsEndDate, 180);
-          break;
-        default:
-          statsStartDate = subDays(statsEndDate, 7);
-      }
-
-      // First filter logs by date range
-      const dateFilteredLogs = activityData.filter(log => {
+      // Filter logs by date range
+      const dateFilteredLogs = logsData.filter(log => {
         const logDate = new Date(log.time);
         return logDate >= statsStartDate && logDate <= statsEndDate;
       });
 
-      // Then filter logs to only include activities for products that exist in current inventory
+      // Filter logs to only include activities for products that exist in current inventory
       const periodLogs = dateFilteredLogs.filter(log => {
         // Check for new product additions
         const newProductMatch = log.detail.match(/added new product "([^"]+)" with total quantity (\d+)/);
@@ -199,7 +174,7 @@ const ReportsAnalytics: React.FC = () => {
       const previousEndDate = new Date(statsStartDate.getTime());
 
       // Filter previous period logs by date range first
-      const previousDateFilteredLogs = activityData.filter(log => {
+      const previousDateFilteredLogs = logsData.filter(log => {
         const logDate = new Date(log.time);
         return logDate >= previousStartDate && logDate <= previousEndDate;
       });
@@ -367,11 +342,6 @@ const ReportsAnalytics: React.FC = () => {
       
       const periodDamagedProducts = periodDamagedData.incidents;
 
-
-
-
-      setInventory(inventoryData);
-      setActivityLogs(activityData);
       setStats({
         totalOrders,
         totalStock,
@@ -390,7 +360,12 @@ const ReportsAnalytics: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [dateRange]);
+  }, [startDate, endDate]);
+
+  const clearDateRange = () => {
+    setStartDate(null);
+    setEndDate(null);
+  };
 
   useEffect(() => {
     fetchData();
@@ -417,18 +392,15 @@ const ReportsAnalytics: React.FC = () => {
     const statsEndDate = new Date();
     let statsStartDate: Date;
 
-    switch (dateRange) {
-      case '7d':
+    switch (timeRange) {
+      case 'daily':
         statsStartDate = subDays(statsEndDate, 7);
         break;
-      case '1m':
+      case 'weekly':
         statsStartDate = subDays(statsEndDate, 30);
         break;
-      case '3m':
+      case 'monthly':
         statsStartDate = subDays(statsEndDate, 90);
-        break;
-      case '6m':
-        statsStartDate = subDays(statsEndDate, 180);
         break;
       default:
         statsStartDate = subDays(statsEndDate, 7);
@@ -545,18 +517,15 @@ const ReportsAnalytics: React.FC = () => {
     const statsEndDate = new Date();
     let statsStartDate: Date;
 
-    switch (dateRange) {
-      case '7d':
+    switch (timeRange) {
+      case 'daily':
         statsStartDate = subDays(statsEndDate, 7);
         break;
-      case '1m':
+      case 'weekly':
         statsStartDate = subDays(statsEndDate, 30);
         break;
-      case '3m':
+      case 'monthly':
         statsStartDate = subDays(statsEndDate, 90);
-        break;
-      case '6m':
-        statsStartDate = subDays(statsEndDate, 180);
         break;
       default:
         statsStartDate = subDays(statsEndDate, 7);
@@ -619,34 +588,17 @@ const ReportsAnalytics: React.FC = () => {
   };
 
   const getDamagedProductsData = () => {
-    const data: { date: string; products: number; units: number }[] = [];
-    const groupedProducts = new Map<string, { incidents: number; units: number }>();
+    const data: { date: string; products: number; units: number; productNames: string[] }[] = [];
+    const groupedProducts = new Map<string, { incidents: number; units: number; productNames: Set<string> }>();
 
     // Calculate date range for filtering logs
-    const statsEndDate = new Date();
-    let statsStartDate: Date;
-
-    switch (dateRange) {
-      case '7d':
-        statsStartDate = subDays(statsEndDate, 7);
-        break;
-      case '1m':
-        statsStartDate = subDays(statsEndDate, 30);
-        break;
-      case '3m':
-        statsStartDate = subDays(statsEndDate, 90);
-        break;
-      case '6m':
-        statsStartDate = subDays(statsEndDate, 180);
-        break;
-      default:
-        statsStartDate = subDays(statsEndDate, 7);
-    }
+    const endDateValue = endDate || new Date();
+    const startDateValue = startDate || subDays(endDateValue, 7);
 
     // First filter logs by date range
     const dateFilteredLogs = activityLogs.filter(log => {
       const logDate = new Date(log.time);
-      return logDate >= statsStartDate && logDate <= statsEndDate;
+      return logDate >= startDateValue && logDate <= endDateValue;
     });
 
     // Then filter to only include activities for products that exist in current inventory
@@ -722,47 +674,47 @@ const ReportsAnalytics: React.FC = () => {
             const match = log.detail.match(pattern);
             if (match) {
               if (match.length === 3) {
-                // For "from X to Y" pattern, calculate the absolute difference
                 const fromValue = parseInt(match[1]);
                 const toValue = parseInt(match[2]);
                 unitsDamaged = Math.abs(fromValue - toValue);
               } else {
                 unitsDamaged = parseInt(match[1]);
               }
-              
-              if (unitsDamaged > 0) {
-                break;
-              }
+              break;
             }
           }
         }
-        
-        // If we still can't find units, use fallback
-        if (unitsDamaged === 0) {
-          unitsDamaged = 1; // Fallback to 1 unit
+
+        // Extract product name from the log detail
+        let productName = 'Unknown Product';
+        const productMatch = log.detail.match(/"([^"]+)"/);
+        if (productMatch) {
+          productName = productMatch[1];
         }
 
-        const current = groupedProducts.get(dateKey) || { incidents: 0, units: 0 };
-        groupedProducts.set(dateKey, {
-          incidents: current.incidents + 1,
-          units: current.units + unitsDamaged
-        });
+        // Group by date
+        if (!groupedProducts.has(dateKey)) {
+          groupedProducts.set(dateKey, { incidents: 0, units: 0, productNames: new Set() });
+        }
+        
+        const group = groupedProducts.get(dateKey)!;
+        group.incidents += 1;
+        group.units += (unitsDamaged > 0 ? unitsDamaged : 1);
+        group.productNames.add(productName);
       }
     });
 
-    groupedProducts.forEach((dataItem, date) => {
+    // Convert grouped data to array format
+    groupedProducts.forEach((group, date) => {
       data.push({
         date,
-        products: dataItem.incidents,
-        units: dataItem.units
+        products: group.incidents,
+        units: group.units,
+        productNames: Array.from(group.productNames)
       });
     });
 
-    return data.sort((a, b) => {
-      const dateA = new Date(a.date);
-      const dateB = new Date(b.date);
-      return dateA.getTime() - dateB.getTime();
-    });
+    return data.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   };
 
   // Export functions
@@ -770,9 +722,9 @@ const ReportsAnalytics: React.FC = () => {
     try {
       // Create comprehensive CSV with multiple sheets
       const timestamp = format(new Date(), 'yyyy-MM-dd-HH-mm');
-      const periodLabel = dateRange === '7d' ? 'Last 7 Days' : 
-                         dateRange === '1m' ? 'Last Month' : 
-                         dateRange === '3m' ? 'Last 3 Months' : 'Last 6 Months';
+      const periodLabel = timeRange === 'daily' ? 'Last 7 Days' : 
+                         timeRange === 'weekly' ? 'Last Month' : 
+                         timeRange === 'monthly' ? 'Last 3 Months' : 'Last 6 Months';
       
       // Inventory data
       const inventoryData = inventory.map(item => [
@@ -871,9 +823,9 @@ const ReportsAnalytics: React.FC = () => {
   const exportToPDF = () => {
     try {
       // Create a simple HTML report that can be printed as PDF
-      const periodLabel = dateRange === '7d' ? 'Last 7 Days' : 
-                         dateRange === '1m' ? 'Last Month' : 
-                         dateRange === '3m' ? 'Last 3 Months' : 'Last 6 Months';
+      const periodLabel = timeRange === 'daily' ? 'Last 7 Days' : 
+                         timeRange === 'weekly' ? 'Last Month' : 
+                         timeRange === 'monthly' ? 'Last 3 Months' : 'Last 6 Months';
       
       // Get current page data (exactly what's shown on the page)
       const inboundData = getInboundProductsData();
@@ -999,6 +951,7 @@ const ReportsAnalytics: React.FC = () => {
                     <th>Date</th>
                     <th>Incidents</th>
                     <th>Units Damaged</th>
+                    <th>Product Names</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1007,15 +960,22 @@ const ReportsAnalytics: React.FC = () => {
                       <td>${item.date}</td>
                       <td>${item.products}</td>
                       <td>${item.units}</td>
+                      <td>${item.productNames ? item.productNames.join(', ') : 'N/A'}</td>
                     </tr>
                   `).join('')}
-                  ${damagedData.length > 15 ? `<tr><td colspan="3"><em>... and ${damagedData.length - 15} more entries</em></td></tr>` : ''}
+                  ${damagedData.length > 15 ? `<tr><td colspan="4"><em>... and ${damagedData.length - 15} more entries</em></td></tr>` : ''}
                 </tbody>
               </table>
             </div>
             
             <div class="section">
               <h2>Inventory Summary (${inventory.length} items)</h2>
+              <div class="chart-summary">
+                <p><strong>Total Products:</strong> ${inventory.length}</p>
+                <p><strong>Active Products:</strong> ${inventory.filter(item => item.status === 'active').length}</p>
+                <p><strong>Pending Products:</strong> ${inventory.filter(item => item.status === 'pending').length}</p>
+                <p><strong>Total Quantity:</strong> ${inventory.reduce((sum, item) => sum + (item.quantity || 0), 0)}</p>
+              </div>
               <table>
                 <thead>
                   <tr>
@@ -1027,11 +987,11 @@ const ReportsAnalytics: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  ${inventory.slice(0, 10).map(item => `
+                  ${inventory.map(item => `
                     <tr>
                       <td>${item.name}</td>
                       <td>${item.quantity}</td>
-                      <td>£${item.price}</td>
+                      <td>${item.price && !isNaN(item.price) ? `£${item.price.toFixed(2)}` : 'Not set'}</td>
                       <td>${item.locationCode}-${item.shelfNumber}</td>
                       <td>${item.status}</td>
                     </tr>
@@ -1091,69 +1051,75 @@ const ReportsAnalytics: React.FC = () => {
           <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} mt-1 text-sm md:text-base`}>Admin Dashboard - Comprehensive warehouse insights</p>
         </div>
         
-        {/* Controls - All buttons in one line on mobile and desktop */}
-        <div className="flex flex-wrap gap-2 justify-center md:justify-end items-center">
+        {/* Controls - Responsive layout */}
+        <div className="flex flex-col sm:flex-row gap-3 justify-between items-start sm:items-center">
           {/* Export Buttons */}
-        <div className="flex gap-2">
-          <button
-            onClick={exportToCSV}
-              className={`inline-flex items-center px-2 md:px-3 py-2 border shadow-sm text-xs md:text-sm leading-4 font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 animate-fade-in-up ${
-              isDarkMode 
-                ? 'border-slate-600 text-slate-200 bg-slate-700 hover:bg-slate-600' 
-                : 'border-slate-300 text-slate-700 bg-white hover:bg-slate-50'
-            }`}
-            style={{ animationDelay: '200ms' }}
-          >
-              <Download className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
-              <span className="hidden sm:inline">Export </span>CSV
-          </button>
-          <button
-            onClick={exportToPDF}
-              className={`inline-flex items-center px-2 md:px-3 py-2 border shadow-sm text-xs md:text-sm leading-4 font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 animate-fade-in-up ${
-              isDarkMode 
-                ? 'border-slate-600 text-slate-200 bg-slate-700 hover:bg-slate-600' 
-                : 'border-slate-300 text-slate-700 bg-white hover:bg-slate-50'
-            }`}
-            style={{ animationDelay: '400ms' }}
-          >
-              <Download className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
-              <span className="hidden sm:inline">Export </span>PDF
-          </button>
-      </div>
+          <div className="flex gap-2 w-full sm:w-auto">
+            <button
+              onClick={exportToCSV}
+              className={`flex-1 sm:flex-none inline-flex items-center justify-center px-3 py-2 border shadow-sm text-sm leading-4 font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 animate-fade-in-up ${
+                isDarkMode 
+                  ? 'border-slate-600 text-slate-200 bg-slate-700 hover:bg-slate-600' 
+                  : 'border-slate-300 text-slate-700 bg-white hover:bg-slate-50'
+              }`}
+              style={{ animationDelay: '200ms' }}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              <span className="hidden xs:inline">Export </span>CSV
+            </button>
+            <button
+              onClick={exportToPDF}
+              className={`flex-1 sm:flex-none inline-flex items-center justify-center px-3 py-2 border shadow-sm text-sm leading-4 font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 animate-fade-in-up ${
+                isDarkMode 
+                  ? 'border-slate-600 text-slate-200 bg-slate-700 hover:bg-slate-600' 
+                  : 'border-slate-300 text-slate-700 bg-white hover:bg-slate-50'
+              }`}
+              style={{ animationDelay: '400ms' }}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              <span className="hidden xs:inline">Export </span>PDF
+            </button>
+          </div>
 
-          {/* Timeframe Selectors */}
-          <div className="flex gap-2 items-center">
-        <Select
-          value={timeRange}
-          onChange={(e) => setTimeRange(e.target.value as 'daily' | 'weekly' | 'monthly')}
-          options={[
-            { value: 'daily', label: 'Daily' },
-            { value: 'weekly', label: 'Weekly' },
-            { value: 'monthly', label: 'Monthly' }
-          ]}
-              className="animate-fade-in-up text-xs md:text-sm"
-          style={{ animationDelay: '100ms' }}
-        />
-        <Select
-          value={dateRange}
-              onChange={(e) => setDateRange(e.target.value as '7d' | '1m' | '3m' | '6m')}
-          options={[
-                { value: '7d', label: '7 Days' },
-                { value: '1m', label: '1 Month' },
-                { value: '3m', label: '3 Months' },
-                { value: '6m', label: '6 Months' }
-              ]}
-              className="animate-fade-in-up text-xs md:text-sm"
-          style={{ animationDelay: '300ms' }}
-        />
-        <Button
-          variant="secondary"
-          onClick={fetchData}
-          className={`flex items-center gap-2 ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-          disabled={isLoading}
-        >
-          <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
-        </Button>
+          {/* Filters and Controls */}
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            {/* Time Range Filter */}
+            <div className="w-full sm:w-auto">
+              <Select
+                value={timeRange}
+                onChange={(e) => setTimeRange(e.target.value as 'daily' | 'weekly' | 'monthly')}
+                options={[
+                  { value: 'daily', label: 'Daily' },
+                  { value: 'weekly', label: 'Weekly' },
+                  { value: 'monthly', label: 'Monthly' }
+                ]}
+                className="animate-fade-in-up text-sm w-full sm:w-auto"
+                style={{ animationDelay: '100ms' }}
+              />
+            </div>
+            
+            {/* Date Range Picker */}
+            <div className="w-full sm:w-auto">
+              <DateRangePicker
+                startDate={startDate}
+                endDate={endDate}
+                onStartDateChange={setStartDate}
+                onEndDateChange={setEndDate}
+                onClear={clearDateRange}
+                className="animate-fade-in-up text-sm w-full sm:w-auto"
+              />
+            </div>
+            
+            {/* Refresh Button */}
+            <Button
+              variant="secondary"
+              onClick={fetchData}
+              className={`flex items-center justify-center gap-2 w-full sm:w-auto ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+              disabled={isLoading}
+            >
+              <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
+              
+            </Button>
           </div>
         </div>
       </div>
@@ -1169,18 +1135,18 @@ const ReportsAnalytics: React.FC = () => {
           </>
         ) : (
           <>
-                      <StatsCard 
-              title={`Total Stock Added (${dateRange === '7d' ? 'Last 7 Days' : dateRange === '1m' ? 'Last Month' : dateRange === '3m' ? 'Last 3 Months' : 'Last 6 Months'})`}
+            <StatsCard 
+              title={`Total Stock Added (${startDate && endDate ? `${format(startDate, 'MMM d')} - ${format(endDate, 'MMM d, yyyy')}` : startDate ? `From ${format(startDate, 'MMM d, yyyy')}` : endDate ? `To ${format(endDate, 'MMM d, yyyy')}` : 'Last 7 Days'})`}
               value={stats.todayStockAdditions}
               icon={<Package size={24} className="text-blue-600" />}
             />
             <StatsCard 
-              title={`Total Units Deducted (${dateRange === '7d' ? 'Last 7 Days' : dateRange === '1m' ? 'Last Month' : dateRange === '3m' ? 'Last 3 Months' : 'Last 6 Months'})`}
+              title={`Total Units Deducted (${startDate && endDate ? `${format(startDate, 'MMM d')} - ${format(endDate, 'MMM d, yyyy')}` : startDate ? `From ${format(startDate, 'MMM d, yyyy')}` : endDate ? `To ${format(endDate, 'MMM d, yyyy')}` : 'Last 7 Days'})`}
               value={stats.totalDeductions}
               icon={<TrendingDown size={24} className="text-blue-600" />}
             />
             <StatsCard 
-              title={`Total Damaged Products (${dateRange === '7d' ? 'Last 7 Days' : dateRange === '1m' ? 'Last Month' : dateRange === '3m' ? 'Last 3 Months' : 'Last 6 Months'})`}
+              title={`Total Damaged Products (${startDate && endDate ? `${format(startDate, 'MMM d')} - ${format(endDate, 'MMM d, yyyy')}` : startDate ? `From ${format(startDate, 'MMM d, yyyy')}` : endDate ? `To ${format(endDate, 'MMM d, yyyy')}` : 'Last 7 Days'})`}
               value={stats.totalDamagedProducts}
               icon={<AlertCircle size={24} className="text-blue-600" />}
             />

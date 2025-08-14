@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Edit2, Trash2, Loader2, CheckSquare, RefreshCw, ChevronDown } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Loader2, CheckSquare, RefreshCw, ChevronDown, Play } from 'lucide-react';
 import { motion } from 'framer-motion';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
@@ -16,7 +16,7 @@ import { useToast } from '../../contexts/ToastContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../config/firebase';
-import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, Timestamp, getCountFromServer } from 'firebase/firestore';
 import { format } from 'date-fns';
 
 const Stock: React.FC = () => {
@@ -25,6 +25,7 @@ const Stock: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedItem, setSelectedItem] = useState<StockItem | null>(null);
   const [items, setItems] = useState<StockItem[]>([]);
@@ -48,34 +49,46 @@ const Stock: React.FC = () => {
   const [isStoreFilterOpen, setIsStoreFilterOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'pending'>('all');
   const [isStatusFilterOpen, setIsStatusFilterOpen] = useState(false);
+  const [totalCount, setTotalCount] = useState<number | null>(null);
 
   // Fetch stock items from Firestore
-    const fetchStockItems = async () => {
-      setIsLoading(true);
-      try {
-        const stockQuery = query(collection(db, 'inventory'), orderBy('name'));
-        const querySnapshot = await getDocs(stockQuery);
-        const stockItems = querySnapshot.docs.map(doc => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            ...data,
-            lastUpdated: data.lastUpdated instanceof Timestamp 
-              ? data.lastUpdated.toDate() 
-              : new Date(data.lastUpdated)
-          };
-        }) as StockItem[];
-        setItems(stockItems);
-      } catch (error) {
-        console.error('Error fetching stock items:', error);
-        showToast('Failed to fetch stock items', 'error');
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  const fetchStockItems = async () => {
+    setIsLoading(true);
+    try {
+      const stockQuery = query(collection(db, 'inventory'), orderBy('name'));
+      const querySnapshot = await getDocs(stockQuery);
+      const stockItems = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          lastUpdated: data.lastUpdated instanceof Timestamp 
+            ? data.lastUpdated.toDate() 
+            : new Date(data.lastUpdated)
+        };
+      }) as StockItem[];
+      setItems(stockItems);
+    } catch (error) {
+      console.error('Error fetching stock items:', error);
+      showToast('Failed to fetch stock items', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const fetchTotalCount = async () => {
+    try {
+      const coll = collection(db, 'inventory');
+      const snapshot = await getCountFromServer(coll);
+      setTotalCount(snapshot.data().count);
+    } catch {
+      setTotalCount(null);
+    }
+  };
 
   useEffect(() => {
     fetchStockItems();
+    fetchTotalCount();
   }, [showToast]);
 
   // Close store filter dropdown when clicking outside
@@ -500,10 +513,64 @@ const handleConfirmQuantityUpdate = async () => {
       setItems(items.filter(item => !selectedItems.has(item.id)));
       setSelectedItems(new Set());
       setIsSelectionMode(false);
+      setIsBulkDeleteModalOpen(false);
       showToast(`Successfully deleted ${selectedItems.size} items`, 'success');
     } catch (error) {
       console.error('Error deleting items:', error);
       showToast('Failed to delete selected items', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleBulkActivate = async () => {
+    if (selectedItems.size === 0) return;
+    
+    setIsLoading(true);
+    try {
+      // Get details of items to be activated
+      const itemsToActivate = items.filter(item => selectedItems.has(item.id) && item.status === 'pending');
+      
+      if (itemsToActivate.length === 0) {
+        showToast('No pending items selected to activate', 'error');
+        return;
+      }
+      
+      // Update all selected pending items to active status
+      const updatePromises = itemsToActivate.map(item => 
+        updateDoc(doc(db, 'inventory', item.id), {
+          status: 'active',
+          lastUpdated: Timestamp.fromDate(new Date())
+        })
+      );
+      await Promise.all(updatePromises);
+      
+      // Add activity log
+      if (user) {
+        const itemsList = itemsToActivate.map(item => 
+          `"${item.name}" from ${item.locationCode}-${item.shelfNumber}`
+        ).join(', ');
+        
+        await addDoc(collection(db, 'activityLogs'), {
+          user: user.name,
+          role: user.role,
+          detail: `Bulk activated ${itemsToActivate.length} pending products: ${itemsList}`,
+          time: new Date().toISOString()
+        });
+      }
+      
+      // Update local state
+      setItems(items.map(item => 
+        selectedItems.has(item.id) && item.status === 'pending'
+          ? { ...item, status: 'active', lastUpdated: new Date() }
+          : item
+      ));
+      setSelectedItems(new Set());
+      setIsSelectionMode(false);
+      showToast(`Successfully activated ${itemsToActivate.length} items`, 'success');
+    } catch (error) {
+      console.error('Error activating items:', error);
+      showToast('Failed to activate selected items', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -518,11 +585,17 @@ const handleConfirmQuantityUpdate = async () => {
 
   return (
     <div className="space-y-6">
+      {/* Total Products Indicator */}
+      <div className="flex items-center justify-between py-4">
+        <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+          Inbound
+        </h1>
+        <span className={`px-3 py-1 rounded-full text-sm font-semibold ${isDarkMode ? 'bg-slate-800 text-blue-300' : 'bg-blue-100 text-blue-700'}`}>
+          Total Products: {totalCount !== null ? totalCount : <span className="animate-pulse">...</span>}
+        </span>
+      </div>
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 gap-4">
         <div>
-          <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-            Inbound
-          </h1>
           <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} mt-1`}>
             Manage your inbound stock, track quantities, and monitor product status
           </p>
@@ -530,8 +603,19 @@ const handleConfirmQuantityUpdate = async () => {
         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
           {isSelectionMode ? (
             <>
+              {statusFilter === 'pending' && (
+                <Button
+                  onClick={handleBulkActivate}
+                  variant="primary"
+                  className="flex items-center gap-2 w-full sm:w-auto"
+                  disabled={isLoading || selectedItems.size === 0}
+                >
+                  <Play size={16} />
+                  Go Live ({selectedItems.size})
+                </Button>
+              )}
               <Button
-                onClick={handleBulkDelete}
+                onClick={() => setIsBulkDeleteModalOpen(true)}
                 variant="danger"
                 className="flex items-center gap-2 w-full sm:w-auto"
                 disabled={isLoading || selectedItems.size === 0}
@@ -998,9 +1082,9 @@ const handleConfirmQuantityUpdate = async () => {
         />
       )}
       <DeleteConfirmationModal
-        isOpen={isSelectionMode && selectedItems.size > 0}
+        isOpen={isBulkDeleteModalOpen}
         onClose={() => {
-          setIsSelectionMode(false);
+          setIsBulkDeleteModalOpen(false);
           setSelectedItems(new Set());
         }}
         onConfirm={handleBulkDelete}

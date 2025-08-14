@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Edit2, Loader2, RefreshCw, Barcode } from 'lucide-react';
+import { Search, Edit2, Loader2, RefreshCw, Barcode, AlertTriangle } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
@@ -7,13 +7,13 @@ import Modal from '../../components/modals/Modal';
 import BarcodeScanModal from '../../components/modals/BarcodeScanModal';
 import OutboundEditForm from '../../components/stock/OutboundEditForm';
 import StockDetailsModal from '../../components/modals/StockDetailsModal';
-import { StockItem } from '../../types';
+import { StockItem, ActivityLog } from '../../types';
 import { useToast } from '../../contexts/ToastContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../config/firebase';
-import { collection, addDoc, getDocs, doc, updateDoc, query, orderBy, Timestamp, getDoc} from 'firebase/firestore';
-import { format } from 'date-fns';
+import { collection, addDoc, getDocs, doc, updateDoc, query, orderBy, Timestamp, getDoc, where } from 'firebase/firestore';
+import { format, subDays } from 'date-fns';
 
 const OutboundStock: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -23,6 +23,7 @@ const OutboundStock: React.FC = () => {
   const [selectedItem, setSelectedItem] = useState<StockItem | null>(null);
   const [items, setItems] = useState<StockItem[]>([]);
   const [isScanModalOpen, setIsScanModalOpen] = useState(false);
+  const [productsWithoutRecentDeductions, setProductsWithoutRecentDeductions] = useState<Set<string>>(new Set());
   const { showToast } = useToast();
   const { isDarkMode } = useTheme();
   const { user } = useAuth();
@@ -52,9 +53,89 @@ const OutboundStock: React.FC = () => {
     }
   };
 
+  // Fetch activity logs and check for recent deductions
+  const fetchActivityLogsAndCheckDeductions = async () => {
+    try {
+      // Fetch activity logs from the last 90 days to check for product additions and deductions
+      const ninetyDaysAgo = subDays(new Date(), 90);
+      const logsQuery = query(
+        collection(db, 'activityLogs'),
+        where('time', '>=', ninetyDaysAgo.toISOString()),
+        orderBy('time', 'desc')
+      );
+      
+      const logsSnapshot = await getDocs(logsQuery);
+      const logsData = logsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as ActivityLog[];
+      
+      // Check which products haven't been deducted in the last 10 days
+      const tenDaysAgo = subDays(new Date(), 10);
+      const productsWithRecentDeductions = new Set<string>();
+      
+      // Track when each product was first added to the system
+      const productFirstAddedDates = new Map<string, Date>();
+      
+      logsData.forEach(log => {
+        // Check for product additions
+        if (log.detail.includes('added new product')) {
+          const productMatch = log.detail.match(/added new product "([^"]+)"/);
+          if (productMatch) {
+            const productName = productMatch[1];
+            const logDate = new Date(log.time);
+            
+            // Only set the first added date if we haven't seen this product before
+            // or if this log is earlier than the previously recorded date
+            if (!productFirstAddedDates.has(productName) || logDate < productFirstAddedDates.get(productName)!) {
+              productFirstAddedDates.set(productName, logDate);
+            }
+          }
+        }
+        
+        // Check for deductions
+        if (log.detail.includes('units deducted from stock')) {
+          const productMatch = log.detail.match(/units deducted from stock "([^"]+)"/);
+          if (productMatch) {
+            const productName = productMatch[1];
+            const logDate = new Date(log.time);
+            if (logDate >= tenDaysAgo) {
+              productsWithRecentDeductions.add(productName);
+            }
+          }
+        }
+      });
+      
+      // Get all product names from inventory and check their age
+      const productsWithoutDeductions = new Set<string>();
+      items.forEach(item => {
+        const productName = item.name;
+        const firstAddedDate = productFirstAddedDates.get(productName);
+        
+        // Only show warning if:
+        // 1. We can find when the product was first added (has activity log)
+        // 2. Product has been in system for more than 10 days (based on first added date)
+        // 3. Product hasn't been deducted in the last 10 days
+        if (firstAddedDate && firstAddedDate < tenDaysAgo && !productsWithRecentDeductions.has(productName)) {
+          productsWithoutDeductions.add(productName);
+        }
+      });
+      
+      setProductsWithoutRecentDeductions(productsWithoutDeductions);
+    } catch (error) {
+      console.error('Error fetching activity logs:', error);
+    }
+  };
+
   useEffect(() => {
     fetchStockItems();
   }, [showToast]);
+
+  useEffect(() => {
+    if (items.length > 0) {
+      fetchActivityLogsAndCheckDeductions();
+    }
+  }, [items]);
 
   // Filter and sort items
   const filteredItems = items
@@ -260,7 +341,28 @@ const OutboundStock: React.FC = () => {
                     className={`${isDarkMode ? 'hover:bg-slate-800' : 'hover:bg-slate-50'} cursor-pointer`}
                     onClick={() => handleItemClick(item)}
                   >
-                    <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-blue-400' : 'text-blue-700'} font-medium`}>{item.name}</td>
+                    <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-blue-400' : 'text-blue-700'} font-medium`}>
+                      <div className="flex items-center gap-2">
+                        {item.name}
+                        {productsWithoutRecentDeductions.has(item.name) && (
+                          <div className="relative group">
+                            <AlertTriangle 
+                              className="h-4 w-4 text-red-500 flex-shrink-0" 
+                            />
+                            <div className={`absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 text-xs rounded-lg shadow-lg z-50 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity ${
+                              isDarkMode 
+                                ? 'bg-slate-800 text-red-300 border border-red-500' 
+                                : 'bg-white text-red-700 border border-red-300'
+                            }`}>
+                              This product has not been deducted for 10+ days
+                              <div className={`absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent ${
+                                isDarkMode ? 'border-t-slate-800' : 'border-t-white'
+                              }`}></div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </td>
                     <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
                       <span className={`px-2 py-1 text-xs font-medium rounded-full ${
                         item.status === 'active' 
@@ -283,12 +385,12 @@ const OutboundStock: React.FC = () => {
                     <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'} text-right`}>
                       <div className="flex items-center justify-end gap-2">
                         {item.quantity <= 10 && (
-                          <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-red-100 text-red-700 ">
+                          <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-red-100 text-red-700 text-center ">
                             Critical Low
                           </span>
                         )}
                         {item.quantity > 10 && item.quantity <= 25 && (
-                          <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-yellow-100 text-yellow-700 ">
+                          <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-yellow-100 text-yellow-700 text-center ">
                             Low Stock
                           </span>
                         )}
@@ -329,13 +431,32 @@ const OutboundStock: React.FC = () => {
               >
                 <div className="flex justify-between items-center">
                   <span className={`font-semibold ${isDarkMode ? 'text-blue-400' : 'text-blue-700'}`}>{item.name}</span>
-                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                    item.status === 'active'
-                      ? 'bg-green-100 text-green-700'
-                      : 'bg-yellow-100 text-yellow-700'
-                  }`}>
-                    {item.status === 'active' ? 'Active' : 'Pending'}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {productsWithoutRecentDeductions.has(item.name) && (
+                      <div className="relative group">
+                        <AlertTriangle 
+                          className="h-4 w-4 text-red-500 flex-shrink-0" 
+                        />
+                        <div className={`absolute bottom-full right-0 mb-2 px-3 py-2 text-xs rounded-lg shadow-lg z-50 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity ${
+                          isDarkMode 
+                            ? 'bg-slate-800 text-red-300 border border-red-500' 
+                            : 'bg-white text-red-700 border border-red-300'
+                        }`}>
+                          This product has not been deducted for 10+ days
+                          <div className={`absolute top-full right-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent ${
+                            isDarkMode ? 'border-t-slate-800' : 'border-t-white'
+                          }`}></div>
+                        </div>
+                      </div>
+                    )}
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                      item.status === 'active'
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-yellow-100 text-yellow-700'
+                    }`}>
+                      {item.status === 'active' ? 'Active' : 'Pending'}
+                    </span>
+                  </div>
                 </div>
                 <div className="flex flex-wrap gap-2 text-xs">
                   <span className={isDarkMode ? 'text-slate-300' : 'text-slate-600'}>Location: <span className="font-medium">{item.locationCode} - {item.shelfNumber}</span></span>

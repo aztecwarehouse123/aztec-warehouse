@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../config/firebase';
 import { collection, getDocs, query, orderBy, where } from 'firebase/firestore';
-import {  Download, RefreshCw } from 'lucide-react';
+import {  Download, RefreshCw, Search } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
-import { format, startOfDay, endOfDay, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
+import { format, startOfDay, endOfDay } from 'date-fns';
 import Select from '../../components/ui/Select';
+import DateRangePicker from '../../components/ui/DateRangePicker';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useTheme } from '../../contexts/ThemeContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import Button from '../../components/ui/Button';
-
+import { User } from '../../types';
+import Input from '../../components/ui/Input';
 
 interface ActivityLog {
   id: string;
@@ -22,13 +24,30 @@ interface ActivityLog {
 
 const WarehouseOperations: React.FC = () => {
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
-  //const [isLoading, setIsLoading] = useState(true);
   const [isLogsLoading, setIsLogsLoading] = useState(true);
-  const [dateFilter, setDateFilter] = useState('today');
-  const [roleFilter, setRoleFilter] = useState('all');
+  const [startDate, setStartDate] = useState<Date | null>(new Date());
+  const [endDate, setEndDate] = useState<Date | null>(new Date());
+  const [userFilter, setUserFilter] = useState('all');
+  const [activityFilter, setActivityFilter] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [users, setUsers] = useState<User[]>([]);
   const { showToast } = useToast();
   const { isDarkMode } = useTheme();
-  const [isLoading, setIsLoading] = useState(false);
+
+  // Fetch all users for the user filter
+  const fetchUsers = async () => {
+    try {
+      const usersSnapshot = await getDocs(collection(db, 'users'));
+      const usersData = usersSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as User[];
+      setUsers(usersData);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      showToast('Failed to fetch users', 'error');
+    }
+  };
 
   // Fetch activity logs
   const fetchActivityLogs = async () => {
@@ -37,34 +56,23 @@ const WarehouseOperations: React.FC = () => {
       let logsQuery = query(collection(db, 'activityLogs'), orderBy('time', 'desc'));
       
       // Apply date filter
-      const now = new Date();
-      if (dateFilter === 'today') {
+      if (startDate && endDate) {
         logsQuery = query(
           collection(db, 'activityLogs'),
-          where('time', '>=', startOfDay(now).toISOString()),
-          where('time', '<=', endOfDay(now).toISOString()),
+          where('time', '>=', startOfDay(startDate).toISOString()),
+          where('time', '<=', endOfDay(endDate).toISOString()),
           orderBy('time', 'desc')
         );
-      } else if (dateFilter === 'yesterday') {
-        const yesterday = subDays(now, 1);
+      } else if (startDate) {
         logsQuery = query(
           collection(db, 'activityLogs'),
-          where('time', '>=', startOfDay(yesterday).toISOString()),
-          where('time', '<=', endOfDay(yesterday).toISOString()),
+          where('time', '>=', startOfDay(startDate).toISOString()),
           orderBy('time', 'desc')
         );
-      } else if (dateFilter === 'week') {
+      } else if (endDate) {
         logsQuery = query(
           collection(db, 'activityLogs'),
-          where('time', '>=', startOfWeek(now).toISOString()),
-          where('time', '<=', endOfWeek(now).toISOString()),
-          orderBy('time', 'desc')
-        );
-      } else if (dateFilter === 'month') {
-        logsQuery = query(
-          collection(db, 'activityLogs'),
-          where('time', '>=', startOfMonth(now).toISOString()),
-          where('time', '<=', endOfMonth(now).toISOString()),
+          where('time', '<=', endOfDay(endDate).toISOString()),
           orderBy('time', 'desc')
         );
       }
@@ -78,9 +86,45 @@ const WarehouseOperations: React.FC = () => {
         time: doc.data().time,
       })) as ActivityLog[];
 
-      // Apply role filter
-      if (roleFilter !== 'all') {
-        logs = logs.filter(log => log.role === roleFilter);
+      // Apply user filter
+      if (userFilter !== 'all') {
+        logs = logs.filter(log => log.user === userFilter);
+      }
+
+      // Apply activity filter
+      if (activityFilter !== 'all') {
+        logs = logs.filter(log => {
+          const detail = log.detail.toLowerCase();
+          if (activityFilter === 'inbound') {
+            return detail.includes('added new product') || 
+                   detail.includes('edited product') ||
+                   detail.includes('quantity from') ||
+                   detail.includes('quantity to');
+          } else if (activityFilter === 'outbound') {
+            return detail.includes('units deducted from stock') ||
+                   detail.includes('deducted from stock');
+          }
+          return true;
+        });
+      }
+
+      // Apply search filter
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        logs = logs.filter(log => {
+          const detail = log.detail.toLowerCase();
+          const user = log.user.toLowerCase();
+          const role = log.role.toLowerCase();
+          
+          // Search in activity detail, user name, role, and extract product names from quotes
+          const productNameMatch = detail.match(/"([^"]+)"/);
+          const productName = productNameMatch ? productNameMatch[1].toLowerCase() : '';
+          
+          return detail.includes(query) || 
+                 user.includes(query) || 
+                 role.includes(query) ||
+                 productName.includes(query);
+        });
       }
 
       setActivityLogs(logs);
@@ -93,25 +137,31 @@ const WarehouseOperations: React.FC = () => {
   };
 
   useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  useEffect(() => {
     fetchActivityLogs();
-  }, [dateFilter, roleFilter]);
+  }, [startDate, endDate, userFilter, activityFilter, searchQuery]);
 
-  // Fetch stock locations
-
-
-  const dateFilterOptions = [
-    { value: 'all', label: 'All Time' },
-    { value: 'today', label: 'Today' },
-    { value: 'yesterday', label: 'Yesterday' },
-    { value: 'week', label: 'This Week' },
-    { value: 'month', label: 'This Month' }
+  const userFilterOptions = [
+    { value: 'all', label: 'All Users' },
+    ...users.map(user => ({
+      value: user.name,
+      label: user.name
+    }))
   ];
 
-  const roleFilterOptions = [
-    { value: 'all', label: 'All Roles' },
-    { value: 'admin', label: 'Admin' },
-    { value: 'staff', label: 'Staff' }
+  const activityFilterOptions = [
+    { value: 'all', label: 'All Activities' },
+    { value: 'inbound', label: 'Inbound' },
+    { value: 'outbound', label: 'Outbound' }
   ];
+
+  const clearDateRange = () => {
+    setStartDate(null);
+    setEndDate(null);
+  };
 
   const exportToCSV = () => {
     try {
@@ -153,12 +203,20 @@ const WarehouseOperations: React.FC = () => {
       
       // Add filters info
       doc.setFontSize(10);
-      doc.text(`Date Filter: ${dateFilterOptions.find(opt => opt.value === dateFilter)?.label}`, 14, 25);
-      doc.text(`Role Filter: ${roleFilterOptions.find(opt => opt.value === roleFilter)?.label}`, 14, 30);
+      const dateRangeText = startDate && endDate 
+        ? `${format(startDate, 'MMM d, yyyy')} - ${format(endDate, 'MMM d, yyyy')}`
+        : startDate 
+        ? `From ${format(startDate, 'MMM d, yyyy')}`
+        : endDate 
+        ? `To ${format(endDate, 'MMM d, yyyy')}`
+        : 'All Time';
+      doc.text(`Date Range: ${dateRangeText}`, 14, 25);
+      doc.text(`User Filter: ${userFilterOptions.find(opt => opt.value === userFilter)?.label}`, 14, 30);
+      doc.text(`Activity Filter: ${activityFilterOptions.find(opt => opt.value === activityFilter)?.label}`, 14, 35);
       
       // Add table
       autoTable(doc, {
-        startY: 35,
+        startY: 40,
         head: [['User', 'Role', 'Activity', 'Time']],
         body: activityLogs.map(log => [
           log.user,
@@ -182,52 +240,74 @@ const WarehouseOperations: React.FC = () => {
     <div className={`space-y-6 ${isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-800'}`}>
       {/* Activity Logs Section */}
       <div className={`rounded-lg shadow-sm border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+        {/* Header with Title and Export Buttons */}
         <div className={`flex flex-col sm:flex-row sm:justify-between sm:items-center p-6 border-b gap-4 ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
           <h2 className={`text-xl font-semibold ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>Activity Logs</h2>
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            <button
+              onClick={exportToCSV}
+              className={`inline-flex items-center px-3 py-2 border shadow-sm text-sm leading-4 font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 w-full sm:w-auto ${
+                isDarkMode 
+                  ? 'border-slate-600 text-slate-200 bg-slate-700 hover:bg-slate-600' 
+                  : 'border-slate-300 text-slate-700 bg-white hover:bg-slate-50'
+              }`}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Export CSV
+            </button>
+            <button
+              onClick={exportToPDF}
+              className={`inline-flex items-center px-3 py-2 border shadow-sm text-sm leading-4 font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 w-full sm:w-auto ${
+                isDarkMode 
+                  ? 'border-slate-600 text-slate-200 bg-slate-700 hover:bg-slate-600' 
+                  : 'border-slate-300 text-slate-700 bg-white hover:bg-slate-50'
+              }`}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Export PDF
+            </button>
+          </div>
+        </div>
+
+        {/* Filters Bar */}
+        <div className={`flex flex-col sm:flex-row sm:justify-between sm:items-center p-6 border-b gap-2 ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
           <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto items-stretch sm:items-center">
-            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-              <button
-                onClick={exportToCSV}
-                className={`inline-flex items-center px-3 py-2 border shadow-sm text-sm leading-4 font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 w-full sm:w-auto ${
-                  isDarkMode 
-                    ? 'border-slate-600 text-slate-200 bg-slate-700 hover:bg-slate-600' 
-                    : 'border-slate-300 text-slate-700 bg-white hover:bg-slate-50'
-                }`}
-              >
-                <Download className="h-4 w-4 mr-2" />
-                Export CSV
-              </button>
-              <button
-                onClick={exportToPDF}
-                className={`inline-flex items-center px-3 py-2 border shadow-sm text-sm leading-4 font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 w-full sm:w-auto ${
-                  isDarkMode 
-                    ? 'border-slate-600 text-slate-200 bg-slate-700 hover:bg-slate-600' 
-                    : 'border-slate-300 text-slate-700 bg-white hover:bg-slate-50'
-                }`}
-              >
-                <Download className="h-4 w-4 mr-2" />
-                Export PDF
-              </button>
-            </div>
+            <Input
+              type="text"
+              placeholder="Search activities, product names, users..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full sm:w-96"
+              icon={<Search size={16} />}
+            />
+          </div>
+          <div className="flex flex-col sm:flex-row gap-1 w-full sm:w-auto items-stretch sm:items-center">
             <Select
-              value={roleFilter}
-              onChange={(e) => setRoleFilter(e.target.value)}
-              options={roleFilterOptions}
+              value={userFilter}
+              onChange={(e) => setUserFilter(e.target.value)}
+              options={userFilterOptions}
               className="w-full sm:w-40"
             />
             <Select
-              value={dateFilter}
-              onChange={(e) => setDateFilter(e.target.value)}
-              options={dateFilterOptions}
+              value={activityFilter}
+              onChange={(e) => setActivityFilter(e.target.value)}
+              options={activityFilterOptions}
               className="w-full sm:w-40"
+            />
+            <DateRangePicker
+              startDate={startDate}
+              endDate={endDate}
+              onStartDateChange={setStartDate}
+              onEndDateChange={setEndDate}
+              onClear={clearDateRange}
+              className="w-full sm:w-80"
             />
             <Button
               variant="secondary"
               onClick={fetchActivityLogs}
-              className={`flex items-center gap-2 w-full sm:w-auto ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-              disabled={isLoading}
+              className="flex items-center gap-2 w-full sm:w-auto"
             >
-              <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
+              <RefreshCw size={16} />
             </Button>
           </div>
         </div>
@@ -251,13 +331,13 @@ const WarehouseOperations: React.FC = () => {
                 </thead>
                 <tbody className={`divide-y ${isDarkMode ? 'divide-slate-700' : 'divide-slate-200'}`}>
                   <AnimatePresence>
-                    {activityLogs.map((log, index) => (
+                    {activityLogs.map((log) => (
                       <motion.tr
                         key={log.id}
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -20 }}
-                        transition={{ duration: 0.3, delay: index * 0.05 }}
+                        transition={{ duration: 0.3 }}
                         className={`${isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-slate-50'}`}
                       >
                         <td className={`px-4 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{log.user}</td>
@@ -272,7 +352,7 @@ const WarehouseOperations: React.FC = () => {
             </div>
             {/* Mobile Card List */}
             <div className="block md:hidden space-y-4 p-4">
-              {activityLogs.map((log, index) => (
+              {activityLogs.map((log) => (
                 <div
                   key={log.id}
                   className={`rounded-lg border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} p-4 shadow-sm flex flex-col gap-2`}
