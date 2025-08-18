@@ -4,6 +4,8 @@ import AppLayout from './components/layout/AppLayout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Stock from './pages/Stock';
+import Inventory from './pages/Inventory';
+import Jobs from './pages/Jobs';
 import Orders from './pages/Orders';
 import WarehouseOperations from './pages/WarehouseOperations';
 import ReportsAnalytics from './pages/ReportsAnalytics';
@@ -32,6 +34,7 @@ function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      {/* <Route path="/jobs" element={<Jobs />} /> */}
       
       <Route path="/" element={<AppLayout />}>
         <Route index element={
@@ -43,6 +46,16 @@ function App() {
         <Route path="stock" element={
           <ProtectedRoute allowedRoles={['admin','staff']}>
             <Stock />
+          </ProtectedRoute>
+        } />
+        <Route path="jobs" element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <Jobs />
+          </ProtectedRoute>
+        } />
+        <Route path="inventory" element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <Inventory />
           </ProtectedRoute>
         } />
         <Route path="orders" element={
