@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Edit2, Check, X, Search, Loader2, RefreshCw, ChevronDown, Eye, Package, AlertCircle, Copy, CheckCircle2, PoundSterling } from 'lucide-react';
-import { motion } from 'framer-motion';
+// import { motion } from 'framer-motion';
 import Input from '../../components/ui/Input';
 import Button from '../../components/ui/Button';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -113,8 +113,19 @@ const Inventory: React.FC = () => {
     return map;
   }, [items]);
 
+  const useDebounce = (value: string, delay: number) => {
+    const [debouncedValue, setDebouncedValue] = useState(value);
+    useEffect(() => {
+      const handler = setTimeout(() => setDebouncedValue(value), delay);
+      return () => clearTimeout(handler);
+    }, [value, delay]);
+    return debouncedValue;
+  };
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
+
+
   const filteredItems = useMemo(() => {
-    const s = searchQuery.trim().toLowerCase();
+    const s = debouncedSearchQuery.trim().toLowerCase();
     return items.filter(item => {
       const name = item.name?.toLowerCase() || '';
       const asin = (item.asin || '').toLowerCase();
@@ -138,7 +149,7 @@ const Inventory: React.FC = () => {
 
       return matchesSearch && matchesDamage && matchesDuplicate;
     });
-  }, [items, searchQuery, damageFilter, duplicateFilter, nameToUniqueLocations]);
+  }, [items, debouncedSearchQuery, damageFilter, duplicateFilter, nameToUniqueLocations]);
 
   const stats = useMemo(() => {
     const total = filteredItems.length;
@@ -347,12 +358,11 @@ const Inventory: React.FC = () => {
                 </tr>
               </thead>
               <tbody className={`divide-y ${isDarkMode ? 'divide-slate-700' : 'divide-slate-200'}`}>
-                {filteredItems.map((item, index) => (
-                  <motion.tr
+                {filteredItems.map((item) => (
+                  <tr
                     key={item.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3, delay: index * 0.03, ease: 'easeOut' }}
+                    className="transition-all duration-100 hover:bg-opacity-10 hover:bg-blue-500"
+                   
                   >
                     <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-blue-400' : 'text-blue-700'} font-medium`}>{item.name}</td>
                     <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
@@ -400,7 +410,7 @@ const Inventory: React.FC = () => {
                         <Eye size={16} />
                       </button>
                     </td>
-                  </motion.tr>
+                  </tr>
                 ))}
               </tbody>
             </table>

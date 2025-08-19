@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback} from 'react';
 import { Plus, Search, Edit2, Trash2, Loader2, CheckSquare, RefreshCw, ChevronDown, Play } from 'lucide-react';
-import { motion } from 'framer-motion';
+// import { motion } from 'framer-motion';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
@@ -21,6 +21,7 @@ import { format } from 'date-fns';
 
 const Stock: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('name');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -51,8 +52,19 @@ const Stock: React.FC = () => {
   const [isStatusFilterOpen, setIsStatusFilterOpen] = useState(false);
   const [totalCount, setTotalCount] = useState<number | null>(null);
 
+
+  //debounce search input
+  useEffect(() => {
+    const handler = setTimeout(()=>{
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [searchQuery]);
+
   // Fetch stock items from Firestore
-  const fetchStockItems = async () => {
+  const fetchStockItems = useCallback (async () => {
     setIsLoading(true);
     try {
       const stockQuery = query(collection(db, 'inventory'), orderBy('name'));
@@ -74,9 +86,9 @@ const Stock: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  },[showToast])
 
-  const fetchTotalCount = async () => {
+  const fetchTotalCount = useCallback(async () => {
     try {
       const coll = collection(db, 'inventory');
       const snapshot = await getCountFromServer(coll);
@@ -84,12 +96,12 @@ const Stock: React.FC = () => {
     } catch {
       setTotalCount(null);
     }
-  };
+  },[]);
 
   useEffect(() => {
     fetchStockItems();
     fetchTotalCount();
-  }, [showToast]);
+  }, [fetchStockItems,fetchTotalCount]);
 
   // Close store filter dropdown when clicking outside
   useEffect(() => {
@@ -112,16 +124,21 @@ const Stock: React.FC = () => {
     };
   }, [isStoreFilterOpen, isStatusFilterOpen]);
 
-  const sortOptions = [
+  const sortOptions = useMemo(() => [
     { value: 'name', label: 'Name (A-Z)' },
     { value: 'quantity', label: 'Quantity (High-Low)' },
     { value: 'price', label: 'Price (High-Low)' },
     { value: 'date', label: 'Date Updated' }
-  ];
+  ], []);
+
+  const predefinedStores = useMemo(() => ['supply & serve', 'APHY', 'AZTEC', 'ZK'], []);
+
 
   // Filter and sort items
-  const filteredItems = items.filter(item => {
-    const searchLower = searchQuery.toLowerCase();
+  const filteredItems = useMemo(() => {
+    const searchLower = debouncedSearchQuery.toLowerCase();
+    return items.filter(item => {
+    
     const matchesName = item.name.toLowerCase().includes(searchLower);
     const matchesLocation = `${item.locationCode} - ${item.shelfNumber}`.toLowerCase().includes(searchLower);
     
@@ -134,7 +151,6 @@ const Stock: React.FC = () => {
     const matchesBarcode = item.barcode ? item.barcode.toLowerCase().includes(searchLower) : false;
     
     // Handle store and fulfillment type filter
-    const predefinedStores = ['supply & serve', 'APHY', 'AZTEC', 'ZK'];
     const matchesStoreFilter = storeFilter 
       ? (storeFilter.storeName === 'other' 
           ? !predefinedStores.includes(item.storeName) && item.fulfillmentType === storeFilter.fulfillmentType
@@ -157,14 +173,15 @@ const Stock: React.FC = () => {
     }
     return 0;
   });
+}, [items, debouncedSearchQuery, storeFilter, statusFilter, sortBy,predefinedStores]);
 
-  const checkLocationForExistingProducts = (locationCode: string, shelfNumber: string): StockItem[] => {
+  const checkLocationForExistingProducts = useCallback((locationCode: string, shelfNumber: string): StockItem[] => {
     return items.filter(item => 
       item.locationCode === locationCode && item.shelfNumber === shelfNumber
     );
-  };
+  }, [items]);
 
-  const handleAddStock = async (data: Omit<StockItem, 'id'>[]) => {
+  const handleAddStock = useCallback( async (data: Omit<StockItem, 'id'>[]) => {
     // Check if any of the locations have existing products
     const locationsWithProducts: { locationCode: string; shelfNumber: string; products: StockItem[] }[] = [];
     
@@ -195,9 +212,9 @@ const Stock: React.FC = () => {
 
     // If no existing products, proceed with adding
     await performAddStock(data);
-  };
+  }, [checkLocationForExistingProducts]);
 
-  const performAddStock = async (data: Omit<StockItem, 'id'>[]) => {
+  const performAddStock = useCallback( async (data: Omit<StockItem, 'id'>[]) => {
     setIsLoading(true);
     
     try {
@@ -243,24 +260,24 @@ const Stock: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user,showToast]);
 
-  const handleLocationConfirm = async () => {
+  const handleLocationConfirm = useCallback(async () => {
     if (pendingStockData) {
       await performAddStock(pendingStockData);
       setIsLocationConfirmModalOpen(false);
       setPendingStockData(null);
       setLocationConfirmationData(null);
     }
-  };
+  },[pendingStockData, performAddStock]);
 
-  const handleLocationCancel = () => {
+  const handleLocationCancel = useCallback(() => {
     setIsLocationConfirmModalOpen(false);
     setPendingStockData(null);
     setLocationConfirmationData(null);
-  };
+  },[]);
 
-  const handleEditStock = async (data: StockItem, originalItem: StockItem) => {
+  const handleEditStock = useCallback(async (data: StockItem, originalItem: StockItem) => {
     setIsLoading(true);
     
     try {
@@ -374,9 +391,9 @@ const Stock: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [items,user,showToast]);
 
-const handleConfirmQuantityUpdate = async () => {
+const handleConfirmQuantityUpdate = useCallback( async () => {
     if (!pendingQuantityUpdate) return;
 
     setIsLoading(true);
@@ -411,10 +428,10 @@ const handleConfirmQuantityUpdate = async () => {
         setIsQuantityConfirmModalOpen(false);
         setPendingQuantityUpdate(null);
     }
-};
+},[pendingQuantityUpdate, items, user, showToast]);
 
 
-  const handleDeleteStock = async (id: string) => {
+  const handleDeleteStock = useCallback( async (id: string) => {
     setIsLoading(true);
     
     try {
@@ -445,33 +462,33 @@ const handleConfirmQuantityUpdate = async () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  },[items, user, showToast]);
 
-  const handleItemClick = (item: StockItem) => {
+  const handleItemClick = useCallback((item: StockItem) => {
     setSelectedItem(item);
-  };
+  }, []);
 
-  const handleEditClick = (e: React.MouseEvent, item: StockItem) => {
+  const handleEditClick = useCallback((e: React.MouseEvent, item: StockItem) => {
     e.stopPropagation();
     setSelectedItem(item);
     setIsEditModalOpen(true);
-  };
+  }, []);
 
-  const handleDeleteClick = (e: React.MouseEvent, item: StockItem) => {
+  const handleDeleteClick = useCallback((e: React.MouseEvent, item: StockItem) => {
     e.stopPropagation();
     setSelectedItem(item);
     setIsDeleteModalOpen(true);
-  };
+  }, []);
 
-  const handleSelectAll = () => {
+  const handleSelectAll = useCallback(() => {
     if (selectedItems.size === filteredItems.length) {
       setSelectedItems(new Set());
     } else {
       setSelectedItems(new Set(filteredItems.map(item => item.id)));
     }
-  };
+  }, [filteredItems, selectedItems.size]);
 
-  const handleSelectItem = (id: string) => {
+  const handleSelectItem = useCallback((id: string) => {
     const newSelected = new Set(selectedItems);
     if (newSelected.has(id)) {
       newSelected.delete(id);
@@ -479,9 +496,9 @@ const handleConfirmQuantityUpdate = async () => {
       newSelected.add(id);
     }
     setSelectedItems(newSelected);
-  };
+  }, [selectedItems]);
 
-  const handleBulkDelete = async () => {
+  const handleBulkDelete = useCallback(async () => {
     if (selectedItems.size === 0) return;
     
     setIsLoading(true);
@@ -521,9 +538,9 @@ const handleConfirmQuantityUpdate = async () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  },[selectedItem, items, user, showToast]);
 
-  const handleBulkActivate = async () => {
+  const handleBulkActivate = useCallback(async () => {
     if (selectedItems.size === 0) return;
     
     setIsLoading(true);
@@ -574,14 +591,104 @@ const handleConfirmQuantityUpdate = async () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [selectedItem, items, user, showToast]);
 
-  const toggleSelectionMode = () => {
+  const toggleSelectionMode = useCallback(() => {
     setIsSelectionMode(!isSelectionMode);
     if (!isSelectionMode) {
       setSelectedItems(new Set());
     }
-  };
+  }, [isSelectionMode]);
+
+  const DesktopTableRow = useCallback(({ item }: { item: StockItem; index: number }) => (
+    <tr
+      key={item.id}
+      className={`hover:${isDarkMode ? 'bg-slate-700/50' : 'bg-slate-50'} cursor-pointer`}
+      onClick={() => handleItemClick(item)}
+    >
+      {isSelectionMode && (
+        <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`} onClick={(e) => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            checked={selectedItems.has(item.id)}
+            onChange={() => handleSelectItem(item.id)}
+            className={`h-4 w-4 text-blue-600 rounded ${isDarkMode ? 'border-slate-600 bg-slate-700' : 'border-slate-300'} focus:ring-blue-500`}
+          />
+        </td>
+      )}
+      <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-blue-400' : 'text-blue-700'} font-medium`}>{item.name}</td>
+      <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+          item.status === 'active' 
+            ? 'bg-green-100 text-green-700'
+            : 'bg-yellow-100 text-yellow-700'
+        }`}>
+          {item.status === 'active' ? 'Active' : 'Pending'}
+        </span>
+      </td>
+      <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+          item.fulfillmentType === 'fba' 
+            ? 'bg-green-100 text-green-700'
+            : 'bg-orange-100 text-orange-700'
+        }`}>
+          {item.fulfillmentType.toUpperCase()}
+        </span>
+      </td>
+      <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{item.locationCode} - {item.shelfNumber}</td>
+      <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+        {item.asin ? (
+          item.asin.split(',').length > 3
+            ? item.asin.split(',').slice(0, 3).map(a => a.trim()).join(', ') + '...'
+            : item.asin.split(',').map(a => a.trim()).join(', ')
+        ) : (
+          '-'
+        )}
+      </td>
+      {user?.role === 'admin' && (
+        <>
+          <td className={`px-4 py-3 text-right text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>
+            {Number(item.price) > 0 ? `£${Number(item.price).toFixed(2)}` : '(Not set)'}
+          </td>
+          <td className={`px-4 py-3 text-right text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>
+            {Number(item.quantity * item.price) > 0 ? `£${Number(item.quantity * item.price).toFixed(2)}` : '(Not set)'}
+          </td>
+        </>
+      )}
+      <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'} text-right`}>
+        <div className="flex items-center justify-end gap-2">
+          {item.quantity <= 10 && (
+            <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-red-100 text-red-700 text-center">
+              Critical Low
+            </span>
+          )}
+          {item.quantity > 10 && item.quantity <= 25 && (
+            <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-yellow-100 text-yellow-700">
+              Low Stock
+            </span>
+          )}
+          <span>{item.quantity}</span>
+        </div>
+      </td>
+        <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{format(new Date(item.lastUpdated), 'MMM d, yyyy')}</td>
+      <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'} text-right`}>
+        <div className="flex items-center justify-end gap-2">
+          <button
+            onClick={(e) => handleEditClick(e, item)}
+            className={`p-1 ${isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'} transition-colors`}
+          >
+            <Edit2 size={16} />
+          </button>
+          <button
+            onClick={(e) => handleDeleteClick(e, item)}
+            className={`p-1 ${isDarkMode ? 'text-red-400 hover:text-red-300' : 'text-red-600 hover:text-red-700'} transition-colors`}
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
+      </td>
+    </tr>
+  ), [isSelectionMode, selectedItems, isDarkMode, user, handleItemClick, handleSelectItem, handleEditClick, handleDeleteClick]);
 
   return (
     <div className="space-y-6">
@@ -850,100 +957,101 @@ const handleConfirmQuantityUpdate = async () => {
             </thead>
             <tbody className={`divide-y ${isDarkMode ? 'divide-slate-700' : 'divide-slate-200'}`}>
               {filteredItems.map((item, index) => (
-                <motion.tr
-                  key={item.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ 
-                    duration: 0.3,
-                    delay: index * 0.05,
-                    ease: "easeOut"
-                  }}
-                  className={`hover:${isDarkMode ? 'bg-slate-700/50' : 'bg-slate-50'} cursor-pointer`}
-                  onClick={() => handleItemClick(item)}
-                >
-                  {isSelectionMode && (
-                    <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`} onClick={(e) => e.stopPropagation()}>
-                      <input
-                        type="checkbox"
-                        checked={selectedItems.has(item.id)}
-                        onChange={() => handleSelectItem(item.id)}
-                        className={`h-4 w-4 text-blue-600 rounded ${isDarkMode ? 'border-slate-600 bg-slate-700' : 'border-slate-300'} focus:ring-blue-500`}
-                      />
-                    </td>
-                  )}
-                  <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-blue-400' : 'text-blue-700'} font-medium`}>{item.name}</td>
-                  <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                      item.status === 'active' 
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-yellow-100 text-yellow-700'
-                    }`}>
-                      {item.status === 'active' ? 'Active' : 'Pending'}
-                    </span>
-                  </td>
-                  <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                      item.fulfillmentType === 'fba' 
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-orange-100 text-orange-700'
-                    }`}>
-                      {item.fulfillmentType.toUpperCase()}
-                    </span>
-                  </td>
-                  <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{item.locationCode} - {item.shelfNumber}</td>
-                  <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
-                    {item.asin ? (
-                      item.asin.split(',').length > 3
-                        ? item.asin.split(',').slice(0, 3).map(a => a.trim()).join(', ') + '...'
-                        : item.asin.split(',').map(a => a.trim()).join(', ')
-                    ) : (
-                      '-'
-                    )}
-                  </td>
-                  {user?.role === 'admin' && (
-                    <>
-                      <td className={`px-4 py-3 text-right text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>
-                        {Number(item.price) > 0 ? `£${Number(item.price).toFixed(2)}` : '(Not set)'}
-                      </td>
-                      <td className={`px-4 py-3 text-right text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>
-                        {Number(item.quantity * item.price) > 0 ? `£${Number(item.quantity * item.price).toFixed(2)}` : '(Not set)'}
-                      </td>
-                    </>
-                  )}
-                  <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'} text-right`}>
-                    <div className="flex items-center justify-end gap-2">
-                      {item.quantity <= 10 && (
-                        <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-red-100 text-red-700 text-center">
-                          Critical Low
-                        </span>
-                      )}
-                      {item.quantity > 10 && item.quantity <= 25 && (
-                        <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-yellow-100 text-yellow-700">
-                          Low Stock
-                        </span>
-                      )}
-                      <span>{item.quantity}</span>
-                    </div>
-                  </td>
-                    <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{format(new Date(item.lastUpdated), 'MMM d, yyyy')}</td>
-                  <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'} text-right`}>
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={(e) => handleEditClick(e, item)}
-                        className={`p-1 ${isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'} transition-colors`}
-                      >
-                        <Edit2 size={16} />
-                      </button>
-                      <button
-                        onClick={(e) => handleDeleteClick(e, item)}
-                        className={`p-1 ${isDarkMode ? 'text-red-400 hover:text-red-300' : 'text-red-600 hover:text-red-700'} transition-colors`}
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </td>
-                </motion.tr>
+                <DesktopTableRow key={item.id} item={item} index={index} />
+                // <motion.tr
+                //   key={item.id}
+                //   initial={{ opacity: 0, y: 20 }}
+                //   animate={{ opacity: 1, y: 0 }}
+                //   transition={{ 
+                //     duration: 0.3,
+                //     delay: index * 0.05,
+                //     ease: "easeOut"
+                //   }}
+                //   className={`hover:${isDarkMode ? 'bg-slate-700/50' : 'bg-slate-50'} cursor-pointer`}
+                //   onClick={() => handleItemClick(item)}
+                // >
+                //   {isSelectionMode && (
+                //     <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`} onClick={(e) => e.stopPropagation()}>
+                //       <input
+                //         type="checkbox"
+                //         checked={selectedItems.has(item.id)}
+                //         onChange={() => handleSelectItem(item.id)}
+                //         className={`h-4 w-4 text-blue-600 rounded ${isDarkMode ? 'border-slate-600 bg-slate-700' : 'border-slate-300'} focus:ring-blue-500`}
+                //       />
+                //     </td>
+                //   )}
+                //   <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-blue-400' : 'text-blue-700'} font-medium`}>{item.name}</td>
+                //   <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                //     <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                //       item.status === 'active' 
+                //         ? 'bg-green-100 text-green-700'
+                //         : 'bg-yellow-100 text-yellow-700'
+                //     }`}>
+                //       {item.status === 'active' ? 'Active' : 'Pending'}
+                //     </span>
+                //   </td>
+                //   <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                //     <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                //       item.fulfillmentType === 'fba' 
+                //         ? 'bg-green-100 text-green-700'
+                //         : 'bg-orange-100 text-orange-700'
+                //     }`}>
+                //       {item.fulfillmentType.toUpperCase()}
+                //     </span>
+                //   </td>
+                //   <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{item.locationCode} - {item.shelfNumber}</td>
+                //   <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                //     {item.asin ? (
+                //       item.asin.split(',').length > 3
+                //         ? item.asin.split(',').slice(0, 3).map(a => a.trim()).join(', ') + '...'
+                //         : item.asin.split(',').map(a => a.trim()).join(', ')
+                //     ) : (
+                //       '-'
+                //     )}
+                //   </td>
+                //   {user?.role === 'admin' && (
+                //     <>
+                //       <td className={`px-4 py-3 text-right text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>
+                //         {Number(item.price) > 0 ? `£${Number(item.price).toFixed(2)}` : '(Not set)'}
+                //       </td>
+                //       <td className={`px-4 py-3 text-right text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>
+                //         {Number(item.quantity * item.price) > 0 ? `£${Number(item.quantity * item.price).toFixed(2)}` : '(Not set)'}
+                //       </td>
+                //     </>
+                //   )}
+                //   <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'} text-right`}>
+                //     <div className="flex items-center justify-end gap-2">
+                //       {item.quantity <= 10 && (
+                //         <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-red-100 text-red-700 text-center">
+                //           Critical Low
+                //         </span>
+                //       )}
+                //       {item.quantity > 10 && item.quantity <= 25 && (
+                //         <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-yellow-100 text-yellow-700">
+                //           Low Stock
+                //         </span>
+                //       )}
+                //       <span>{item.quantity}</span>
+                //     </div>
+                //   </td>
+                //     <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{format(new Date(item.lastUpdated), 'MMM d, yyyy')}</td>
+                //   <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'} text-right`}>
+                //     <div className="flex items-center justify-end gap-2">
+                //       <button
+                //         onClick={(e) => handleEditClick(e, item)}
+                //         className={`p-1 ${isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'} transition-colors`}
+                //       >
+                //         <Edit2 size={16} />
+                //       </button>
+                //       <button
+                //         onClick={(e) => handleDeleteClick(e, item)}
+                //         className={`p-1 ${isDarkMode ? 'text-red-400 hover:text-red-300' : 'text-red-600 hover:text-red-700'} transition-colors`}
+                //       >
+                //         <Trash2 size={16} />
+                //       </button>
+                //     </div>
+                //   </td>
+                // </motion.tr>
               ))}
             </tbody>
           </table>
