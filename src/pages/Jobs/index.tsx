@@ -9,6 +9,7 @@ import Modal from '../../components/modals/Modal';
 import DeleteConfirmationModal from '../../components/modals/DeleteConfirmationModal';
 import BarcodeScanModal from '../../components/modals/BarcodeScanModal';
 import { useAuth } from '../../contexts/AuthContext';
+import Input from '../../components/ui/Input'; // Import the Input component
 
 type JobStatus = 'picking' | 'awaiting_pack' | 'completed';
 
@@ -63,6 +64,7 @@ const Jobs: React.FC = () => {
   const [isNewJobScanOpen, setIsNewJobScanOpen] = useState(false);
   const [jobToDelete, setJobToDelete] = useState<Job | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
+  const [manualBarcode, setManualBarcode] = useState(''); // State for manual barcode input
 
   const filteredJobs = jobs.filter(job =>
     showCompleted ? job.status === 'completed' : job.status !== 'completed'
@@ -120,10 +122,16 @@ const Jobs: React.FC = () => {
 
   const openNewJobModal = () => {
     setNewJobItems([]);
+    setManualBarcode(''); // Reset manual barcode input
     setIsNewJobModalOpen(true);
   };
 
   const onNewJobBarcodeScanned = (barcode: string) => {
+    addBarcodeToJob(barcode);
+    setIsNewJobScanOpen(false);
+  };
+
+  const addBarcodeToJob = (barcode: string) => {
     setNewJobItems(prev => {
       const idx = prev.findIndex(i => i.barcode === barcode);
       if (idx >= 0) {
@@ -133,7 +141,14 @@ const Jobs: React.FC = () => {
       }
       return [...prev, { barcode, quantity: 1, verified: false }];
     });
-    setIsNewJobScanOpen(false);
+  };
+
+  const handleManualBarcodeSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (manualBarcode.trim()) {
+      addBarcodeToJob(manualBarcode.trim());
+      setManualBarcode(''); // Clear the input after adding
+    }
   };
 
   const finishNewJobPicking = async () => {
@@ -414,8 +429,31 @@ const Jobs: React.FC = () => {
         title="Start Picking"
         size='sm'
       >
-        <div className="space-y-3">
-        <div className="flex flex-col sm:flex-row gap-2">
+        <div className="space-y-4">
+          {/* Barcode Input Field */}
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+              Barcode
+            </label>
+            <form onSubmit={handleManualBarcodeSubmit} className="flex gap-2">
+              <Input
+                name="manualBarcode"
+                value={manualBarcode}
+                onChange={(e) => setManualBarcode(e.target.value)}
+                placeholder="Enter barcode manually"
+                fullWidth
+              />
+              <Button 
+                type="submit" 
+                className="flex items-center gap-1 whitespace-nowrap"
+                size='sm'
+              >
+                <Plus size={16} /> Add
+              </Button>
+            </form>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-2">
             <Button 
               onClick={() => setIsNewJobScanOpen(true)} 
               className="flex items-center gap-1 justify-center"
@@ -427,10 +465,12 @@ const Jobs: React.FC = () => {
               onClick={finishNewJobPicking} 
               disabled={newJobItems.length === 0} 
               className="flex items-center gap-1 justify-center"
-              size='sm'>
+              size='sm'
+            >
               <CheckSquare size={16} /> Finish Picking
             </Button>
           </div>
+          
           <div className="max-h-64 overflow-auto space-y-2">
             {newJobItems.map(it => (
               <div key={it.barcode} className={`flex items-center justify-between p-2 rounded ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
