@@ -6,7 +6,7 @@ import Button from '../../components/ui/Button';
 import { db } from '../../config/firebase';
 import { collection, query, orderBy, limit, getDocs, Timestamp, where } from 'firebase/firestore';
 import { subDays, formatDistanceToNow, startOfDay, endOfDay } from 'date-fns';
-import { Order } from '../../types';
+// import { Order } from '../../types';
 import { useTheme } from '../../contexts/ThemeContext';
 
 interface DashboardStats {
@@ -455,7 +455,7 @@ const AdminDashboard: React.FC = () => {
       {/* Top Products and Recent Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Activity */}
-        <Card title="Recent Activity" className={`h-[400px] overflow-hidden ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+        <Card title="Recent Activity" className={`${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
           {isLoading ? (
             <TableSkeleton />
           ) : recentActivities.length > 0 ? (
@@ -470,7 +470,7 @@ const AdminDashboard: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className={`divide-y ${isDarkMode ? 'divide-slate-700' : 'divide-slate-200'}`}>
-                  {recentActivities.map((activity) => (
+                  {recentActivities.slice(0, 5).map((activity) => (
                     <tr key={activity.id} className={`${isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-slate-50'}`}>
                       <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                         {activity.user}
@@ -478,8 +478,10 @@ const AdminDashboard: React.FC = () => {
                       <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                         {activity.role}
                       </td>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                        {activity.detail}
+                      <td className={`px-6 py-4 text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                        <div className="max-w-xs truncate" title={activity.detail}>
+                          {activity.detail}
+                        </div>
                       </td>
                       <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                         {formatDistanceToNow(new Date(activity.time), { addSuffix: true })}
@@ -535,7 +537,7 @@ const AdminDashboard: React.FC = () => {
           )}
         </Card>
         */}
-        <Card title="Low Stock Items" className={`h-[400px] overflow-hidden ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+        <Card title="Low Stock Items" className={`${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
           {isLoading ? (
             <TableSkeleton />
           ) : lowStockItems.length > 0 ? (
@@ -550,10 +552,12 @@ const AdminDashboard: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className={`divide-y ${isDarkMode ? 'divide-slate-700' : 'divide-slate-200'}`}>
-                  {lowStockItems.map((item) => (
+                  {lowStockItems.slice(0, 5).map((item) => (
                     <tr key={item.id} className={`${isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-slate-50'}`}>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                        {item.name}
+                      <td className={`px-6 py-4 text-sm font-medium ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                        <div className="max-w-xs truncate" title={item.name}>
+                          {item.name}
+                        </div>
                       </td>
                       <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                         {item.locationCode}-{item.shelfNumber}
@@ -582,7 +586,7 @@ const AdminDashboard: React.FC = () => {
       {/* Stock Alerts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Critical Stock Items */}
-        <Card title="Critical Stock Items" className={`h-[400px] overflow-hidden ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+        <Card title="Critical Stock Items" className={`${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
           {isLoading ? (
             <TableSkeleton />
           ) : criticalStockItems.length > 0 ? (
@@ -597,10 +601,12 @@ const AdminDashboard: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className={`divide-y ${isDarkMode ? 'divide-slate-700' : 'divide-slate-200'}`}>
-                  {criticalStockItems.map((item) => (
+                  {criticalStockItems.slice(0, 5).map((item) => (
                     <tr key={item.id} className={`${isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-slate-50'}`}>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                        {item.name}
+                      <td className={`px-6 py-4 text-sm font-medium ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                        <div className="max-w-xs truncate" title={item.name}>
+                          {item.name}
+                        </div>
                       </td>
                       <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                         {item.locationCode}-{item.shelfNumber}
@@ -621,7 +627,7 @@ const AdminDashboard: React.FC = () => {
           ) : (
             <div className={`text-center py-8 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
               No critical stock items found
-          </div>
+            </div>
           )}
         </Card>
         
