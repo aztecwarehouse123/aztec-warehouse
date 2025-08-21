@@ -663,7 +663,7 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
             </span>
           )}
           {item.quantity > 10 && item.quantity <= 25 && (
-            <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-yellow-100 text-yellow-700">
+            <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-yellow-100 text-yellow-700 text-center">
               Low Stock
             </span>
           )}

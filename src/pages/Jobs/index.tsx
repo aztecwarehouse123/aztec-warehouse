@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Plus, RefreshCw, Barcode, CheckSquare, ClipboardList, Trash2,X } from 'lucide-react';
+import { Plus, RefreshCw, CheckSquare, ClipboardList, Trash2, Edit } from 'lucide-react';
 import { db } from '../../config/firebase';
 import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, orderBy, query, serverTimestamp, Timestamp, updateDoc, where } from 'firebase/firestore';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -7,9 +7,10 @@ import { useToast } from '../../contexts/ToastContext';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/modals/Modal';
 import DeleteConfirmationModal from '../../components/modals/DeleteConfirmationModal';
-import BarcodeScanModal from '../../components/modals/BarcodeScanModal';
 import { useAuth } from '../../contexts/AuthContext';
-import Input from '../../components/ui/Input'; // Import the Input component
+import Input from '../../components/ui/Input';
+import JobStockUpdateForm from '../../components/stock/JobStockUpdateForm';
+import { StockItem } from '../../types';
 
 type JobStatus = 'picking' | 'awaiting_pack' | 'completed';
 
@@ -19,6 +20,8 @@ type JobItem = {
   asin?: string | null;
   quantity: number;
   verified: boolean; // set by packer
+  locationCode?: string;
+  shelfNumber?: string;
 };
 
 type Job = {
@@ -30,6 +33,7 @@ type Job = {
   picker?: string | null;
   packer?: string | null;
   items: JobItem[];
+  pickingTime?: number; // Time taken to complete picking in seconds
 };
 
 type FirestoreJobItem = {
@@ -38,6 +42,8 @@ type FirestoreJobItem = {
   asin?: string | null;
   quantity?: number;
   verified?: boolean;
+  locationCode?: string;
+  shelfNumber?: string;
 };
 
 type FirestoreJob = {
@@ -48,6 +54,7 @@ type FirestoreJob = {
   picker?: string | null;
   packer?: string | null;
   items?: FirestoreJobItem[];
+  pickingTime?: number; // Time taken to complete picking in seconds
 };
 
 const Jobs: React.FC = () => {
@@ -57,15 +64,25 @@ const Jobs: React.FC = () => {
 
   const [isLoading, setIsLoading] = useState(false);
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [isScanModalOpen, setIsScanModalOpen] = useState(false);
-  const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [isNewJobModalOpen, setIsNewJobModalOpen] = useState(false);
   const [newJobItems, setNewJobItems] = useState<JobItem[]>([]);
-  const [isNewJobScanOpen, setIsNewJobScanOpen] = useState(false);
+  const [pendingStockUpdates, setPendingStockUpdates] = useState<Array<{
+    stockItem: StockItem;
+    deductedQuantity: number;
+    reason: string;
+    storeName: string;
+    locationCode: string;
+    shelfNumber: string;
+  }>>([]);
+  const [editingItem, setEditingItem] = useState<{index: number, barcode: string, quantity: number} | null>(null);
+  const [editingJobItem, setEditingJobItem] = useState<{jobId: string, itemIndex: number, barcode: string, quantity: number, locationCode?: string, shelfNumber?: string} | null>(null);
   const [jobToDelete, setJobToDelete] = useState<Job | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
   const [manualBarcode, setManualBarcode] = useState(''); // State for manual barcode input
-  const [editingQuantity, setEditingQuantity] = useState<{barcode: string, quantity: number} | null>(null);
+  const [isStockUpdateModalOpen, setIsStockUpdateModalOpen] = useState(false);
+  const [selectedStockItem, setSelectedStockItem] = useState<StockItem | null>(null);
+  const [jobCreationStartTime, setJobCreationStartTime] = useState<Date | null>(null);
+  const [elapsedTime, setElapsedTime] = useState<number>(0);
 
   const filteredJobs = jobs.filter(job =>
     showCompleted ? job.status === 'completed' : job.status !== 'completed'
@@ -83,6 +100,21 @@ const Jobs: React.FC = () => {
       });
     } catch (e) {
       console.error('Failed to log activity:', e);
+    }
+  };
+
+  const formatElapsedTime = (seconds: number): string => {
+    if (seconds < 60) {
+      return `${seconds}s`;
+    } else if (seconds < 3600) {
+      const minutes = Math.floor(seconds / 60);
+      const remainingSeconds = seconds % 60;
+      return `${minutes}m ${remainingSeconds}s`;
+    } else {
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.floor((seconds % 3600) / 60);
+      const remainingSeconds = seconds % 60;
+      return `${hours}h ${minutes}m ${remainingSeconds}s`;
     }
   };
 
@@ -107,7 +139,10 @@ const Jobs: React.FC = () => {
             asin: it.asin ?? null,
             quantity: Number(it.quantity || 1),
             verified: Boolean(it.verified),
+            locationCode: it.locationCode,
+            shelfNumber: it.shelfNumber,
           })) : [],
+          pickingTime: data.pickingTime || 0,
         };
       });
       setJobs(list);
@@ -121,9 +156,31 @@ const Jobs: React.FC = () => {
 
   useEffect(() => { fetchJobs(); }, [fetchJobs]);
 
+  // Timer for job creation
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    
+    if (jobCreationStartTime) {
+      interval = setInterval(() => {
+        const now = new Date();
+        const elapsed = Math.floor((now.getTime() - jobCreationStartTime.getTime()) / 1000);
+        setElapsedTime(elapsed);
+      }, 1000);
+    }
+    
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [jobCreationStartTime]);
+
   const openNewJobModal = () => {
-    setNewJobItems([]);
     setManualBarcode(''); // Reset manual barcode input
+    setNewJobItems([]); // Reset job items
+    setPendingStockUpdates([]); // Reset pending updates
+    setJobCreationStartTime(new Date()); // Start timer
+    setElapsedTime(0); // Reset elapsed time
     setIsNewJobModalOpen(true);
   };
 
@@ -139,45 +196,6 @@ const Jobs: React.FC = () => {
     }
   };
 
-  const onNewJobBarcodeScanned = async (barcode: string) => {
-    const exists = await checkBarcodeExists(barcode);
-    if (!exists) {
-      showToast(`Product with barcode ${barcode} does not exist`, 'error');
-      return;
-    }
-    addBarcodeToJob(barcode);
-    setIsNewJobScanOpen(false);
-  };
-
-  const addBarcodeToJob = (barcode: string) => {
-    setNewJobItems(prev => {
-      const idx = prev.findIndex(i => i.barcode === barcode);
-      if (idx >= 0) {
-        const copy = [...prev];
-        copy[idx] = { ...copy[idx], quantity: copy[idx].quantity + 1 };
-        return copy;
-      }
-      return [...prev, { barcode, quantity: 1, verified: false }];
-    });
-  };
-
-  const removeBarcodeFromJob = (barcode: string) => {
-    setNewJobItems(prev => prev.filter(item => item.barcode !== barcode));
-  };
-
-  const updateQuantity = (barcode: string, newQuantity: number) => {
-    if (newQuantity < 1) return;
-    
-    setNewJobItems(prev => 
-      prev.map(item => 
-        item.barcode === barcode 
-          ? { ...item, quantity: newQuantity } 
-          : item
-      )
-    );
-    setEditingQuantity(null);
-  };
-
   const handleManualBarcodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const barcode = manualBarcode.trim();
@@ -189,17 +207,175 @@ const Jobs: React.FC = () => {
       return;
     }
 
-    addBarcodeToJob(barcode);
+    // Fetch the stock item details and open stock update modal
+    try {
+      const q = query(collection(db, 'inventory'), where('barcode', '==', barcode));
+      const snapshot = await getDocs(q);
+      if (!snapshot.empty) {
+        const stockData = snapshot.docs[0].data() as StockItem;
+        const stockItem: StockItem = {
+          ...stockData,
+          id: snapshot.docs[0].id,
+          lastUpdated: stockData.lastUpdated instanceof Timestamp ? stockData.lastUpdated.toDate() : new Date(stockData.lastUpdated)
+        };
+        setSelectedStockItem(stockItem);
+        setIsStockUpdateModalOpen(true);
+        setIsNewJobModalOpen(false);
+      }
+    } catch (error) {
+      console.error('Error fetching stock item:', error);
+      showToast('Error fetching stock item details', 'error');
+    }
+  };
+
+  const handleStockUpdate = async (data: { id: string; quantity: number; reason: string; storeName: string; locationCode: string; shelfNumber: string }) => {
+    if (!selectedStockItem) return;
+    
+    // Calculate the deducted quantity
+    const deductedQuantity = selectedStockItem.quantity - data.quantity;
+    
+    // Find the specific stock item for this location (not just by barcode)
+    const stockQuery = query(collection(db, 'inventory'), 
+      where('barcode', '==', selectedStockItem.barcode),
+      where('locationCode', '==', data.locationCode),
+      where('shelfNumber', '==', data.shelfNumber)
+    );
+    const stockSnapshot = await getDocs(stockQuery);
+    
+    if (stockSnapshot.empty) {
+      showToast('Stock item not found for this location', 'error');
+      return;
+    }
+    
+    const locationSpecificStockItem = {
+      ...selectedStockItem,
+      id: stockSnapshot.docs[0].id,
+      quantity: stockSnapshot.docs[0].data().quantity || 0
+    };
+    
+    // Add to pending stock updates with the location-specific stock item
+    setPendingStockUpdates(prev => [...prev, {
+      stockItem: locationSpecificStockItem,
+      deductedQuantity,
+      reason: data.reason,
+      storeName: data.storeName,
+      locationCode: data.locationCode,
+      shelfNumber: data.shelfNumber
+    }]);
+    
+    // Add the barcode to the job items - treat barcode+location as unique identifier
+    if (selectedStockItem.barcode) {
+      setNewJobItems(prev => {
+        const barcode = selectedStockItem.barcode!;
+        
+        // Check if this exact barcode+location combination already exists
+        const existingIndex = prev.findIndex(item => 
+          item.barcode === barcode && 
+          item.locationCode === data.locationCode && 
+          item.shelfNumber === data.shelfNumber
+        );
+        
+        if (existingIndex >= 0) {
+          // Update existing item quantity for this specific location
+          const updated = [...prev];
+          updated[existingIndex] = { ...updated[existingIndex], quantity: updated[existingIndex].quantity + deductedQuantity };
+          return updated;
+        } else {
+          // Add new item with location information
+          return [...prev, { 
+            barcode: barcode, 
+            quantity: deductedQuantity, 
+            verified: false,
+            locationCode: data.locationCode,
+            shelfNumber: data.shelfNumber
+          }];
+        }
+      });
+    }
+    
+    showToast('Item added to job', 'success');
+    setIsStockUpdateModalOpen(false);
+    setSelectedStockItem(null);
+    
+    // Return to the Add Barcode modal to continue adding more barcodes
+    setIsNewJobModalOpen(true);
+    
+    // Reset the barcode input field
     setManualBarcode('');
+  };
+
+  const handleStockUpdateCancel = () => {
+    setIsStockUpdateModalOpen(false);
+    setSelectedStockItem(null);
+    setIsNewJobModalOpen(true);
   };
 
   const finishNewJobPicking = async () => {
     if (newJobItems.length === 0) {
-      showToast('Scan at least one item', 'error');
+      showToast('Add at least one item to create a job', 'error');
       return;
     }
+    
     setIsLoading(true);
     try {
+      // Apply all pending stock updates
+      for (const update of pendingStockUpdates) {
+        const stockRef = doc(db, 'inventory', update.stockItem.id);
+        await updateDoc(stockRef, {
+          quantity: update.stockItem.quantity - update.deductedQuantity,
+          lastUpdated: serverTimestamp()
+        });
+        
+        // Add activity log for each stock update
+        await addDoc(collection(db, 'activityLogs'), {
+          detail: `${update.deductedQuantity} units deducted from stock "${update.stockItem.name}" (Reason: ${update.reason}, Store: ${update.storeName}) by ${user?.role}`,
+          time: new Date().toISOString(),
+          user: user?.name,
+          role: user?.role
+        });
+      }
+      
+      // Also ensure all job items have corresponding stock updates
+      // This handles cases where items might have been edited but pending updates weren't properly synced
+      for (const jobItem of newJobItems) {
+        // Check if this job item already has a pending update
+        const hasPendingUpdate = pendingStockUpdates.some(update => 
+          update.stockItem.barcode === jobItem.barcode &&
+          update.locationCode === jobItem.locationCode &&
+          update.shelfNumber === jobItem.shelfNumber
+        );
+        
+        if (!hasPendingUpdate) {
+          // Find the stock item in inventory to update - use the specific location
+          const stockQuery = query(collection(db, 'inventory'), 
+            where('barcode', '==', jobItem.barcode),
+            where('locationCode', '==', jobItem.locationCode),
+            where('shelfNumber', '==', jobItem.shelfNumber)
+          );
+          const stockSnapshot = await getDocs(stockQuery);
+          
+          if (!stockSnapshot.empty) {
+            const stockDoc = stockSnapshot.docs[0];
+            const stockData = stockDoc.data();
+            const currentQuantity = stockData.quantity || 0;
+            
+            // Update stock quantity for this specific location
+            await updateDoc(doc(db, 'inventory', stockDoc.id), {
+              quantity: currentQuantity - jobItem.quantity,
+              lastUpdated: serverTimestamp()
+            });
+            
+            // Add activity log for this stock update
+            // await addDoc(collection(db, 'activityLogs'), {
+            //   detail: `${jobItem.quantity} units deducted from stock "${stockData.name || 'Unknown Product'}" at location ${jobItem.locationCode} shelf ${jobItem.shelfNumber} (Reason: job creation, Store: 'job') by ${user?.role}`,
+            //   time: new Date().toISOString(),
+            //   user: user?.name,
+            //   role: user?.role
+            // });
+          }
+        }
+      }
+      
       const numericId = Date.now().toString(); 
 
       const ref = await addDoc(collection(db, 'jobs'), {
@@ -210,10 +386,11 @@ const Jobs: React.FC = () => {
         picker: user?.name || null,
         packer: null,
         items: newJobItems,
+        pickingTime: elapsedTime // Store the elapsed time
       });
       await updateDoc(ref, { docId: ref.id });
       
-      // Add activity log
+      // Add activity log for job creation
       await logActivity(
         `created new job ${numericId} with ${newJobItems.length} items (${newJobItems.reduce((sum, item) => sum + item.quantity, 0)} total units)`
       );
@@ -221,50 +398,16 @@ const Jobs: React.FC = () => {
       showToast(`Job ${numericId} created and awaiting pack`, 'success');
       setIsNewJobModalOpen(false);
       setNewJobItems([]);
+      setPendingStockUpdates([]);
+      setManualBarcode('');
+      setJobCreationStartTime(null); // Stop timer
+      setElapsedTime(0); // Reset elapsed time
       fetchJobs();
     } catch (e) {
       console.error(e);
       showToast('Failed to create job', 'error');
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const onBarcodeScanned = async (barcode: string) => {
-    if (!activeJobId) return;
-
-    const exists = await checkBarcodeExists(barcode);
-    if (!exists) {
-      showToast(`Product with barcode ${barcode} does not exist`, 'error');
-      return;
-    }
-
-    try {
-      const jobRef = doc(db, 'jobs', activeJobId);
-      const snap = await getDoc(jobRef);
-      if (!snap.exists()) return;
-      const data = snap.data() as FirestoreJob;
-      const items: JobItem[] = Array.isArray(data.items) ? data.items.map((it: FirestoreJobItem) => ({
-        barcode: String(it.barcode || ''),
-        name: it.name ?? null,
-        asin: it.asin ?? null,
-        quantity: Number(it.quantity || 1),
-        verified: Boolean(it.verified),
-      })) : [];
-      const idx = items.findIndex(i => i.barcode === barcode);
-      if (idx >= 0) {
-        items[idx] = { ...items[idx], quantity: (items[idx].quantity || 0) + 1 };
-      } else {
-        // We only store minimal product info for speed
-        items.push({ barcode, quantity: 1, verified: false });
-      }
-      await updateDoc(jobRef, { items });
-      showToast('Scanned added to job', 'success');
-      setIsScanModalOpen(false);
-      fetchJobs();
-    } catch (e) {
-      console.error(e);
-      showToast('Failed adding scan to job', 'error');
     }
   };
 
@@ -339,6 +482,50 @@ const Jobs: React.FC = () => {
     }
   };
 
+  const updateJobItem = async (job: Job, itemIndex: number, newBarcode: string, newQuantity: number) => {
+    try {
+      const updatedItems = [...job.items];
+      updatedItems[itemIndex] = {
+        ...updatedItems[itemIndex],
+        barcode: newBarcode,
+        quantity: newQuantity
+      };
+      
+      await updateDoc(doc(db, 'jobs', job.id), {
+        items: updatedItems
+      });
+      
+      await logActivity(
+        `updated job item in job ${job.jobId}: barcode ${job.items[itemIndex].barcode} → ${newBarcode}, quantity ${job.items[itemIndex].quantity} → ${newQuantity}`
+      );
+      
+      showToast('Job item updated successfully', 'success');
+      setEditingJobItem(null);
+      fetchJobs();
+    } catch {
+      showToast('Failed to update job item', 'error');
+    }
+  };
+
+  const removeJobItem = async (job: Job, itemIndex: number) => {
+    try {
+      const updatedItems = job.items.filter((_, index) => index !== itemIndex);
+      
+      await updateDoc(doc(db, 'jobs', job.id), {
+        items: updatedItems
+      });
+      
+      await logActivity(
+        `removed item ${job.items[itemIndex].barcode} (qty: ${job.items[itemIndex].quantity}) from job ${job.jobId}`
+      );
+      
+      showToast('Job item removed successfully', 'success');
+      fetchJobs();
+    } catch {
+      showToast('Failed to remove job item', 'error');
+    }
+  };
+
   const JobRow: React.FC<{ job: Job }> = ({ job }) => {
     const isAwaitingPack = job.status === 'awaiting_pack';
     const isPicking = job.status === 'picking';
@@ -355,7 +542,14 @@ const Jobs: React.FC = () => {
               {/*  */}
               <div>
               <h3 className={`text-base sm:text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>Job {job.jobId}</h3>
-              <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-xs`}>Created by {job.createdBy} • {job.createdAt.toLocaleString()}</p>
+              <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-xs`}>
+                Created by {job.createdBy} • {job.createdAt.toLocaleString()}
+                {job.pickingTime && job.pickingTime > 0 && (
+                  <span className={`ml-2 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
+                    • Picking: {formatElapsedTime(job.pickingTime)}
+                  </span>
+                )}
+              </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -374,18 +568,62 @@ const Jobs: React.FC = () => {
         <div className="p-3 sm:p-4 space-y-3">
           <div className="flex items-center gap-2">
             {isPicking && (
-              <Button onClick={() => { setActiveJobId(job.id); setIsScanModalOpen(true); }} className="flex items-center gap-1" size='sm'>
-                <Barcode size={14} /> Scan
+              <Button onClick={() => setIsStockUpdateModalOpen(true)} className="flex items-center gap-1" size='sm'>
+                <ClipboardList size={14} /> Scan
               </Button>
             )}
           </div>
           <div className="space-y-2">
-            {job.items.map(it => ( 
-              <div key={it.barcode} className={`flex items-center justify-between p-2 rounded ${isDarkMode ? 'bg-slate-700' : 'bg-slate-100'}`}>
+            {job.items.map((it, itemIndex) => (
+              <div key={`${it.barcode}-${itemIndex}-${job.id}`} className={`flex items-center justify-between p-2 rounded ${isDarkMode ? 'bg-slate-700' : 'bg-slate-100'}`}>
                 <div className="flex-1 min-w-0">
+                  {editingJobItem?.jobId === job.id && editingJobItem?.itemIndex === itemIndex ? (
+                    // Edit mode
+                    <div className="flex items-center gap-2">
+                      <Input 
+                        value={editingJobItem.barcode} 
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditingJobItem({...editingJobItem, barcode: e.target.value})} 
+                        className="w-24 text-sm" 
+                      />
+                      <Input 
+                        type="number" 
+                        value={editingJobItem.quantity.toString()} 
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditingJobItem({...editingJobItem, quantity: Number(e.target.value) || 1})} 
+                        className="w-16 text-sm" 
+                        min="1" 
+                      />
+                      <div className="flex gap-1">
+                        <Button 
+                          size="sm" 
+                          onClick={() => updateJobItem(job, itemIndex, editingJobItem.barcode, editingJobItem.quantity)} 
+                          className="h-6 px-2"
+                        >
+                          ✓
+                        </Button>
+                        <Button 
+                          variant="secondary" 
+                          size="sm" 
+                          onClick={() => setEditingJobItem(null)} 
+                          className="h-6 px-2"
+                        >
+                          ✕
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    // Display mode
+                    <>
                   <div className={`${isDarkMode ? 'text-white' : 'text-slate-800'} text-sm font-medium truncate`}>{it.barcode}</div>
-                  <div className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-xs`}>Qty: {it.quantity}</div>
+                      <div className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-xs`}>
+                        Qty: {it.quantity}
+                        {it.locationCode && it.shelfNumber && (
+                          <span className="ml-2">• Location: {it.locationCode}-{it.shelfNumber}</span>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
+                <div className="flex items-center gap-2">
                 {isAwaitingPack && (
                   <label className={`flex items-center gap-2 text-sm cursor-pointer ${isDarkMode? 'text-white': 'text-slate-700'}`}>
                     <input 
@@ -398,6 +636,35 @@ const Jobs: React.FC = () => {
                      <span className="sm:inline hidden">Verify</span>
                   </label>
                 )}
+                  {isAwaitingPack && !editingJobItem && (
+                    <>
+                      <Button 
+                        variant="secondary" 
+                        size="sm" 
+                        onClick={() => setEditingJobItem({
+                          jobId: job.id,
+                          itemIndex,
+                          barcode: it.barcode,
+                          quantity: it.quantity,
+                          locationCode: it.locationCode,
+                          shelfNumber: it.shelfNumber
+                        })} 
+                        className="h-6 px-2"
+                      >
+                        <Edit size={14} />
+                      </Button>
+                      <Button 
+                        variant="danger" 
+                        size="sm" 
+                        onClick={() => removeJobItem(job, itemIndex)} 
+                        className="h-6 px-2"
+                      >
+                        <Trash2 size={14} />
+                      </Button>
+                    </>
+                  )}
+                  
+                </div>
               </div>
             ))}
             {job.items.length === 0 && (
@@ -465,20 +732,19 @@ const Jobs: React.FC = () => {
 
       {/* No title modal; jobs are identified by generated ID */}
 
-      <BarcodeScanModal
-        isOpen={isScanModalOpen}
-        onClose={() => setIsScanModalOpen(false)}
-        onBarcodeScanned={onBarcodeScanned}
-      />
-
       {/* New Job Picking Modal */}
       <Modal 
         isOpen={isNewJobModalOpen} 
-        onClose={() => setIsNewJobModalOpen(false)} 
-        title="Start Picking"
+        onClose={() => {
+          setIsNewJobModalOpen(false);
+          setJobCreationStartTime(null); // Reset timer
+          setElapsedTime(0); // Reset elapsed time
+        }} 
+        title="Add Barcode to Job"
         size='sm'
       >
         <div className="space-y-4">
+          
           {/* Barcode Input Field */}
           <div className="space-y-2">
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
@@ -502,91 +768,152 @@ const Jobs: React.FC = () => {
             </form>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-2">
-            <Button 
-              onClick={() => setIsNewJobScanOpen(true)} 
-              className="flex items-center gap-1 justify-center"
-              size='sm'
-            >
-              <Barcode size={16} /> Scan Item
-            </Button>
-            <Button 
-              onClick={finishNewJobPicking} 
-              disabled={newJobItems.length === 0} 
-              className="flex items-center gap-1 justify-center"
-              size='sm'
-            >
-              <CheckSquare size={16} /> Finish Picking
-            </Button>
+          <div className="text-center text-sm text-slate-500 dark:text-slate-400">
+            Enter a barcode to update stock quantity for this job
           </div>
           
-          <div className="max-h-64 overflow-auto space-y-2">
-            {newJobItems.map(it => (
-              <div key={it.barcode} className={`flex items-center justify-between p-2 rounded ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
-                <div className='flex-1 min-w-0'>
-                  <div className="text-sm truncate flex-1">{it.barcode}</div>
-                </div>
-                <div className="flex items-center gap-2">
-                {editingQuantity?.barcode === it.barcode ? (
-                    <div className="flex items-center gap-1">
+          {/* Display current job items */}
+          {newJobItems.length > 0 && (
+            <div className="space-y-2">
+              <h4 className={`text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                Current Job Items:
+              </h4>
+              <div className="max-h-32 overflow-auto space-y-1">
+                {newJobItems.map((item, index) => (
+                  <div key={`${item.barcode}-${item.locationCode}-${item.shelfNumber}-${index}`} className={`flex items-center justify-between p-2 rounded text-sm ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
+                    {editingItem?.index === index ? (
+                      // Edit mode
+                      <div className="flex items-center gap-2 flex-1">
+                        <Input
+                          value={editingItem.barcode}
+                          onChange={(e) => setEditingItem({...editingItem, barcode: e.target.value})}
+                          className="w-24 text-sm"
+                          //size="sm"
+                        />
                       <Input
                         type="number"
-                        value={editingQuantity.quantity}
-                        onChange={(e) => setEditingQuantity({
-                          barcode: it.barcode,
-                          quantity: parseInt(e.target.value) || 1
-                        })}
-                        className="w-16 text-center"
+                          value={editingItem.quantity}
+                          onChange={(e) => setEditingItem({...editingItem, quantity: Number(e.target.value) || 1})}
+                          className="w-16 text-sm"
+                          //size="sm"
                         min="1"
                       />
+                        <div className="flex gap-1">
                       <Button 
                         size="sm" 
-                        onClick={() => updateQuantity(it.barcode, editingQuantity.quantity)}
-                        className="h-8"
+                            onClick={() => {
+                              const oldQuantity = newJobItems[index].quantity;
+                              const newQuantity = Number(editingItem.quantity);
+                              const quantityDifference = newQuantity - oldQuantity;
+                              
+                              // Update job items
+                              setNewJobItems(prev => {
+                                const updated = [...prev];
+                                updated[index] = { ...updated[index], barcode: editingItem.barcode, quantity: newQuantity };
+                                return updated;
+                              });
+                              
+                              // Update pending stock updates to reflect the quantity change
+                              setPendingStockUpdates(prev => {
+                                const updated = [...prev];
+                                // Find the corresponding pending update for this item
+                                const pendingIndex = updated.findIndex(update => 
+                                  update.stockItem.barcode === editingItem.barcode &&
+                                  update.locationCode === newJobItems[index].locationCode &&
+                                  update.shelfNumber === newJobItems[index].shelfNumber
+                                );
+                                
+                                if (pendingIndex >= 0) {
+                                  // Adjust the deducted quantity based on the change
+                                  updated[pendingIndex] = {
+                                    ...updated[pendingIndex],
+                                    deductedQuantity: updated[pendingIndex].deductedQuantity + quantityDifference
+                                  };
+                                }
+                                
+                                return updated;
+                              });
+                              
+                              setEditingItem(null);
+                            }}
+                            className="h-6 px-2"
                       >
                         ✓
                       </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setEditingItem(null)}
+                            className="h-6 px-2"
+                          >
+                            ✕
+                          </Button>
+                        </div>
                     </div>
                   ) : (
+                      // Display mode
+                      <>
+                        <div className="flex-1 min-w-0">
+                          <span className="truncate block">{item.barcode}</span>
+                          {item.locationCode && item.shelfNumber && (
+                            <span className="text-xs text-slate-500 block">
+                              Location: {item.locationCode} - Shelf {item.shelfNumber}
+                            </span>
+                          )}
+                        </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm">Qty: {it.quantity}</span>
+                          <span className="text-xs text-slate-500">Qty: {item.quantity}</span>
                       <Button 
                         variant="secondary" 
                         size="sm" 
-                        onClick={() => setEditingQuantity({
-                          barcode: it.barcode,
-                          quantity: it.quantity
-                        })}
-                        className="h-8"
+                            onClick={() => setEditingItem({index, barcode: item.barcode, quantity: item.quantity})}
+                            className="h-6 px-2"
                       >
                         Edit
                       </Button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              // Remove from job items
+                              setNewJobItems(prev => prev.filter((_, i) => i !== index));
+                              
+                              // Remove corresponding pending stock update
+                              setPendingStockUpdates(prev => {
+                                const itemToRemove = newJobItems[index];
+                                return prev.filter(update => 
+                                  !(update.stockItem.barcode === itemToRemove.barcode &&
+                                    update.locationCode === itemToRemove.locationCode &&
+                                    update.shelfNumber === itemToRemove.shelfNumber)
+                                );
+                              });
+                            }}
+                            className={`h-6 w-6 rounded flex items-center justify-center text-white bg-red-500 hover:bg-red-600 transition-colors ${isDarkMode ? 'hover:bg-red-600' : 'hover:bg-red-600'}`}
+                            title="Remove item"
+                          >
+                            ×
+                          </button>
                     </div>
+                      </>
                   )}
+                  </div>
+                ))}
+              </div>
                   
+              {/* Finish Picking Button */}
+              <div className="pt-2">
                   <Button 
-                    variant="danger" 
+                  onClick={finishNewJobPicking}
+                  disabled={newJobItems.length === 0}
+                  className="w-full flex items-center justify-center gap-2"
                     size="sm" 
-                    onClick={() => removeBarcodeFromJob(it.barcode)}
-                    className="h-8"
                   >
-                    <X size={14} />
+                  <CheckSquare size={16} /> Finish Picking
                   </Button>
                 </div>     
               </div>
-            ))}
-            {newJobItems.length === 0 && (
-              <div className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-sm text-center py-4`}>No items scanned yet.</div>
             )}
-          </div>
         </div>
       </Modal>
-
-      <BarcodeScanModal
-        isOpen={isNewJobScanOpen}
-        onClose={() => setIsNewJobScanOpen(false)}
-        onBarcodeScanned={onNewJobBarcodeScanned}
-      />
 
       {/* Delete confirmation modal */}
       <DeleteConfirmationModal
@@ -597,6 +924,23 @@ const Jobs: React.FC = () => {
         message={jobToDelete ? `Are you sure you want to delete Job ${jobToDelete.jobId}? This action cannot be undone.` : ''}
         isLoading={false}
       />
+
+      {/* Stock Update Modal */}
+      <Modal
+        isOpen={isStockUpdateModalOpen}
+        onClose={() => setIsStockUpdateModalOpen(false)}
+        title="Update Stock for Job"
+        size='lg'
+      >
+        {selectedStockItem && (
+          <JobStockUpdateForm
+            item={selectedStockItem}
+            onSubmit={handleStockUpdate}
+            onCancel={handleStockUpdateCancel}
+            isLoading={false}
+          />
+        )}
+      </Modal>
     </div>
   );
 };
