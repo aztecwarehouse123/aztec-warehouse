@@ -13,6 +13,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Button from '../../components/ui/Button';
 import { User } from '../../types';
 import Input from '../../components/ui/Input';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface ActivityLog {
   id: string;
@@ -33,6 +34,7 @@ const WarehouseOperations: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const { showToast } = useToast();
   const { isDarkMode } = useTheme();
+  const { user } = useAuth();
 
   // Fetch all users for the user filter
   const fetchUsers = async () => {
@@ -85,6 +87,11 @@ const WarehouseOperations: React.FC = () => {
         detail:  doc.data().detail,
         time: doc.data().time,
       })) as ActivityLog[];
+
+      // If current user is staff, filter out admin logs
+      if (user && user.role === 'staff') {
+        logs = logs.filter(log => log.role !== 'admin');
+      }
 
       // Apply user filter
       if (userFilter !== 'all') {
@@ -142,15 +149,33 @@ const WarehouseOperations: React.FC = () => {
 
   useEffect(() => {
     fetchActivityLogs();
-  }, [startDate, endDate, userFilter, activityFilter, searchQuery]);
+  }, [startDate, endDate, userFilter, activityFilter, searchQuery, user]);
 
-  const userFilterOptions = [
-    { value: 'all', label: 'All Users' },
-    ...users.map(user => ({
-      value: user.name,
-      label: user.name
-    }))
-  ];
+  const getUserFilterOptions = () => {
+    let filteredUsers  = users;
+
+    // If current user is staff, filter out admin users
+    if (user && user.role === 'staff') {
+      filteredUsers = users.filter(user => user.role !== 'admin');
+    }
+
+    return [
+      { value: 'all', label: 'All Users' },
+      ...filteredUsers.map(user => ({
+        value: user.name,
+        label: user.name
+      }))
+    ];
+
+  }
+
+  // const userFilterOptions = [
+  //   { value: 'all', label: 'All Users' },
+  //   ...users.map(user => ({
+  //     value: user.name,
+  //     label: user.name
+  //   }))
+  // ];
 
   const activityFilterOptions = [
     { value: 'all', label: 'All Activities' },
@@ -211,7 +236,8 @@ const WarehouseOperations: React.FC = () => {
         ? `To ${format(endDate, 'MMM d, yyyy')}`
         : 'All Time';
       doc.text(`Date Range: ${dateRangeText}`, 14, 25);
-      doc.text(`User Filter: ${userFilterOptions.find(opt => opt.value === userFilter)?.label}`, 14, 30);
+      // doc.text(`User Filter: ${userFilterOptions.find(opt => opt.value === userFilter)?.label}`, 14, 30);
+      doc.text(`User Filter: ${getUserFilterOptions().find(opt => opt.value === userFilter)?.label}`, 14, 30);
       doc.text(`Activity Filter: ${activityFilterOptions.find(opt => opt.value === activityFilter)?.label}`, 14, 35);
       
       // Add table
@@ -285,7 +311,7 @@ const WarehouseOperations: React.FC = () => {
             <Select
               value={userFilter}
               onChange={(e) => setUserFilter(e.target.value)}
-              options={userFilterOptions}
+              options={getUserFilterOptions()}
               className="w-full sm:w-40"
             />
             <Select

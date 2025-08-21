@@ -151,6 +151,12 @@ const Inventory: React.FC = () => {
     });
   }, [items, debouncedSearchQuery, damageFilter, duplicateFilter, nameToUniqueLocations]);
 
+  // Calculate total quantity of searched products
+  const totalSearchedQuantity = useMemo(() => {
+    if (!debouncedSearchQuery.trim()) return 0;
+    return filteredItems.reduce((total, item) => total + (item.quantity || 0), 0);
+  }, [filteredItems, debouncedSearchQuery]);
+
   const stats = useMemo(() => {
     const total = filteredItems.length;
     let damaged = 0;
@@ -231,9 +237,15 @@ const Inventory: React.FC = () => {
         </div>
       </div>
 
+
       {/* Stats section */}
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 md:gap-6">
-        <StatsCard title="Products" value={stats.total} icon={<Package size={20} className="text-blue-600" />} />
+        {debouncedSearchQuery.trim()? (
+          <StatsCard title="Total Quantity" value={totalSearchedQuantity} icon={<Package size={20} className="text-blue-600" />} />
+        ):(
+          <StatsCard title="Products" value={stats.total} icon={<Package size={20} className="text-blue-600" />} />
+        )}
+        
         <StatsCard title="Damaged" value={stats.damaged} icon={<AlertCircle size={20} className="text-blue-600" />}  />
         <StatsCard title="Duplicates" value={stats.duplicates} icon={<Copy size={20} className="text-blue-600" />}  />
         <StatsCard title="Unique" value={stats.unique} icon={<CheckCircle2 size={20} className="text-blue-600" />}  />
@@ -353,6 +365,7 @@ const Inventory: React.FC = () => {
                   <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Name</th>
                   <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>ASIN</th>
                   <th className={`px-4 py-3 text-right text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Price</th>
+                  <th className={`px-4 py-3 text-center text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Quantity</th>
                   <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Barcode</th>
                   <th className={`px-4 py-3 text-right text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>View</th>
                 </tr>
@@ -400,6 +413,7 @@ const Inventory: React.FC = () => {
                         </button>
                       )}
                     </td>
+                    <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'} text-center`}>{item.quantity}</td>
                     <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{item.barcode || '-'}</td>
                     <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'} text-right`}>
                       <button
@@ -426,6 +440,7 @@ const Inventory: React.FC = () => {
                     <div className="flex flex-wrap gap-x-2 gap-y-1 text-xs mt-1">
                       <span className={isDarkMode ? 'text-slate-300' : 'text-slate-600'}>ASIN: <span className="font-medium">{item.asin?.split(',')[0] || '-'}</span></span>
                       <span className={isDarkMode ? 'text-slate-300' : 'text-slate-600'}>Barcode: <span className="font-medium">{item.barcode || '-'}</span></span>
+                      <span className={isDarkMode ? 'text-slate-300' : 'text-slate-600'}>Quantity: <span className="font-medium">{item.quantity}</span></span>
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1">

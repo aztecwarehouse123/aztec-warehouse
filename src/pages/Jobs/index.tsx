@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Plus, RefreshCw, Barcode, CheckSquare, ClipboardList, Trash2 } from 'lucide-react';
+import { Plus, RefreshCw, Barcode, CheckSquare, ClipboardList, Trash2,X } from 'lucide-react';
 import { db } from '../../config/firebase';
-import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, orderBy, query, serverTimestamp, Timestamp, updateDoc } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, orderBy, query, serverTimestamp, Timestamp, updateDoc, where } from 'firebase/firestore';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '../../contexts/ToastContext';
 import Button from '../../components/ui/Button';
@@ -65,6 +65,7 @@ const Jobs: React.FC = () => {
   const [jobToDelete, setJobToDelete] = useState<Job | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
   const [manualBarcode, setManualBarcode] = useState(''); // State for manual barcode input
+  const [editingQuantity, setEditingQuantity] = useState<{barcode: string, quantity: number} | null>(null);
 
   const filteredJobs = jobs.filter(job =>
     showCompleted ? job.status === 'completed' : job.status !== 'completed'
@@ -126,7 +127,24 @@ const Jobs: React.FC = () => {
     setIsNewJobModalOpen(true);
   };
 
-  const onNewJobBarcodeScanned = (barcode: string) => {
+  //check barcode if exists
+  const checkBarcodeExists = async (barcode: string): Promise<boolean> => {
+    try {
+      const q = query(collection(db, 'inventory'), where('barcode', '==', barcode));
+      const snapshot = await getDocs(q);
+      return !snapshot.empty;
+    } catch (error) {
+      console.error('Error checking barcode:', error);
+      return false;
+    }
+  };
+
+  const onNewJobBarcodeScanned = async (barcode: string) => {
+    const exists = await checkBarcodeExists(barcode);
+    if (!exists) {
+      showToast(`Product with barcode ${barcode} does not exist`, 'error');
+      return;
+    }
     addBarcodeToJob(barcode);
     setIsNewJobScanOpen(false);
   };
@@ -143,12 +161,36 @@ const Jobs: React.FC = () => {
     });
   };
 
-  const handleManualBarcodeSubmit = (e: React.FormEvent) => {
+  const removeBarcodeFromJob = (barcode: string) => {
+    setNewJobItems(prev => prev.filter(item => item.barcode !== barcode));
+  };
+
+  const updateQuantity = (barcode: string, newQuantity: number) => {
+    if (newQuantity < 1) return;
+    
+    setNewJobItems(prev => 
+      prev.map(item => 
+        item.barcode === barcode 
+          ? { ...item, quantity: newQuantity } 
+          : item
+      )
+    );
+    setEditingQuantity(null);
+  };
+
+  const handleManualBarcodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (manualBarcode.trim()) {
-      addBarcodeToJob(manualBarcode.trim());
-      setManualBarcode(''); // Clear the input after adding
+    const barcode = manualBarcode.trim();
+    if (!barcode) return;
+
+    const exists = await checkBarcodeExists(barcode);
+    if (!exists) {
+      showToast(`Product with barcode ${barcode} does not exist`, 'error');
+      return;
     }
+
+    addBarcodeToJob(barcode);
+    setManualBarcode('');
   };
 
   const finishNewJobPicking = async () => {
@@ -190,6 +232,13 @@ const Jobs: React.FC = () => {
 
   const onBarcodeScanned = async (barcode: string) => {
     if (!activeJobId) return;
+
+    const exists = await checkBarcodeExists(barcode);
+    if (!exists) {
+      showToast(`Product with barcode ${barcode} does not exist`, 'error');
+      return;
+    }
+
     try {
       const jobRef = doc(db, 'jobs', activeJobId);
       const snap = await getDoc(jobRef);
@@ -474,8 +523,56 @@ const Jobs: React.FC = () => {
           <div className="max-h-64 overflow-auto space-y-2">
             {newJobItems.map(it => (
               <div key={it.barcode} className={`flex items-center justify-between p-2 rounded ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
-                <div className="text-sm truncate flex-1">{it.barcode}</div>
-                <div className="text-xs">Qty: {it.quantity}</div>
+                <div className='flex-1 min-w-0'>
+                  <div className="text-sm truncate flex-1">{it.barcode}</div>
+                </div>
+                <div className="flex items-center gap-2">
+                {editingQuantity?.barcode === it.barcode ? (
+                    <div className="flex items-center gap-1">
+                      <Input
+                        type="number"
+                        value={editingQuantity.quantity}
+                        onChange={(e) => setEditingQuantity({
+                          barcode: it.barcode,
+                          quantity: parseInt(e.target.value) || 1
+                        })}
+                        className="w-16 text-center"
+                        min="1"
+                      />
+                      <Button 
+                        size="sm" 
+                        onClick={() => updateQuantity(it.barcode, editingQuantity.quantity)}
+                        className="h-8"
+                      >
+                        ✓
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm">Qty: {it.quantity}</span>
+                      <Button 
+                        variant="secondary" 
+                        size="sm" 
+                        onClick={() => setEditingQuantity({
+                          barcode: it.barcode,
+                          quantity: it.quantity
+                        })}
+                        className="h-8"
+                      >
+                        Edit
+                      </Button>
+                    </div>
+                  )}
+                  
+                  <Button 
+                    variant="danger" 
+                    size="sm" 
+                    onClick={() => removeBarcodeFromJob(it.barcode)}
+                    className="h-8"
+                  >
+                    <X size={14} />
+                  </Button>
+                </div>     
               </div>
             ))}
             {newJobItems.length === 0 && (

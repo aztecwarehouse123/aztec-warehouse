@@ -42,11 +42,11 @@ const Navbar: React.FC = () => {
     { to: "/stock", icon: <PackagePlus size={20} />, label: "Inbound", roles: ['admin', 'staff'] },
     { to: "/outbound-stock", icon: <PackageMinus size={20} />, label: "Outbound", roles: ['admin', 'staff'] },
     { to: "/inventory", icon: <Boxes size={20} />, label: "Inventory", roles: ['admin'] },
-    { to: "/jobs", icon: <Briefcase size={20} />, label: "Jobs", roles: ['admin'] },
+    { to: "/jobs", icon: <Briefcase size={20} />, label: "Jobs", roles: ['admin','staff'] },
     { to: "/warehouse-locations", icon: <MapPin size={20} />, label: "Locations", roles: ['admin', 'staff'] },
     { to: "/orders", icon: <ShoppingCart size={20} />, label: "Orders", roles: [''] },
     { to: "/reports-analytics", icon: <BarChart size={20} />, label: "Reports", roles: ['admin'] },
-    { to: "/warehouse-operations", icon: <Activity size={20} />, label: "Logs", roles: ['admin'] },
+    { to: "/warehouse-operations", icon: <Activity size={20} />, label: "Logs", roles: ['admin','staff'] },
     { to: "/settings", icon: <Settings size={20} />, label: "Settings", roles: ['admin', 'staff'] },
     
   ];
