@@ -231,6 +231,7 @@ const Jobs: React.FC = () => {
       const q = query(collection(db, 'inventory'), where('barcode', '==', barcode));
       const snapshot = await getDocs(q);
       if (!snapshot.empty) {
+        // Create a stock item with the barcode and basic info, but let the form fetch all locations
         const stockData = snapshot.docs[0].data() as StockItem;
         const stockItem: StockItem = {
           ...stockData,

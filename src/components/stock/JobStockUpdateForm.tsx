@@ -44,17 +44,33 @@ const JobStockUpdateForm: React.FC<JobStockUpdateFormProps> = ({ item, onSubmit,
     const fetchLocations = async () => {
       setIsLoadingLocations(true);
       try {
-        const q = query(collection(db, 'inventory'), where('barcode', '==', item.barcode));
-        const snapshot = await getDocs(q);
+        // Try exact match first
+        let q = query(collection(db, 'inventory'), where('barcode', '==', item.barcode));
+        let snapshot = await getDocs(q);
+        
+        // If no results, try with string conversion and trimming
+        if (snapshot.empty && item.barcode) {
+          const trimmedBarcode = String(item.barcode).trim();
+          q = query(collection(db, 'inventory'), where('barcode', '==', trimmedBarcode));
+          snapshot = await getDocs(q);
+        }
+        
+        // If still no results, try searching by name as fallback
+        if (snapshot.empty && item.name) {
+          q = query(collection(db, 'inventory'), where('name', '==', item.name));
+          snapshot = await getDocs(q);
+        }
+        
         const locations: LocationInfo[] = [];
         
-        snapshot.docs.forEach(doc => {
+        snapshot.docs.forEach((doc) => {
           const data = doc.data();
-          if (data.locationCode && data.shelfNumber && data.quantity > 0) {
+          
+          if (data.locationCode && data.shelfNumber) {
             locations.push({
               locationCode: data.locationCode,
               shelfNumber: data.shelfNumber,
-              quantity: data.quantity
+              quantity: data.quantity || 0
             });
           }
         });
@@ -85,7 +101,12 @@ const JobStockUpdateForm: React.FC<JobStockUpdateFormProps> = ({ item, onSubmit,
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const quantityNum = Number(deductQuantity);
-    if (!deductQuantity || quantityNum <= 0 || quantityNum > item.quantity) return;
+    if (!deductQuantity || quantityNum < 0) return;
+    
+    // Check against the selected location's quantity
+    const maxQuantityForLocation = getMaxQuantityForLocation();
+    if (quantityNum > maxQuantityForLocation) return;
+    
     if (!selectedLocation) return;
     
     const finalReason = reason === 'other' ? otherReason : reason;
@@ -103,14 +124,27 @@ const JobStockUpdateForm: React.FC<JobStockUpdateFormProps> = ({ item, onSubmit,
     });
   };
 
+  const getMaxQuantityForLocation = () => {
+    if (!selectedLocation) return item.quantity;
+    const [locationCode, shelfNumber] = selectedLocation.split('-');
+    const location = availableLocations.find(loc => 
+      loc.locationCode === locationCode && loc.shelfNumber === shelfNumber
+    );
+    return location ? location.quantity : item.quantity;
+  };
+
   const getValidationMessage = () => {
     const quantityNum = Number(deductQuantity);
-    if (!deductQuantity || quantityNum <= 0) {
-      return "Quantity to deduct must be greater than 0";
+    if (!deductQuantity || quantityNum < 0) {
+      return "Quantity to deduct must be 0 or greater";
     }
-    if (quantityNum > item.quantity) {
-      return `Cannot deduct more than current stock (${item.quantity} units)`;
+    
+    // Check against the selected location's quantity
+    const maxQuantityForLocation = getMaxQuantityForLocation();
+    if (quantityNum > maxQuantityForLocation) {
+      return `Cannot deduct more than current stock at selected location (${maxQuantityForLocation} units)`;
     }
+    
     if (!reason) {
       return "Please select a reason";
     }
@@ -128,15 +162,6 @@ const JobStockUpdateForm: React.FC<JobStockUpdateFormProps> = ({ item, onSubmit,
 
   const validationMessage = getValidationMessage();
 
-  const getMaxQuantityForLocation = () => {
-    if (!selectedLocation) return item.quantity;
-    const [locationCode, shelfNumber] = selectedLocation.split('-');
-    const location = availableLocations.find(loc => 
-      loc.locationCode === locationCode && loc.shelfNumber === shelfNumber
-    );
-    return location ? location.quantity : item.quantity;
-  };
-
   return (
     <form onSubmit={handleSubmit} className={`space-y-6 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
       <div className="space-y-4">
@@ -145,16 +170,17 @@ const JobStockUpdateForm: React.FC<JobStockUpdateFormProps> = ({ item, onSubmit,
             {item.name}
           </h3>
           <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-            Current Stock: {selectedLocation ? getMaxQuantityForLocation() : item.quantity} units
+            {/* Total Stock: {item.quantity} units */}
             {selectedLocation && (
-              <span className={`ml-2 ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
-                (at selected location)
+              <span className={` ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+                Selected Location: {getMaxQuantityForLocation()} units
               </span>
             )}
           </p>
           <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
             Barcode: {item.barcode}
           </p>
+
           
         </div>
 
@@ -181,7 +207,7 @@ const JobStockUpdateForm: React.FC<JobStockUpdateFormProps> = ({ item, onSubmit,
                 { value: '', label: 'Select a location' },
                 ...availableLocations.map(loc => ({
                   value: `${loc.locationCode}-${loc.shelfNumber}`,
-                  label: `${loc.locationCode} - Shelf ${loc.shelfNumber} (${loc.quantity} units)`
+                  label: `${loc.locationCode} - Shelf ${loc.shelfNumber} (${loc.quantity} units)${loc.quantity === 0 ? ' - Out of Stock' : ''}`
                 }))
               ]}
               className={`${isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-300 text-gray-900'} ${validationMessage ? 'border-red-500 focus:border-red-500' : ''}`}
@@ -191,6 +217,12 @@ const JobStockUpdateForm: React.FC<JobStockUpdateFormProps> = ({ item, onSubmit,
               No locations found for this product
             </div>
           )}
+          {/* {availableLocations.some(loc => loc.quantity === 0) && (
+            <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+              Note: Locations with 0 units can still be selected for marking as moved/damaged
+            </p>
+          )} */}
+
         </div>
 
         <div className="space-y-2">
@@ -203,7 +235,7 @@ const JobStockUpdateForm: React.FC<JobStockUpdateFormProps> = ({ item, onSubmit,
           <Input
             id="deductQuantity"
             type="number"
-            min="1"
+            min="0"
             max={getMaxQuantityForLocation()}
             value={deductQuantity}
             onChange={(e) => setDeductQuantity(e.target.value.replace(/^0+(?!$)/, ''))}
