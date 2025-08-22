@@ -10,19 +10,11 @@ import DeleteConfirmationModal from '../../components/modals/DeleteConfirmationM
 import { useAuth } from '../../contexts/AuthContext';
 import Input from '../../components/ui/Input';
 import JobStockUpdateForm from '../../components/stock/JobStockUpdateForm';
-import { StockItem } from '../../types';
+import { StockItem, JobItem } from '../../types';
 
 type JobStatus = 'picking' | 'awaiting_pack' | 'completed';
 
-type JobItem = {
-  barcode: string;
-  name?: string | null;
-  asin?: string | null;
-  quantity: number;
-  verified: boolean; // set by packer
-  locationCode?: string;
-  shelfNumber?: string;
-};
+
 
 type Job = {
   id: string;
@@ -44,6 +36,8 @@ type FirestoreJobItem = {
   verified?: boolean;
   locationCode?: string;
   shelfNumber?: string;
+  reason?: string;
+  storeName?: string;
 };
 
 type FirestoreJob = {
@@ -74,8 +68,8 @@ const Jobs: React.FC = () => {
     locationCode: string;
     shelfNumber: string;
   }>>([]);
-  const [editingItem, setEditingItem] = useState<{index: number, barcode: string, quantity: number} | null>(null);
-  const [editingJobItem, setEditingJobItem] = useState<{jobId: string, itemIndex: number, barcode: string, quantity: number, locationCode?: string, shelfNumber?: string} | null>(null);
+  const [editingItem, setEditingItem] = useState<{index: number, barcode: string, quantity: number, reason?: string, storeName?: string, name?: string | null} | null>(null);
+  const [editingJobItem, setEditingJobItem] = useState<{jobId: string, itemIndex: number, barcode: string, quantity: number, locationCode?: string, shelfNumber?: string, reason?: string, storeName?: string} | null>(null);
   const [jobToDelete, setJobToDelete] = useState<Job | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
   const [manualBarcode, setManualBarcode] = useState(''); // State for manual barcode input
@@ -141,11 +135,36 @@ const Jobs: React.FC = () => {
             verified: Boolean(it.verified),
             locationCode: it.locationCode,
             shelfNumber: it.shelfNumber,
+            reason: it.reason || 'Unknown',
+            storeName: it.storeName || 'Unknown',
           })) : [],
           pickingTime: data.pickingTime || 0,
         };
       });
-      setJobs(list);
+      
+      // Enhance items with product names from inventory for items that don't have names
+      const enhancedList = await Promise.all(list.map(async (job) => {
+        const enhancedItems = await Promise.all(job.items.map(async (item) => {
+          if (item.name) return item; // Item already has a name
+          
+          try {
+            // Fetch product name from inventory
+            const q = query(collection(db, 'inventory'), where('barcode', '==', item.barcode));
+            const snapshot = await getDocs(q);
+            if (!snapshot.empty) {
+              const stockData = snapshot.docs[0].data();
+              return { ...item, name: stockData.name || null };
+            }
+          } catch (error) {
+            console.error('Error fetching product name for barcode:', item.barcode, error);
+          }
+          return item;
+        }));
+        
+        return { ...job, items: enhancedItems };
+      }));
+      
+      setJobs(enhancedList);
     } catch (e) {
       console.error(e);
       showToast('Failed to fetch jobs', 'error');
@@ -284,10 +303,13 @@ const Jobs: React.FC = () => {
           // Add new item with location information
           return [...prev, { 
             barcode: barcode, 
+            name: selectedStockItem.name, // Add product name
             quantity: deductedQuantity, 
             verified: false,
             locationCode: data.locationCode,
-            shelfNumber: data.shelfNumber
+            shelfNumber: data.shelfNumber,
+            reason: data.reason,
+            storeName: data.storeName
           }];
         }
       });
@@ -439,6 +461,10 @@ const Jobs: React.FC = () => {
         asin: it.asin ?? null,
         quantity: Number(it.quantity || 1),
         verified: Boolean(it.verified),
+        locationCode: it.locationCode,
+        shelfNumber: it.shelfNumber,
+        reason: it.reason || 'Unknown',
+        storeName: it.storeName || 'Unknown',
       })) : [];
       const idx = items.findIndex(i => i.barcode === barcode);
       if (idx >= 0) {
@@ -613,11 +639,24 @@ const Jobs: React.FC = () => {
                   ) : (
                     // Display mode
                     <>
-                  <div className={`${isDarkMode ? 'text-white' : 'text-slate-800'} text-sm font-medium truncate`}>{it.barcode}</div>
+                  <div className={`${isDarkMode ? 'text-white' : 'text-slate-800'} text-sm font-medium truncate`}>
+                    {it.name || it.barcode}
+                  </div>
+                  {it.name && (
+                    <div className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-xs`}>
+                      Barcode: {it.barcode}
+                    </div>
+                  )}
                       <div className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-xs`}>
                         Qty: {it.quantity}
                         {it.locationCode && it.shelfNumber && (
                           <span className="ml-2">• Location: {it.locationCode}-{it.shelfNumber}</span>
+                        )}
+                        {it.reason && (
+                          <span className="ml-2">• Reason: {it.reason}</span>
+                        )}
+                        {it.storeName && (
+                          <span className="ml-2">• Store: {it.storeName}</span>
                         )}
                       </div>
                     </>
@@ -647,7 +686,9 @@ const Jobs: React.FC = () => {
                           barcode: it.barcode,
                           quantity: it.quantity,
                           locationCode: it.locationCode,
-                          shelfNumber: it.shelfNumber
+                          shelfNumber: it.shelfNumber,
+                          reason: it.reason,
+                          storeName: it.storeName
                         })} 
                         className="h-6 px-2"
                       >
@@ -809,7 +850,7 @@ const Jobs: React.FC = () => {
                               // Update job items
                               setNewJobItems(prev => {
                                 const updated = [...prev];
-                                updated[index] = { ...updated[index], barcode: editingItem.barcode, quantity: newQuantity };
+                                updated[index] = { ...updated[index], barcode: editingItem.barcode, quantity: newQuantity, reason: editingItem.reason || 'Unknown', storeName: editingItem.storeName || 'Unknown', name: editingItem.name || null };
                                 return updated;
                               });
                               
@@ -854,10 +895,25 @@ const Jobs: React.FC = () => {
                       // Display mode
                       <>
                         <div className="flex-1 min-w-0">
-                          <span className="truncate block">{item.barcode}</span>
+                          <span className="truncate block font-medium">{item.name || item.barcode}</span>
+                          {item.name && (
+                            <span className="text-xs text-slate-500 block">
+                              Barcode: {item.barcode}
+                            </span>
+                          )}
                           {item.locationCode && item.shelfNumber && (
                             <span className="text-xs text-slate-500 block">
                               Location: {item.locationCode} - Shelf {item.shelfNumber}
+                            </span>
+                          )}
+                          {item.reason && (
+                            <span className="text-xs text-slate-500 block">
+                              Reason: {item.reason}
+                            </span>
+                          )}
+                          {item.storeName && (
+                            <span className="text-xs text-slate-500 block">
+                              Store: {item.storeName}
                             </span>
                           )}
                         </div>
@@ -866,7 +922,7 @@ const Jobs: React.FC = () => {
                       <Button 
                         variant="secondary" 
                         size="sm" 
-                            onClick={() => setEditingItem({index, barcode: item.barcode, quantity: item.quantity})}
+                            onClick={() => setEditingItem({index, barcode: item.barcode, quantity: item.quantity, reason: item.reason, storeName: item.storeName, name: item.name})}
                             className="h-6 px-2"
                       >
                         Edit

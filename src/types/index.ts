@@ -87,3 +87,15 @@ export type ActivityLog = {
   detail: string;
   time: string;
 };
+
+export interface JobItem {
+  barcode: string;
+  name?: string | null;
+  asin?: string | null;
+  quantity: number;
+  verified: boolean;
+  locationCode?: string;
+  shelfNumber?: string;
+  reason: string;
+  storeName: string;
+}
