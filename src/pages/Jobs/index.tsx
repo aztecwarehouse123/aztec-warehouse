@@ -795,6 +795,7 @@ const Jobs: React.FC = () => {
             <form onSubmit={handleManualBarcodeSubmit} className="flex gap-2">
               <Input
                 name="manualBarcode"
+                type="text"
                 value={manualBarcode}
                 onChange={(e) => setManualBarcode(e.target.value)}
                 placeholder="Enter barcode manually"
