@@ -8,6 +8,7 @@ interface ModalProps {
   title: string;
   children: React.ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl';
+  closeOnOutsideClick?: boolean;
 }
 
 const Modal: React.FC<ModalProps> = ({
@@ -16,6 +17,7 @@ const Modal: React.FC<ModalProps> = ({
   title,
   children,
   size = 'md',
+  closeOnOutsideClick = true,
 }) => {
   const { isDarkMode } = useTheme();
   const modalRef = useRef<HTMLDivElement>(null);
@@ -40,7 +42,7 @@ const Modal: React.FC<ModalProps> = ({
   // Handle outside click
   useEffect(() => {
     const handleOutsideClick = (event: MouseEvent) => {
-      if (modalRef.current && !modalRef.current.contains(event.target as Node)) {
+      if (closeOnOutsideClick && modalRef.current && !modalRef.current.contains(event.target as Node)) {
         onClose();
       }
     };
@@ -52,7 +54,7 @@ const Modal: React.FC<ModalProps> = ({
     return () => {
       document.removeEventListener('mousedown', handleOutsideClick);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, closeOnOutsideClick]);
 
   if (!isOpen) return null;
 
@@ -66,7 +68,7 @@ const Modal: React.FC<ModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
       <div className="flex min-h-screen items-center justify-center p-4 text-center">
-        <div className="fixed inset-0 bg-black bg-opacity-50 transition-opacity" onClick={onClose} />
+        <div className="fixed inset-0 bg-black bg-opacity-50 transition-opacity" onClick={closeOnOutsideClick ? onClose : undefined} />
         
         <div className={`relative transform overflow-hidden rounded-lg ${sizeClasses[size]} w-full ${isDarkMode ? 'bg-slate-800' : 'bg-white'} p-6 text-left shadow-xl transition-all`}>
           <div className="flex items-center justify-between mb-4">

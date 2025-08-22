@@ -784,6 +784,7 @@ const Jobs: React.FC = () => {
         }} 
         title="Add Barcode to Job"
         size='sm'
+        closeOnOutsideClick={false}
       >
         <div className="space-y-4">
           
@@ -989,6 +990,7 @@ const Jobs: React.FC = () => {
         onClose={() => setIsStockUpdateModalOpen(false)}
         title="Update Stock for Job"
         size='lg'
+        closeOnOutsideClick={false}
       >
         {selectedStockItem && (
           <JobStockUpdateForm
