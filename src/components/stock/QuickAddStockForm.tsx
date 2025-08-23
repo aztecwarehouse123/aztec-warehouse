@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Plus, Barcode } from 'lucide-react';
 import Input from '../ui/Input';
 import Button from '../ui/Button';
@@ -8,6 +8,7 @@ import BarcodeScanModal from '../modals/BarcodeScanModal';
 
 import { db } from '../../config/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
+import { generateShelfOptions } from '../../utils/shelfUtils';
 
 interface QuickAddStockFormProps {
   onSubmit: (data: Omit<StockItem, 'id'>[]) => Promise<void>;
@@ -236,16 +237,9 @@ const locationOptions = [
   { value: 'Awaiting Location', label: 'Awaiting Location' }
 ];
 
-const shelfOptions = [
-  { value: '0', label: '0' },
-  { value: '1', label: '1' },
-  { value: '2', label: '2' },
-  { value: '3', label: '3' },
-  { value: '4', label: '4' },
-  { value: '5', label: '5' },
-];
-
 const QuickAddStockForm: React.FC<QuickAddStockFormProps> = ({ onSubmit, onClose, isLoading = false }) => {
+  // Shelf options will be generated dynamically based on selected location
+  const [shelfOptions, setShelfOptions] = useState<Array<{value: string, label: string}>>([]);
   const [formData, setFormData] = useState<QuickFormData>({
     name: '',
     locationCode: 'A1',
@@ -260,6 +254,21 @@ const QuickAddStockForm: React.FC<QuickAddStockFormProps> = ({ onSubmit, onClose
   const [isFetchingProductInfo, setIsFetchingProductInfo] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Initialize shelf options for the default location
+  useEffect(() => {
+    setShelfOptions(generateShelfOptions(formData.locationCode));
+  }, []);
+
+  // Update shelf options when location changes
+  useEffect(() => {
+    setShelfOptions(generateShelfOptions(formData.locationCode));
+    // Reset shelf number if it's no longer valid for the new location
+    const maxShelf = generateShelfOptions(formData.locationCode).length - 1;
+    if (parseInt(formData.shelfNumber) > maxShelf) {
+      setFormData(prev => ({ ...prev, shelfNumber: '0' }));
+    }
+  }, [formData.locationCode]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -433,6 +442,7 @@ const QuickAddStockForm: React.FC<QuickAddStockFormProps> = ({ onSubmit, onClose
        name: formData.name.toUpperCase(), // Convert to uppercase like in Add page
        quantity: parseInt(formData.quantity),
        price: 0, // Default price
+       unit: null, // Default unit
        supplier: 'not set', // Default supplier
        lastUpdated: new Date(),
        locationCode: formData.locationCode,

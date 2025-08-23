@@ -12,6 +12,7 @@ import { db } from '../../config/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import ConfirmationModal from '../modals/ConfirmationModal';
 import Modal from '../modals/Modal';
+import { generateShelfOptions } from '../../utils/shelfUtils';
 
 
 interface AddStockFormProps {
@@ -251,10 +252,10 @@ const locationOptions = [
   { value: 'Awaiting Location', label: 'Awaiting Location' }
 ];
 
-const shelfOptions = Array.from({ length: 6 }, (_, i) => ({
-  value: i.toString(),
-  label: `${i}`
-}));
+// Shelf options will be generated dynamically based on selected location
+const generateShelfOptionsForLocation = (locationCode: string) => {
+  return generateShelfOptions(locationCode);
+};
 
 const supplierOptions = [
   { value: 'Rayburns Trading', label: 'Rayburns Trading' },
@@ -347,6 +348,22 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
     setLocationEntries(prev => {
       const newEntries = [...prev];
       newEntries[index] = { ...newEntries[index], [field]: value };
+      
+      // If location code changed, reset shelf number to 0 and validate
+      if (field === 'locationCode') {
+        newEntries[index].shelfNumber = '0';
+      }
+      
+      // If shelf number changed, validate it's within range for the location
+      if (field === 'shelfNumber') {
+        const locationCode = newEntries[index].locationCode;
+        const maxShelf = generateShelfOptions(locationCode).length - 1;
+        const shelfNum = parseInt(value);
+        if (shelfNum > maxShelf) {
+          newEntries[index].shelfNumber = '0';
+        }
+      }
+      
       return newEntries;
     });
   };
@@ -362,9 +379,9 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
     setLocationEntries(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleScan = () => {
-    setIsScanModalOpen(true);
-  };
+  // const handleScan = () => {
+  //   setIsScanModalOpen(true);
+  // };
 
   const handleBarcodeScanned = async (barcode: string) => {
     setFormData(prev => ({
@@ -667,7 +684,7 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
                 label="Shelf Number"
                 value={entry.shelfNumber}
                 onChange={(e) => handleLocationEntryChange(index, 'shelfNumber', e.target.value)}
-                options={shelfOptions}
+                options={generateShelfOptionsForLocation(entry.locationCode)}
                 required
                 fullWidth
               />

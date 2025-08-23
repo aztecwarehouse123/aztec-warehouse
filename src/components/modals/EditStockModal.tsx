@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { StockItem } from '../../types';
+import { generateShelfOptions } from '../../utils/shelfUtils';
 
 interface EditStockModalProps {
   isOpen: boolean;
@@ -17,6 +18,18 @@ const EditStockModal: React.FC<EditStockModalProps> = ({ isOpen, onClose, onSave
   const [shelfNumber, setShelfNumber] = useState(item.shelfNumber.toString());
   
   const [supplier, setSupplier] = useState(item.supplier);
+  const [shelfOptions, setShelfOptions] = useState(generateShelfOptions(item.locationCode));
+
+  // Update shelf options when location changes
+  const handleLocationChange = (newLocation: string) => {
+    setLocationCode(newLocation);
+    const newShelfOptions = generateShelfOptions(newLocation);
+    setShelfOptions(newShelfOptions);
+    // Reset shelf number to 0 if current selection is invalid
+    if (parseInt(shelfNumber) >= newShelfOptions.length) {
+      setShelfNumber('0');
+    }
+  };
 
   useEffect(() => {
     setName(item.name);
@@ -25,6 +38,7 @@ const EditStockModal: React.FC<EditStockModalProps> = ({ isOpen, onClose, onSave
     setLocationCode(item.locationCode);
     setShelfNumber(item.shelfNumber.toString());
     setSupplier(item.supplier);
+    setShelfOptions(generateShelfOptions(item.locationCode));
   }, [item]);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -62,9 +76,9 @@ const EditStockModal: React.FC<EditStockModalProps> = ({ isOpen, onClose, onSave
             
             <div>
               <label className="block text-sm font-medium text-slate-700">Supplier</label>
-              <input
+                              <input
                 type="text"
-                value={supplier}
+                value={supplier || ''}
                 onChange={(e) => setSupplier(e.target.value)}
                 className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 required
@@ -97,7 +111,7 @@ const EditStockModal: React.FC<EditStockModalProps> = ({ isOpen, onClose, onSave
               <label className="block text-sm font-medium text-slate-700">Location</label>
               <select
                 value={locationCode}
-                onChange={(e) => setLocationCode(e.target.value)}
+                onChange={(e) => handleLocationChange(e.target.value)}
                 className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 required
               >
@@ -320,9 +334,9 @@ const EditStockModal: React.FC<EditStockModalProps> = ({ isOpen, onClose, onSave
                 className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 required
               >
-                {Array.from({ length: 6 }, (_, i) => i).map((num) => (
-                  <option key={num} value={num.toString()}>
-                    {num}
+                {shelfOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
                   </option>
                 ))}
               </select>

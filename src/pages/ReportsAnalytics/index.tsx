@@ -590,6 +590,16 @@ const ReportsAnalytics: React.FC = () => {
   const getDamagedProductsData = () => {
     const data: { date: string; products: number; units: number; productNames: string[] }[] = [];
     const groupedProducts = new Map<string, { incidents: number; units: number; productNames: Set<string> }>();
+    
+    // For detailed incident tracking (used in PDF export)
+    const detailedIncidents: Array<{
+      date: string;
+      time: string;
+      user: string;
+      productName: string;
+      units: number;
+      detail: string;
+    }> = [];
 
     // Calculate date range for filtering logs
     const endDateValue = endDate || new Date();
@@ -692,6 +702,16 @@ const ReportsAnalytics: React.FC = () => {
           productName = productMatch[1];
         }
 
+        // Add to detailed incidents for PDF export
+        detailedIncidents.push({
+          date: dateKey,
+          time: format(logDate, 'HH:mm'),
+          user: log.user,
+          productName: productName,
+          units: unitsDamaged > 0 ? unitsDamaged : 1,
+          detail: log.detail
+        });
+
         // Group by date
         if (!groupedProducts.has(dateKey)) {
           groupedProducts.set(dateKey, { incidents: 0, units: 0, productNames: new Set() });
@@ -714,7 +734,17 @@ const ReportsAnalytics: React.FC = () => {
       });
     });
 
-    return data.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    // Sort the main data by date
+    const sortedData = data.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    
+    // Store detailed incidents for PDF export
+    (sortedData as any).detailedIncidents = detailedIncidents.sort((a, b) => {
+      const dateA = new Date(a.date + ' ' + a.time);
+      const dateB = new Date(b.date + ' ' + b.time);
+      return dateB.getTime() - dateA.getTime(); // Most recent first
+    });
+
+    return sortedData;
   };
 
   // Export functions
@@ -804,6 +834,19 @@ const ReportsAnalytics: React.FC = () => {
         csvRows.push(row.join(','));
       }
       
+      // Add detailed damaged products incidents
+      csvRows.push(''); // Empty row for separation
+      csvRows.push('DETAILED DAMAGED PRODUCTS INCIDENTS');
+      csvRows.push('Date,Time,User,Product Name,Units Damaged,Details');
+      
+      if ((damagedData as any).detailedIncidents && (damagedData as any).detailedIncidents.length > 0) {
+        (damagedData as any).detailedIncidents.forEach((incident: any) => {
+          csvRows.push(`${incident.date},${incident.time},${incident.user},${incident.productName},${incident.units},"${incident.detail.replace(/"/g, '""')}"`);
+        });
+      } else {
+        csvRows.push('No detailed incidents available,,,,,');
+      }
+      
       const csvContent = csvRows.join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -832,6 +875,21 @@ const ReportsAnalytics: React.FC = () => {
       const outboundData = getOutboundProductsData();
       const damagedData = getDamagedProductsData();
       
+      // Extract detailed incidents data for PDF export
+      const detailedIncidents = (damagedData as any).detailedIncidents || [];
+      
+      // Debug logging
+      console.log('Damaged Data:', damagedData);
+      console.log('Detailed Incidents:', detailedIncidents);
+      console.log('Activity Logs Count:', activityLogs.length);
+      console.log('Sample Activity Logs:', activityLogs.slice(0, 3));
+      
+      // If no detailed incidents, try to generate them on the fly
+      if (!detailedIncidents || detailedIncidents.length === 0) {
+        console.log('No detailed incidents found, generating on the fly...');
+        // This will be handled by the fallback in the template
+      }
+      
       const reportContent = `
         <html>
           <head>
@@ -844,6 +902,8 @@ const ReportsAnalytics: React.FC = () => {
               table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
               th, td { border: 1px solid #ddd; padding: 6px; text-align: left; }
               th { background-color: #f8fafc; font-weight: bold; }
+              .detailed-table th, .detailed-table td { font-size: 10px; padding: 4px; }
+              .detailed-table td { max-width: 150px; word-wrap: break-word; }
               .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-bottom: 30px; }
               .stat-card { border: 1px solid #e2e8f0; padding: 15px; text-align: center; border-radius: 8px; }
               .stat-value { font-size: 24px; font-weight: bold; color: #2563eb; margin-bottom: 5px; }
@@ -944,7 +1004,11 @@ const ReportsAnalytics: React.FC = () => {
                 <p><strong>Total Data Points:</strong> ${damagedData.length}</p>
                 <p><strong>Total Incidents:</strong> ${damagedData.reduce((sum, item) => sum + item.products, 0)}</p>
                 <p><strong>Total Units Damaged:</strong> ${damagedData.reduce((sum, item) => sum + item.units, 0)}</p>
+                <p><strong>Detailed Incidents Available:</strong> ${detailedIncidents.length}</p>
+                <p><strong>Note:</strong> Detailed incident breakdown with user information is shown below.</p>
               </div>
+              
+              <h3>Summary by Date</h3>
               <table>
                 <thead>
                   <tr>
@@ -964,6 +1028,31 @@ const ReportsAnalytics: React.FC = () => {
                     </tr>
                   `).join('')}
                   ${damagedData.length > 15 ? `<tr><td colspan="4"><em>... and ${damagedData.length - 15} more entries</em></td></tr>` : ''}
+                </tbody>
+              </table>
+              
+              <h3>Detailed Incidents by Entry</h3>
+              <table class="detailed-table">
+                <thead>
+                  <tr>
+                    <th>Date & Time</th>
+                    <th>User</th>
+                    <th>Product</th>
+                    <th>Units Damaged</th>
+                    <th>Details</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${detailedIncidents.length > 0 ? detailedIncidents.slice(0, 50).map((incident: any) => `
+                    <tr>
+                      <td>${incident.date} ${incident.time}</td>
+                      <td>${incident.user}</td>
+                      <td>${incident.productName}</td>
+                      <td>${incident.units}</td>
+                      <td style="max-width: 200px; word-wrap: break-word;">${incident.detail}</td>
+                    </tr>
+                  `).join('') : '<tr><td colspan="5">No detailed incidents available</td></tr>'}
+                  ${detailedIncidents.length > 50 ? `<tr><td colspan="5"><em>... and ${detailedIncidents.length - 50} more incidents</em></td></tr>` : ''}
                 </tbody>
               </table>
             </div>

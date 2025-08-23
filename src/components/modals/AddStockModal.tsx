@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { StockItem } from '../../types';
+import { generateShelfOptions } from '../../utils/shelfUtils';
 
 interface AddStockModalProps {
   isOpen: boolean;
@@ -219,20 +220,32 @@ const locationOptions = [
   { value: 'Awaiting Location', label: 'Awaiting Location' }
 ];
 
-const shelfOptions = Array.from({ length: 6 }, (_, i) => ({
-  value: (i + 1).toString(),
-  label: `${i + 1}`
-}));
+// Shelf options will be generated dynamically based on selected location
+const generateShelfOptionsForLocation = (locationCode: string) => {
+  return generateShelfOptions(locationCode);
+};
 
 const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, onAdd }) => {
   const [name, setName] = useState('');
   const [quantity, setQuantity] = useState('');
   const [price, setPrice] = useState('');
   const [locationCode, setLocationCode] = useState('A1');
-  const [shelfNumber, setShelfNumber] = useState('1');
+  const [shelfNumber, setShelfNumber] = useState('0');
   const [supplier, setSupplier] = useState('');
   const [barcode, setBarcode] = useState('');
   const [asin, setAsin] = useState('');
+  const [shelfOptions, setShelfOptions] = useState(generateShelfOptions('A1'));
+
+  // Update shelf options when location changes
+  const handleLocationChange = (newLocation: string) => {
+    setLocationCode(newLocation);
+    const newShelfOptions = generateShelfOptions(newLocation);
+    setShelfOptions(newShelfOptions);
+    // Reset shelf number to 0 if current selection is invalid
+    if (parseInt(shelfNumber) >= newShelfOptions.length) {
+      setShelfNumber('0');
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -256,10 +269,11 @@ const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, onAdd })
     setQuantity('');
     setPrice('');
     setLocationCode('A1');
-    setShelfNumber('1');
+    setShelfNumber('0');
     setSupplier('');
     setBarcode('');
     setAsin('');
+    setShelfOptions(generateShelfOptions('A1'));
     onClose();
   };
 
@@ -316,7 +330,7 @@ const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, onAdd })
               <label className="block text-sm font-medium text-slate-700">Location</label>
               <select
                 value={locationCode}
-                onChange={(e) => setLocationCode(e.target.value)}
+                onChange={(e) => handleLocationChange(e.target.value)}
                 className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 required
               >

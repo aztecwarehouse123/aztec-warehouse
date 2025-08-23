@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Plus, RefreshCw, CheckSquare, ClipboardList, Trash2, Edit } from 'lucide-react';
+import { Plus, RefreshCw, CheckSquare, ClipboardList, Trash2, Edit, ChevronUp, ChevronDown, Search, X, ArrowLeft } from 'lucide-react';
 import { db } from '../../config/firebase';
 import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, orderBy, query, serverTimestamp, Timestamp, updateDoc, where } from 'firebase/firestore';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -7,6 +7,7 @@ import { useToast } from '../../contexts/ToastContext';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/modals/Modal';
 import DeleteConfirmationModal from '../../components/modals/DeleteConfirmationModal';
+import DateRangePicker from '../../components/ui/DateRangePicker';
 import { useAuth } from '../../contexts/AuthContext';
 import Input from '../../components/ui/Input';
 import JobStockUpdateForm from '../../components/stock/JobStockUpdateForm';
@@ -72,15 +73,73 @@ const Jobs: React.FC = () => {
   const [editingJobItem, setEditingJobItem] = useState<{jobId: string, itemIndex: number, barcode: string, quantity: number, locationCode?: string, shelfNumber?: string, reason?: string, storeName?: string} | null>(null);
   const [jobToDelete, setJobToDelete] = useState<Job | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const [manualBarcode, setManualBarcode] = useState(''); // State for manual barcode input
   const [isStockUpdateModalOpen, setIsStockUpdateModalOpen] = useState(false);
   const [selectedStockItem, setSelectedStockItem] = useState<StockItem | null>(null);
   const [jobCreationStartTime, setJobCreationStartTime] = useState<Date | null>(null);
   const [elapsedTime, setElapsedTime] = useState<number>(0);
+  const [verifyingItems, setVerifyingItems] = useState<Set<string>>(new Set());
+  
+  // Search functionality state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<StockItem[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchType, setSearchType] = useState<'name' | 'barcode' | 'asin'>('name');
+  const [showSearchSection, setShowSearchSection] = useState(false);
+  
+  // Date range filter for archived jobs
+  const [startDate, setStartDate] = useState<Date | null>(null);
+  const [endDate, setEndDate] = useState<Date | null>(null);
+  
+  // User filter for archived jobs
+  const [selectedUser, setSelectedUser] = useState<string>('all');
 
-  const filteredJobs = jobs.filter(job =>
-    showCompleted ? job.status === 'completed' : job.status !== 'completed'
-  );
+  // Helper function to check if a job should be archived (older than current day at 12 AM)
+  const isJobArchived = (job: Job): boolean => {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // Start of today (12 AM)
+    return job.createdAt < todayStart && job.status === 'completed';
+  };
+
+  // Helper function to check if a job matches the date range filter
+  const isJobInDateRange = (job: Job): boolean => {
+    if (!startDate && !endDate) return true; // No date filter applied
+    
+    const jobDate = job.createdAt;
+    
+    if (startDate && endDate) {
+      return jobDate >= startDate && jobDate <= endDate;
+    } else if (startDate) {
+      return jobDate >= startDate;
+    } else if (endDate) {
+      return jobDate <= endDate;
+    }
+    
+    return true;
+  };
+  
+  // Get unique users from jobs for filter dropdown
+  const getUniqueUsers = (): string[] => {
+    const users = new Set(jobs.map(job => job.createdBy));
+    return Array.from(users).sort();
+  };
+  
+  // Check if job matches user filter
+  const isJobMatchingUser = (job: Job): boolean => {
+    if (selectedUser === 'all') return true;
+    return job.createdBy === selectedUser;
+  };
+
+  const filteredJobs = jobs.filter(job => {
+    if (showArchived) {
+      return isJobArchived(job) && isJobInDateRange(job) && isJobMatchingUser(job);
+    } else if (showCompleted) {
+      return job.status === 'completed' && !isJobArchived(job);
+    } else {
+      return job.status !== 'completed';
+    }
+  });
 
   const logActivity = async ( details: string) => {
     if (!user) return;
@@ -114,6 +173,13 @@ const Jobs: React.FC = () => {
 
   const fetchJobs = useCallback(async () => {
     setIsLoading(true);
+    // Reset view states when refreshing - default to Active Jobs
+    setShowCompleted(false);
+    setShowArchived(false);
+    // Reset filters when refreshing
+    setStartDate(null);
+    setEndDate(null);
+    setSelectedUser('all');
     try {
       const q = query(collection(db, 'jobs'), orderBy('createdAt', 'desc'));
       const snapshot = await getDocs(q);
@@ -325,12 +391,42 @@ const Jobs: React.FC = () => {
     
     // Reset the barcode input field
     setManualBarcode('');
+    
+    // Refresh the search functionality
+    refreshSearch();
   };
 
   const handleStockUpdateCancel = () => {
     setIsStockUpdateModalOpen(false);
     setSelectedStockItem(null);
     setIsNewJobModalOpen(true);
+    
+    // Refresh the search functionality
+    refreshSearch();
+  };
+
+  // Function to refresh search when returning to Add Barcode modal
+  const refreshSearch = () => {
+    setSearchQuery('');
+    setSearchResults([]);
+    setSearchType('name');
+    setShowSearchSection(false);
+  };
+
+  // Function to clear date range filter
+  const clearDateRange = () => {
+    setStartDate(null);
+    setEndDate(null);
+  };
+  
+  const clearUserFilter = () => {
+    setSelectedUser('all');
+  };
+  
+  const clearAllFilters = () => {
+    setStartDate(null);
+    setEndDate(null);
+    setSelectedUser('all');
   };
 
   const finishNewJobPicking = async () => {
@@ -448,10 +544,29 @@ const Jobs: React.FC = () => {
     } catch { showToast('Failed to update job', 'error'); }
   };
 
-  const verifyItem = async (job: Job, barcode: string, verified: boolean, e?: React.MouseEvent) => {
-    e?.preventDefault();
-    e?.stopPropagation();
+  const verifyItem = async (job: Job, barcode: string, verified: boolean) => {
+    const itemKey = `${job.id}-${barcode}`;
+    
+    // Set loading state
+    setVerifyingItems(prev => new Set(prev).add(itemKey));
+    
     try {
+      // Optimistically update the UI immediately for better performance
+      setJobs(prev => prev.map(j => {
+        if (j.id === job.id) {
+          return {
+            ...j,
+            items: j.items.map(item => 
+              item.barcode === barcode 
+                ? { ...item, verified } 
+                : item
+            )
+          };
+        }
+        return j;
+      }));
+
+      // Update the database in the background
       const jobRef = doc(db, 'jobs', job.id);
       const snap = await getDoc(jobRef);
       if (!snap.exists()) return;
@@ -471,11 +586,31 @@ const Jobs: React.FC = () => {
       if (idx >= 0) {
         items[idx] = { ...items[idx], verified };
         await updateDoc(jobRef, { items });
-        setJobs(prev => prev.map(j => j.id === job.id ? { ...j, items: items } : j));
       }
-        
-      // fetchJobs();
-    } catch { showToast('Failed to verify item', 'error'); }
+    } catch { 
+      // Revert the optimistic update on error
+      setJobs(prev => prev.map(j => {
+        if (j.id === job.id) {
+          return {
+            ...j,
+            items: j.items.map(item => 
+              item.barcode === barcode 
+                ? { ...item, verified: !verified } 
+                : item
+            )
+          };
+        }
+        return j;
+      }));
+      showToast('Failed to verify item', 'error'); 
+    } finally {
+      // Clear loading state
+      setVerifyingItems(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(itemKey);
+        return newSet;
+      });
+    }
   };
 
   const completePacking = async (job: Job) => {
@@ -553,10 +688,69 @@ const Jobs: React.FC = () => {
     }
   };
 
+  // Search inventory function
+  const searchInventory = async (searchQuery: string, type: 'name' | 'barcode' | 'asin') => {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      let q;
+      
+      switch (type) {
+        case 'barcode':
+          q = query(collection(db, 'inventory'), where('barcode', '==', searchQuery.trim()));
+          break;
+        case 'asin':
+          q = query(collection(db, 'inventory'), where('asin', '==', searchQuery.trim()));
+          break;
+        case 'name':
+        default:
+          // Search by name (case-insensitive)
+          q = query(collection(db, 'inventory'), where('name', '>=', searchQuery.trim().toUpperCase()), where('name', '<=', searchQuery.trim().toUpperCase() + '\uf8ff'));
+          break;
+      }
+      
+      const snapshot = await getDocs(q);
+      const results: StockItem[] = snapshot.docs.map(doc => {
+        const data = doc.data() as any;
+        return {
+          id: doc.id,
+          name: data.name || '',
+          quantity: data.quantity || 0,
+          price: data.price || 0,
+          unit: data.unit || null,
+          supplier: data.supplier || null,
+          lastUpdated: data.lastUpdated instanceof Timestamp ? data.lastUpdated.toDate() : new Date(),
+          locationCode: data.locationCode || '',
+          shelfNumber: data.shelfNumber || '',
+          barcode: data.barcode || null,
+          asin: data.asin || null,
+          status: data.status || 'pending',
+          damagedItems: data.damagedItems || 0,
+          fulfillmentType: data.fulfillmentType || 'fba',
+          storeName: data.storeName || '',
+        };
+      });
+      
+      setSearchResults(results);
+    } catch (error) {
+      console.error('Search error:', error);
+      showToast('Failed to search inventory', 'error');
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
   const JobRow: React.FC<{ job: Job }> = ({ job }) => {
     const isAwaitingPack = job.status === 'awaiting_pack';
     const isPicking = job.status === 'picking';
     const isCompleted = job.status === 'completed';
+    const [isExpanded, setIsExpanded] = useState(false);
+    
     return (
       <div className={`${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} rounded-lg shadow-sm border`}>        
         <div className={`p-3 sm:p-4 border-b ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
@@ -566,9 +760,32 @@ const Jobs: React.FC = () => {
                 <ClipboardList className={`${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`} size={18} />
               </div>
 
-              {/*  */}
-              <div>
+              {/* Job Header with Expandable Items */}
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
               <h3 className={`text-base sm:text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>Job {job.jobId}</h3>
+                  <button
+                    onClick={() => setIsExpanded(!isExpanded)}
+                    className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
+                      isDarkMode 
+                        ? 'text-slate-300 hover:text-white hover:bg-slate-700' 
+                        : 'text-slate-600 hover:text-slate-800 hover:bg-slate-200'
+                    }`}
+                  >
+                    {isExpanded ? (
+                      <>
+                        <ChevronUp size={14} />
+                        Hide Items ({job.items.length})
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown size={14} />
+                        Show Items ({job.items.length})
+
+                      </>
+                    )}
+                  </button>
+                </div>
               <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-xs`}>
                 Created by {job.createdBy} • {job.createdAt.toLocaleString()}
                 {job.pickingTime && job.pickingTime > 0 && (
@@ -577,6 +794,16 @@ const Jobs: React.FC = () => {
                   </span>
                 )}
               </p>
+                {/* Quick summary when collapsed */}
+                {!isExpanded && job.items.length > 0 && (
+                  <div className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-xs mt-1`}>
+                    {job.items.length} item{job.items.length !== 1 ? 's' : ''} • 
+                    Total Qty: {job.items.reduce((sum, item) => sum + item.quantity, 0)}
+                    {/* {job.items.some(item => item.locationCode && item.shelfNumber) && (
+                      <span> • Has locations</span>
+                    )} */}
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -592,6 +819,9 @@ const Jobs: React.FC = () => {
             </div>
           </div>
         </div>
+        
+        {/* Expandable Items Section */}
+        {isExpanded && (
         <div className="p-3 sm:p-4 space-y-3">
           <div className="flex items-center gap-2">
             {isPicking && (
@@ -665,16 +895,23 @@ const Jobs: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-2">
                 {isAwaitingPack && (
-                  <label className={`flex items-center gap-2 text-sm cursor-pointer ${isDarkMode? 'text-white': 'text-slate-700'}`}>
-                    <input 
-                      type="checkbox" 
-                      checked={it.verified} 
-                      onChange={e => verifyItem(job, it.barcode, e.target.checked, e as unknown as React.MouseEvent<Element>)} 
-                      onClick={e => e.stopPropagation()}
-                      className='w-4 h-4'
-                    />
-                     <span className="sm:inline hidden">Verify</span>
-                  </label>
+                    <Button
+                      variant={it.verified ? "success" : "primary"}
+                      size="sm"
+                      onClick={() => verifyItem(job, it.barcode, !it.verified)}
+                      disabled={verifyingItems.has(`${job.id}-${it.barcode}`)}
+                      className={`h-6 px-2 transition-all duration-200 ${
+                        it.verified 
+                          ? 'bg-green-500 hover:bg-green-600 text-white' 
+                          : 'bg-blue-500 hover:bg-blue-600 text-white'
+                      }`}
+                    >
+                      {verifyingItems.has(`${job.id}-${it.barcode}`) ? (
+                        <RefreshCw size={12} className="animate-spin" />
+                      ) : (
+                        it.verified ? 'Verified' : 'Verify'
+                      )}
+                    </Button>
                 )}
                   {isAwaitingPack && !editingJobItem && (
                     <>
@@ -726,49 +963,180 @@ const Jobs: React.FC = () => {
             )}
           </div>
         </div>
+        )}
       </div>
     );
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-      <h1 className={`text-xl sm:text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{showCompleted ? 'Completed' : 'Active'} Jobs</h1>
-        <div className="flex items-center gap-2 flex-wrap">
-          <Button 
-            variant="secondary" 
-            onClick={fetchJobs} 
-            className={`flex items-center gap-1 ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`} 
-            disabled={isLoading}
-            size='sm'
-          >
-            <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
-          </Button>
-          <Button 
-            onClick={openNewJobModal} 
-            className="flex items-center gap-1"
-            size='sm'
-          >
-              <Plus size={16} /> <span className="sm:inline hidden">New Job</span>
-          </Button>
-          <Button 
+      <div className="flex flex-col gap-4">
+        {/* Header with title and action buttons */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex flex-col gap-2">
+            <h1 className={`text-xl sm:text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+              {showArchived ? 'Archived' : showCompleted ? 'Completed' : 'Active'} Jobs
+            </h1>
+          </div>
+          
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button 
+              variant="secondary" 
+              onClick={fetchJobs} 
+              className={`flex items-center gap-1 ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`} 
+              disabled={isLoading}
+              size='sm'
+            >
+              <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
+            </Button>
+            <Button 
+              onClick={openNewJobModal} 
+              className="flex items-center gap-1"
+              size='sm'
+            >
+                <Plus size={16} /> <span className="sm:inline hidden">New Job</span>
+            </Button>
+            <Button 
+              variant={!showCompleted && !showArchived ? "primary" : "secondary"} 
+              onClick={() => {
+                setShowCompleted(false);
+                setShowArchived(false);
+              }}
+              size='sm'
+            >
+              Active Jobs
+            </Button>
+            <Button 
+              variant={showCompleted ? "primary" : "secondary"} 
+              onClick={() => {
+                setShowCompleted(true);
+                setShowArchived(false);
+              }}
+              size='sm'
+            >
+              Completed Jobs
+            </Button>
+            <Button 
+              variant={showArchived ? "primary" : "secondary"} 
+              onClick={() => {
+                setShowCompleted(false);
+                setShowArchived(true);
+              }}
+              size='sm'
+            >
+              Archived Jobs
+            </Button>
+          </div>
+        </div>
+        
+        {/* Job Type Navigation and Filters Section */}
+        <div className="flex flex-col lg:flex-row gap-4">
+          {/* Job Type Buttons - Positioned on the right */}
+          <div className="flex items-center gap-2 flex-wrap lg:ml-auto">
             
-            variant={showCompleted ? "primary" : "secondary"} 
-            onClick={() => setShowCompleted(!showCompleted)}
-            size='sm'
-          >
-            {showCompleted ? "Show Active Jobs" : "Show Completed Jobs"}
-          </Button>
-
+          </div>
+          
+          {/* Filters Section - Only show for Archived Jobs, positioned below job type buttons on the right */}
+          {showArchived && (
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 lg:ml-auto">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                {/* User Filter */}
+                <div className="flex flex-col gap-1">
+                  <label className={`text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                    Filter by User:
+                  </label>
+                  <select
+                    value={selectedUser}
+                    onChange={(e) => setSelectedUser(e.target.value)}
+                    className={`px-3 py-2 border rounded-md text-sm ${
+                      isDarkMode 
+                        ? 'bg-slate-700 border-slate-600 text-white' 
+                        : 'bg-white border-slate-300 text-slate-900'
+                    }`}
+                  >
+                    <option value="all">All Users</option>
+                    {getUniqueUsers().map(userName => (
+                      <option key={userName} value={userName}>{userName}</option>
+                    ))}
+                  </select>
+                </div>
+                
+                {/* Date Range Filter */}
+                <div className="flex flex-col gap-1">
+                  <label className={`text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                    Filter by Date Range:
+                  </label>
+                  <DateRangePicker
+                    startDate={startDate}
+                    endDate={endDate}
+                    onStartDateChange={setStartDate}
+                    onEndDateChange={setEndDate}
+                    onClear={clearDateRange}
+                    className="w-64"
+                  />
+                </div>
+              </div>
+              
+              {/* Clear Filters Button */}
+              <Button
+                variant="secondary"
+                onClick={clearAllFilters}
+                size="sm"
+                className="self-end"
+              >
+                Clear All Filters
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 
       <div className="space-y-4">
+        {/* Filter Summary for Archived Jobs */}
+        {showArchived && (startDate || endDate || selectedUser !== 'all') && (
+          <div className={`p-3 rounded-lg border ${
+            isDarkMode 
+              ? 'bg-slate-800 border-slate-700 text-slate-300' 
+              : 'bg-slate-50 border-slate-200 text-slate-700'
+          }`}>
+            <div className="flex items-center gap-2 text-sm">
+              <span className="font-medium">Active Filters:</span>
+              {selectedUser !== 'all' && (
+                <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded text-xs">
+                  User: {selectedUser}
+                </span>
+              )}
+              {startDate && (
+                <span className="px-2 py-1 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded text-xs">
+                  From: {startDate.toLocaleDateString()}
+                </span>
+              )}
+              {endDate && (
+                <span className="px-2 py-1 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded text-xs">
+                  To: {endDate.toLocaleDateString()}
+                </span>
+              )}
+              <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded text-xs">
+                {filteredJobs.length} jobs found
+              </span>
+            </div>
+          </div>
+        )}
+        
         {filteredJobs.map(job => (
           <JobRow key={job.id} job={job} />
         ))}
-        {jobs.length === 0 && (
-          <div className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{showCompleted ? 'No completed jobs.' : 'No active jobs.'}</div>
+        {filteredJobs.length === 0 && (
+          <div className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-center py-8`}>
+            {showArchived ? (
+              <div className="space-y-2">
+                <p>No archived jobs found.</p>
+                {(startDate || endDate || selectedUser !== 'all') && (
+                  <p className="text-sm">Try adjusting your filters or clearing them to see more results.</p>
+                )}
+              </div>
+            ) : showCompleted ? 'No completed jobs found.' : 'No active jobs found.'}
+          </div>
         )}
       </div>
 
@@ -781,14 +1149,127 @@ const Jobs: React.FC = () => {
           setIsNewJobModalOpen(false);
           setJobCreationStartTime(null); // Reset timer
           setElapsedTime(0); // Reset elapsed time
+          setShowSearchSection(false); // Reset search section
         }} 
-        title="Add Barcode to Job"
-        size='sm'
+        title={showSearchSection ? "Search Product from Inventory" : "Add Barcode to Job"}
+        size='md'
         closeOnOutsideClick={false}
       >
         <div className="space-y-4">
           
-          {/* Barcode Input Field */}
+          {/* Search Toggle Button - Only show when search section is closed */}
+          {!showSearchSection && (
+            <div className="flex justify-start">
+              <button
+                onClick={() => setShowSearchSection(true)}
+                className="flex items-center gap-2 px-3 py-2 rounded-md transition-colors bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600"
+                title="Show search section"
+              >
+                <Search size={16} />
+                <span className="text-sm font-medium">Search Product</span>
+              </button>
+            </div>
+          )}
+          
+          {/* Search Section - Full screen when active */}
+          {showSearchSection && (
+            <div className="space-y-4">
+                              {/* Search Header with Close Button */}
+                <div className="flex items-center justify-between">
+                  
+                  <button
+                    onClick={() => setShowSearchSection(false)}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-md transition-colors ${
+                      isDarkMode 
+                        ? 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white' 
+                        : 'bg-slate-200 text-slate-700 hover:bg-slate-300 hover:text-slate-800'
+                    }`}
+                    title="Back to Add Barcode"
+                  >
+                    <ArrowLeft size={16} />
+                    <span className="text-sm font-medium">Back to Add Barcode</span>
+                  </button>
+                </div>
+              
+              {/* Search Type Selector */}
+              <div className="flex gap-2 mb-3">
+                {(['name', 'barcode', 'asin'] as const).map((type) => (
+                  <button
+                    key={type}
+                    onClick={() => setSearchType(type)}
+                    className={`px-3 py-1 text-xs rounded-md transition-colors ${
+                      searchType === type
+                        ? 'bg-blue-500 text-white'
+                        : isDarkMode
+                        ? 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                        : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                    }`}
+                  >
+                    {type.charAt(0).toUpperCase() + type.slice(1)}
+                  </button>
+                ))}
+              </div>
+
+              {/* Search Input */}
+              <div className="flex gap-2 mb-3">
+                <Input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={`Search by ${searchType}...`}
+                  className="flex-1"
+                  onKeyPress={(e) => e.key === 'Enter' && searchInventory(searchQuery, searchType)}
+                />
+                <Button
+                  onClick={() => searchInventory(searchQuery, searchType)}
+                  disabled={isSearching || !searchQuery.trim()}
+                  size="sm"
+                  className="px-4"
+                >
+                  {isSearching ? <RefreshCw size={14} className="animate-spin" /> : 'Search'}
+                </Button>
+              </div>
+
+              {/* Search Results */}
+              {searchResults.length > 0 && (
+                <div className="space-y-2 max-h-48 overflow-auto">
+                  <h5 className={`text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                    Found {searchResults.length} product{searchResults.length !== 1 ? 's' : ''}:
+                  </h5>
+                  {searchResults.map((item) => (
+                    <div
+                      key={item.id}
+                      className={`p-2 rounded text-sm ${
+                        isDarkMode ? 'bg-slate-700 border border-slate-600' : 'bg-slate-100 border border-slate-200'
+                      }`}
+                    >
+                      <div className={`font-medium ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
+                        {item.name}
+                      </div>
+                      <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                        {item.barcode && <span className="mr-3">Barcode: {item.barcode}</span>}
+                        {item.asin && <span className="mr-3">ASIN: {item.asin}</span>}
+                        {item.locationCode && item.shelfNumber && (
+                          <span className="mr-3">Location: {item.locationCode}-{item.shelfNumber}</span>
+                        )}
+                        <span className="mr-3">Qty: {item.quantity}</span>
+                        <span>Store: {item.storeName}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {searchQuery && searchResults.length === 0 && !isSearching && (
+                <div className={`text-center text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                  No products found for "{searchQuery}"
+                </div>
+              )}
+            </div>
+          )}
+          
+          {/* Barcode Input Field - Only show when search section is closed */}
+          {!showSearchSection && (
+            <>
           <div className="space-y-2">
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
               Barcode
@@ -815,9 +1296,11 @@ const Jobs: React.FC = () => {
           <div className="text-center text-sm text-slate-500 dark:text-slate-400">
             Enter a barcode to update stock quantity for this job
           </div>
+            </>
+          )}
           
           {/* Display current job items */}
-          {newJobItems.length > 0 && (
+          {!showSearchSection && newJobItems.length > 0 && (
             <div className="space-y-2">
               <h4 className={`text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
                 Current Job Items:
@@ -971,6 +1454,8 @@ const Jobs: React.FC = () => {
                 </div>     
               </div>
             )}
+
+
         </div>
       </Modal>
 

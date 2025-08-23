@@ -7,6 +7,7 @@ import { StockItem } from '../../types';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import BarcodeScanModal from '../modals/BarcodeScanModal';
+import { generateShelfOptions } from '../../utils/shelfUtils';
 
 interface FormData {
   name: string;
@@ -243,10 +244,10 @@ const locationOptions = [
   { value: 'Awaiting Location', label: 'Awaiting Location' }
 ];
 
-const shelfOptions = Array.from({ length: 6 }, (_, i) => ({
-  value: i.toString(),
-  label: `${i}`
-}));
+// Shelf options will be generated dynamically based on selected location
+const generateShelfOptionsForLocation = (locationCode: string) => {
+  return generateShelfOptions(locationCode);
+};
 
 const predefinedStores = ['supply & serve', 'APHY', 'AZTEC', 'ZK'];
 
@@ -495,7 +496,7 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
           name="shelfNumber"
           value={formData.shelfNumber}
           onChange={handleChange}
-          options={shelfOptions}
+          options={generateShelfOptionsForLocation(formData.locationCode)}
           required
           fullWidth
         />

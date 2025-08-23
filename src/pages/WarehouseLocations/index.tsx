@@ -11,6 +11,7 @@ import BarcodeScanModal from '../../components/modals/BarcodeScanModal';
 import { useAuth } from '../../contexts/AuthContext';
 import { StockItem } from '../../types';
 import Button from '../../components/ui/Button';
+import { generateShelfOptions } from '../../utils/shelfUtils';
 
 interface LocationSummary {
   locationCode: string;
@@ -37,7 +38,19 @@ const WarehouseLocations: React.FC = () => {
   const [isScanModalOpen, setIsScanModalOpen] = useState(false);
   const [lastNotifiedProductQuery, setLastNotifiedProductQuery] = useState('');
   // const [lastNotifiedLocationQuery, setLastNotifiedLocationQuery] = useState('');
+  const [moveShelfOptions, setMoveShelfOptions] = useState(generateShelfOptions('A1'));
   const { user } = useAuth();
+
+  // Update shelf options when move location changes
+  const handleMoveLocationChange = (newLocation: string) => {
+    setMoveLocation(newLocation);
+    const newShelfOptions = generateShelfOptions(newLocation);
+    setMoveShelfOptions(newShelfOptions);
+    // Reset shelf number to 0 if current selection is invalid
+    if (parseInt(moveShelf) >= newShelfOptions.length) {
+      setMoveShelf('0');
+    }
+  };
 
   const fetchLocations = async () => {
     setIsLoading(true);
@@ -51,6 +64,7 @@ const WarehouseLocations: React.FC = () => {
           name: data.name || '',
           quantity: data.quantity || 0,
           price: data.price || 0,
+          unit: data.unit || null,
           supplier: data.supplier ?? null,
           lastUpdated: data.lastUpdated instanceof Timestamp ? data.lastUpdated.toDate() : new Date(),
           locationCode: data.locationCode || '',
@@ -637,7 +651,7 @@ const WarehouseLocations: React.FC = () => {
               <label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>New Location</label>
               <select
                 value={moveLocation}
-                onChange={e => setMoveLocation(e.target.value)}
+                onChange={e => handleMoveLocationChange(e.target.value)}
                 className={`w-full rounded border px-2 py-1 ${isDarkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300 text-slate-800'}`}
                 required
               >
@@ -654,8 +668,8 @@ const WarehouseLocations: React.FC = () => {
                 className={`w-full rounded border px-2 py-1 ${isDarkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300 text-slate-800'}`}
                 required
               >
-                {[0,1,2,3,4,5].map(num => (
-                  <option key={num} value={num}>{num}</option>
+                {moveShelfOptions.map(option => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
               </select>
             </div>
