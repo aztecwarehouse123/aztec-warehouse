@@ -561,6 +561,13 @@ const Jobs: React.FC = () => {
     setVerifyingItems(prev => new Set(prev).add(itemKey));
     
     try {
+      // Validate inputs
+      if (!job.id || !barcode) {
+        // throw new Error('Invalid job or barcode');
+        showToast('Invalid job or barcode', 'error');
+        return;
+      }
+
       // Optimistically update the UI immediately for better performance
       setJobs(prev => prev.map(j => {
         if (j.id === job.id) {
@@ -579,9 +586,22 @@ const Jobs: React.FC = () => {
       // Update the database in the background
       const jobRef = doc(db, 'jobs', job.id);
       const snap = await getDoc(jobRef);
-      if (!snap.exists()) return;
+      
+      if (!snap.exists()) {
+        // throw new Error('Job not found in database');
+        showToast('Job not found in database', 'error');
+        return;
+      }
+      
       const data = snap.data() as FirestoreJob;
-      const items: JobItem[] = Array.isArray(data.items) ? data.items.map((it: FirestoreJobItem) => ({
+      
+      if (!data.items || !Array.isArray(data.items)) {
+        // throw new Error('Invalid job items data');
+        showToast('Invalid job items data', 'error');
+        return;
+      }
+      
+      const items: JobItem[] = data.items.map((it: FirestoreJobItem) => ({
         barcode: String(it.barcode || ''),
         name: it.name ?? null,
         asin: it.asin ?? null,
@@ -591,13 +611,21 @@ const Jobs: React.FC = () => {
         shelfNumber: it.shelfNumber,
         reason: it.reason || 'Unknown',
         storeName: it.storeName || 'Unknown',
-      })) : [];
+      }));
+      
       const idx = items.findIndex(i => i.barcode === barcode);
-      if (idx >= 0) {
-        items[idx] = { ...items[idx], verified };
-        await updateDoc(jobRef, { items });
+      if (idx === -1) {
+        // throw new Error('Item not found in job');
+        showToast('Item not found in job', 'error');
+        return;
       }
-    } catch { 
+      
+      items[idx] = { ...items[idx], verified };
+      await updateDoc(jobRef, { items });
+      
+    } catch (error) { 
+      console.error('Error verifying item:', error);
+      
       // Revert the optimistic update on error
       setJobs(prev => prev.map(j => {
         if (j.id === job.id) {
@@ -612,7 +640,13 @@ const Jobs: React.FC = () => {
         }
         return j;
       }));
-      showToast('Failed to verify item', 'error'); 
+      
+      // Show more specific error message
+      if (error instanceof Error) {
+        showToast(`Failed to verify item: ${error.message}`, 'error');
+      } else {
+        showToast('Failed to verify item', 'error');
+      }
     } finally {
       // Clear loading state
       setVerifyingItems(prev => {
