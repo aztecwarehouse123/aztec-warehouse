@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Barcode } from 'lucide-react';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
@@ -292,7 +292,7 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
     asin: item.asin || '',
     status: item.status,
     damagedItems: item.damagedItems.toString(),
-    fulfillmentType: item.fulfillmentType,
+    fulfillmentType: (isCustomStore ? 'other' : (item.storeName || 'supply & serve')) === 'supply & serve' ? 'mf' : item.fulfillmentType,
     storeName: isCustomStore ? 'other' : (item.storeName || 'supply & serve'),
     barcode: item.barcode || ''
   });
@@ -301,6 +301,13 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
   const [showOtherSupplierInput, setShowOtherSupplierInput] = useState(initialSupplier === 'other');
   const [otherSupplier, setOtherSupplier] = useState(initialOtherSupplier);
   const [isBarcodeScanModalOpen, setIsBarcodeScanModalOpen] = useState(false);
+
+  // Ensure fulfillment type is consistent with store name
+  useEffect(() => {
+    if (formData.storeName === 'supply & serve' && formData.fulfillmentType !== 'mf') {
+      setFormData(prev => ({ ...prev, fulfillmentType: 'mf' }));
+    }
+  }, [formData.storeName, formData.fulfillmentType]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -472,10 +479,14 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
           name="fulfillmentType"
           value={formData.fulfillmentType}
           onChange={handleChange}
-          options={[
-            { value: 'fba', label: 'FBA' },
-            { value: 'mf', label: 'MF' }
-          ]}
+          options={
+            formData.storeName === 'supply & serve' 
+              ? [{ value: 'mf', label: 'MF' }]
+              : [
+                  { value: 'fba', label: 'FBA' },
+                  { value: 'mf', label: 'MF' }
+                ]
+          }
           fullWidth
         />
       </div>
@@ -564,7 +575,12 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
             value={formData.storeName}
             onChange={(e) => {
               const value = e.target.value;
-              setFormData(prev => ({ ...prev, storeName: value }));
+              setFormData(prev => ({ 
+                ...prev, 
+                storeName: value,
+                // Automatically set fulfillment type to 'mf' for 'supply & serve'
+                fulfillmentType: value === 'supply & serve' ? 'mf' : prev.fulfillmentType
+              }));
               setShowOtherStoreInput(value === 'other');
               if (value !== 'other') {
                 setOtherStoreName('');

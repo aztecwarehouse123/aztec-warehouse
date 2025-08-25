@@ -80,6 +80,8 @@ const Jobs: React.FC = () => {
   const [jobCreationStartTime, setJobCreationStartTime] = useState<Date | null>(null);
   const [elapsedTime, setElapsedTime] = useState<number>(0);
   const [verifyingItems, setVerifyingItems] = useState<Set<string>>(new Set());
+  // State to prevent duplicate job creation when button is clicked multiple times
+  const [isJobCreationInProgress, setIsJobCreationInProgress] = useState(false);
   
   // Search functionality state
   const [searchQuery, setSearchQuery] = useState('');
@@ -435,6 +437,13 @@ const Jobs: React.FC = () => {
       return;
     }
     
+    // Prevent duplicate job creation
+    if (isJobCreationInProgress) {
+      showToast('Job creation is already in progress. Please wait for the current job to be created.', 'warning');
+      return;
+    }
+    
+    setIsJobCreationInProgress(true);
     setIsLoading(true);
     try {
       // Apply all pending stock updates
@@ -527,6 +536,7 @@ const Jobs: React.FC = () => {
       showToast('Failed to create job', 'error');
     } finally {
       setIsLoading(false);
+      setIsJobCreationInProgress(false);
     }
   };
 
@@ -754,106 +764,117 @@ const Jobs: React.FC = () => {
     return (
       <div className={`${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} rounded-lg shadow-sm border`}>        
         <div className={`p-3 sm:p-4 border-b ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-        <div className={`${isDarkMode ? 'bg-slate-700' : 'bg-slate-100'} p-1 sm:p-2 rounded-lg`}>
-                <ClipboardList className={`${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`} size={18} />
-              </div>
-
-              {/* Job Header with Expandable Items */}
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-              <h3 className={`text-base sm:text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>Job {job.jobId}</h3>
-                  <button
-                    onClick={() => setIsExpanded(!isExpanded)}
-                    className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
-                      isDarkMode 
-                        ? 'text-slate-300 hover:text-white hover:bg-slate-700' 
-                        : 'text-slate-600 hover:text-slate-800 hover:bg-slate-200'
-                    }`}
-                  >
-                    {isExpanded ? (
-                      <>
-                        <ChevronUp size={14} />
-                        Hide Items ({job.items.length})
-                      </>
-                    ) : (
-                      <>
-                        <ChevronDown size={14} />
-                        Show Items ({job.items.length})
-
-                      </>
-                    )}
-                  </button>
+          <div className="flex flex-col gap-3">
+            {/* Job Header Row */}
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+              <div className="flex items-start gap-3 min-w-0 flex-1">
+                <div className={`${isDarkMode ? 'bg-slate-700' : 'bg-slate-100'} p-2 rounded-lg flex-shrink-0`}>
+                  <ClipboardList className={`${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`} size={18} />
                 </div>
-              <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-xs`}>
-                Created by {job.createdBy} • {job.createdAt.toLocaleString()}
-                {job.pickingTime && job.pickingTime > 0 && (
-                  <span className={`ml-2 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
-                    • Picking: {formatElapsedTime(job.pickingTime)}
-                  </span>
-                )}
-              </p>
-                {/* Quick summary when collapsed */}
-                {!isExpanded && job.items.length > 0 && (
-                  <div className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-xs mt-1`}>
-                    {job.items.length} item{job.items.length !== 1 ? 's' : ''} • 
-                    Total Qty: {job.items.reduce((sum, item) => sum + item.quantity, 0)}
-                    {/* {job.items.some(item => item.locationCode && item.shelfNumber) && (
-                      <span> • Has locations</span>
-                    )} */}
+
+                {/* Job Header with Expandable Items */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-2">
+                    <h3 className={`text-base sm:text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-slate-800'} break-all`}>
+                      Job {job.jobId}
+                    </h3>
+                    <button
+                      onClick={() => setIsExpanded(!isExpanded)}
+                      className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors flex-shrink-0 ${
+                        isDarkMode 
+                          ? 'text-slate-300 hover:text-white hover:bg-slate-700' 
+                          : 'text-slate-600 hover:text-slate-800 hover:bg-slate-200'
+                      }`}
+                    >
+                      {isExpanded ? (
+                        <>
+                          <ChevronUp size={14} />
+                          <span className="hidden sm:inline">Hide Items</span> ({job.items.length})
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown size={14} />
+                          <span className="hidden sm:inline">Show Items</span> ({job.items.length})
+                        </>
+                      )}
+                    </button>
                   </div>
-                )}
+                  
+                  <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-xs leading-relaxed`}>
+                    Created by {job.createdBy} • {job.createdAt.toLocaleString()}
+                    {job.pickingTime && job.pickingTime > 0 && (
+                      <span className={`ml-2 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
+                        • Picking: {formatElapsedTime(job.pickingTime)}
+                      </span>
+                    )}
+                  </p>
+                  
+                  {/* Quick summary when collapsed */}
+                  {!isExpanded && job.items.length > 0 && (
+                    <div className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-xs mt-2`}>
+                      {job.items.length} item{job.items.length !== 1 ? 's' : ''} • 
+                      Total Qty: {job.items.reduce((sum, item) => sum + item.quantity, 0)}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-            <span className={`px-2 py-1 rounded-full text-xs font-medium ${isCompleted ? 'bg-green-100 text-green-700' : isAwaitingPack ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'}`}>
-                {isCompleted ? 'Completed' : isAwaitingPack ? 'Awaiting Pack' : 'Picking'}
-              </span>
-              <Button variant="secondary" onClick={fetchJobs} size='sm'>
-                <RefreshCw size={14} />
-              </Button>
-              <Button variant="danger" onClick={() => requestDeleteJob(job)} size='sm'>
-                <Trash2 size={14} />
-              </Button>
+              
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <span className={`px-2 py-1 rounded-full text-xs font-medium ${isCompleted ? 'bg-green-100 text-green-700' : isAwaitingPack ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'}`}>
+                  {isCompleted ? 'Completed' : isAwaitingPack ? 'Awaiting Pack' : 'Picking'}
+                </span>
+                <Button variant="secondary" onClick={fetchJobs} size='sm' className="h-8 w-8 p-0">
+                  <RefreshCw size={14} />
+                </Button>
+                <Button variant="danger" onClick={() => requestDeleteJob(job)} size='sm' className="h-8 w-8 p-0">
+                  <Trash2 size={14} />
+                </Button>
+              </div>
             </div>
           </div>
         </div>
         
         {/* Expandable Items Section */}
         {isExpanded && (
-        <div className="p-3 sm:p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            {isPicking && (
-              <Button onClick={() => setIsStockUpdateModalOpen(true)} className="flex items-center gap-1" size='sm'>
-                <ClipboardList size={14} /> Scan
-              </Button>
-            )}
-          </div>
-          <div className="space-y-2">
-            {job.items.map((it, itemIndex) => (
-              <div key={`${it.barcode}-${itemIndex}-${job.id}`} className={`flex items-center justify-between p-2 rounded ${isDarkMode ? 'bg-slate-700' : 'bg-slate-100'}`}>
-                <div className="flex-1 min-w-0">
+          <div className="p-3 sm:p-4 space-y-4">
+            {/* Action Buttons Row */}
+            <div className="flex flex-wrap items-center gap-2">
+              {isPicking && (
+                <Button onClick={() => setIsStockUpdateModalOpen(true)} className="flex items-center gap-1" size='sm'>
+                  <ClipboardList size={14} /> <span className="hidden sm:inline">Scan</span>
+                </Button>
+              )}
+            </div>
+            
+            {/* Job Items List */}
+            <div className="space-y-3">
+              {job.items.map((it, itemIndex) => (
+                <div key={`${it.barcode}-${itemIndex}-${job.id}`} className={`p-3 rounded-lg ${isDarkMode ? 'bg-slate-700' : 'bg-slate-100'}`}>
                   {editingJobItem?.jobId === job.id && editingJobItem?.itemIndex === itemIndex ? (
                     // Edit mode
-                    <div className="flex items-center gap-2">
-                      <Input 
-                        value={editingJobItem.barcode} 
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditingJobItem({...editingJobItem, barcode: e.target.value})} 
-                        className="w-24 text-sm" 
-                      />
-                      <Input 
-                        type="number" 
-                        value={editingJobItem.quantity.toString()} 
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditingJobItem({...editingJobItem, quantity: Number(e.target.value) || 1})} 
-                        className="w-16 text-sm" 
-                        min="1" 
-                      />
-                      <div className="flex gap-1">
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <div className="flex flex-col sm:flex-row gap-2 flex-1">
+                        <Input 
+                          value={editingJobItem.barcode} 
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditingJobItem({...editingJobItem, barcode: e.target.value})} 
+                          className="w-full sm:w-32 text-sm" 
+                          placeholder="Barcode"
+                        />
+                        <Input 
+                          type="number" 
+                          value={editingJobItem.quantity.toString()} 
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditingJobItem({...editingJobItem, quantity: Number(e.target.value) || 1})} 
+                          className="w-full sm:w-20 text-sm" 
+                          min="1" 
+                          placeholder="Qty"
+                        />
+                      </div>
+                      <div className="flex gap-2">
                         <Button 
                           size="sm" 
                           onClick={() => updateJobItem(job, itemIndex, editingJobItem.barcode, editingJobItem.quantity)} 
-                          className="h-6 px-2"
+                          className="h-8 px-3"
                         >
                           ✓
                         </Button>
@@ -861,7 +882,7 @@ const Jobs: React.FC = () => {
                           variant="secondary" 
                           size="sm" 
                           onClick={() => setEditingJobItem(null)} 
-                          className="h-6 px-2"
+                          className="h-8 px-3"
                         >
                           ✕
                         </Button>
@@ -869,100 +890,114 @@ const Jobs: React.FC = () => {
                     </div>
                   ) : (
                     // Display mode
-                    <>
-                  <div className={`${isDarkMode ? 'text-white' : 'text-slate-800'} text-sm font-medium truncate`}>
-                    {it.name || it.barcode}
-                  </div>
-                  {it.name && (
-                    <div className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-xs`}>
-                      Barcode: {it.barcode}
-                    </div>
-                  )}
-                      <div className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-xs`}>
-                        Qty: {it.quantity}
+                    <div className="space-y-2">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className={`${isDarkMode ? 'text-white' : 'text-slate-800'} text-sm font-medium break-words`}>
+                            {it.name || it.barcode}
+                          </div>
+                          {it.name && (
+                            <div className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-xs mt-1 break-all`}>
+                              Barcode: {it.barcode}
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* Action Buttons */}
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {isAwaitingPack && (
+                            <Button
+                              variant={it.verified ? "success" : "primary"}
+                              size="sm"
+                              onClick={() => verifyItem(job, it.barcode, !it.verified)}
+                              disabled={verifyingItems.has(`${job.id}-${it.barcode}`)}
+                              className={`h-7 px-2 text-xs transition-all duration-200 ${
+                                it.verified 
+                                  ? 'bg-green-500 hover:bg-green-600 text-white' 
+                                  : 'bg-blue-500 hover:bg-blue-600 text-white'
+                              }`}
+                            >
+                              {verifyingItems.has(`${job.id}-${it.barcode}`) ? (
+                                <RefreshCw size={12} className="animate-spin" />
+                              ) : (
+                                <span className="hidden sm:inline">{it.verified ? 'Verified' : 'Verify'}</span>
+                              )}
+                            </Button>
+                          )}
+                          
+                          {isAwaitingPack && !editingJobItem && (
+                            <>
+                              <Button 
+                                variant="secondary" 
+                                size="sm" 
+                                onClick={() => setEditingJobItem({
+                                  jobId: job.id,
+                                  itemIndex,
+                                  barcode: it.barcode,
+                                  quantity: it.quantity,
+                                  locationCode: it.locationCode,
+                                  shelfNumber: it.shelfNumber,
+                                  reason: it.reason,
+                                  storeName: it.storeName
+                                })} 
+                                className="h-7 w-7 p-0"
+                                title="Edit item"
+                              >
+                                <Edit size={14} />
+                              </Button>
+                              <Button 
+                                variant="danger" 
+                                size="sm" 
+                                onClick={() => removeJobItem(job, itemIndex)} 
+                                className="h-7 w-7 p-0"
+                                title="Remove item"
+                              >
+                                <Trash2 size={14} />
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Item Details */}
+                      <div className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-xs space-y-1`}>
+                        <div>Qty: {it.quantity}</div>
                         {it.locationCode && it.shelfNumber && (
-                          <span className="ml-2">• Location: {it.locationCode}-{it.shelfNumber}</span>
+                          <div>Location: {it.locationCode}-{it.shelfNumber}</div>
                         )}
                         {it.reason && (
-                          <span className="ml-2">• Reason: {it.reason}</span>
+                          <div>Reason: {it.reason}</div>
                         )}
                         {it.storeName && (
-                          <span className="ml-2">• Store: {it.storeName}</span>
+                          <div>Store: {it.storeName}</div>
                         )}
                       </div>
-                    </>
+                    </div>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
-                {isAwaitingPack && (
-                    <Button
-                      variant={it.verified ? "success" : "primary"}
-                      size="sm"
-                      onClick={() => verifyItem(job, it.barcode, !it.verified)}
-                      disabled={verifyingItems.has(`${job.id}-${it.barcode}`)}
-                      className={`h-6 px-2 transition-all duration-200 ${
-                        it.verified 
-                          ? 'bg-green-500 hover:bg-green-600 text-white' 
-                          : 'bg-blue-500 hover:bg-blue-600 text-white'
-                      }`}
-                    >
-                      {verifyingItems.has(`${job.id}-${it.barcode}`) ? (
-                        <RefreshCw size={12} className="animate-spin" />
-                      ) : (
-                        it.verified ? 'Verified' : 'Verify'
-                      )}
-                    </Button>
-                )}
-                  {isAwaitingPack && !editingJobItem && (
-                    <>
-                      <Button 
-                        variant="secondary" 
-                        size="sm" 
-                        onClick={() => setEditingJobItem({
-                          jobId: job.id,
-                          itemIndex,
-                          barcode: it.barcode,
-                          quantity: it.quantity,
-                          locationCode: it.locationCode,
-                          shelfNumber: it.shelfNumber,
-                          reason: it.reason,
-                          storeName: it.storeName
-                        })} 
-                        className="h-6 px-2"
-                      >
-                        <Edit size={14} />
-                      </Button>
-                      <Button 
-                        variant="danger" 
-                        size="sm" 
-                        onClick={() => removeJobItem(job, itemIndex)} 
-                        className="h-6 px-2"
-                      >
-                        <Trash2 size={14} />
-                      </Button>
-                    </>
-                  )}
-                  
+              ))}
+              
+              {job.items.length === 0 && (
+                <div className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-sm text-center py-4`}>
+                  No items scanned yet.
                 </div>
-              </div>
-            ))}
-            {job.items.length === 0 && (
-              <div className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-sm`}>No items scanned yet.</div>
-            )}
+              )}
+            </div>
+            
+            {/* Bottom Action Buttons */}
+            <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+              {isPicking && (
+                <Button onClick={() => completePicking(job)} size='sm' className="flex items-center gap-1 w-full sm:w-auto">
+                  <CheckSquare size={14} /> <span className="hidden sm:inline">Finish Picking</span>
+                </Button>
+              )}
+              {isAwaitingPack && (
+                <Button onClick={() => completePacking(job)} size='sm' className="flex items-center gap-1 w-full sm:w-auto">
+                  <CheckSquare size={14} /> <span className="hidden sm:inline">Complete Job</span>
+                </Button>
+              )}
+            </div>
           </div>
-          <div className="flex justify-end gap-2">
-            {isPicking && (
-              <Button onClick={() => completePicking(job)} size='sm' className="flex items-center gap-1">
-                <CheckSquare size={14} /> Finish Picking
-              </Button>
-            )}
-            {isAwaitingPack && (
-              <Button onClick={() => completePacking(job)} size='sm' className="flex items-center gap-1">
-                <CheckSquare size={14} /> Complete Job
-              </Button>
-            )}
-          </div>
-        </div>
         )}
       </div>
     );
@@ -1030,62 +1065,62 @@ const Jobs: React.FC = () => {
         </div>
         
         {/* Job Type Navigation and Filters Section */}
-        <div className="flex flex-col lg:flex-row gap-4">
-          {/* Job Type Buttons - Positioned on the right */}
-          <div className="flex items-center gap-2 flex-wrap lg:ml-auto">
-            
-          </div>
-          
-          {/* Filters Section - Only show for Archived Jobs, positioned below job type buttons on the right */}
+        <div className="flex flex-col gap-4">
+          {/* Filters Section - Only show for Archived Jobs */}
           {showArchived && (
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 lg:ml-auto">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                {/* User Filter */}
-                <div className="flex flex-col gap-1">
-                  <label className={`text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                    Filter by User:
-                  </label>
-                  <select
-                    value={selectedUser}
-                    onChange={(e) => setSelectedUser(e.target.value)}
-                    className={`px-3 py-2 border rounded-md text-sm ${
-                      isDarkMode 
-                        ? 'bg-slate-700 border-slate-600 text-white' 
-                        : 'bg-white border-slate-300 text-slate-900'
-                    }`}
-                  >
-                    <option value="all">All Users</option>
-                    {getUniqueUsers().map(userName => (
-                      <option key={userName} value={userName}>{userName}</option>
-                    ))}
-                  </select>
+            <div className="w-full">
+              <div className="flex flex-col gap-4 p-4 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                {/* Filter Row 1: User Filter and Date Range */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* User Filter */}
+                  <div className="flex flex-col gap-1">
+                    <label className={`text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                      Filter by User:
+                    </label>
+                    <select
+                      value={selectedUser}
+                      onChange={(e) => setSelectedUser(e.target.value)}
+                      className={`px-3 py-2 border rounded-md text-sm w-full ${
+                        isDarkMode 
+                          ? 'bg-slate-700 border-slate-600 text-white' 
+                          : 'bg-white border-slate-300 text-slate-900'
+                      }`}
+                    >
+                      <option value="all">All Users</option>
+                      {getUniqueUsers().map(userName => (
+                        <option key={userName} value={userName}>{userName}</option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  {/* Date Range Filter */}
+                  <div className="flex flex-col gap-1">
+                    <label className={`text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                      Filter by Date Range:
+                    </label>
+                    <DateRangePicker
+                      startDate={startDate}
+                      endDate={endDate}
+                      onStartDateChange={setStartDate}
+                      onEndDateChange={setEndDate}
+                      onClear={clearDateRange}
+                      className="w-full"
+                    />
+                  </div>
                 </div>
                 
-                {/* Date Range Filter */}
-                <div className="flex flex-col gap-1">
-                  <label className={`text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                    Filter by Date Range:
-                  </label>
-                  <DateRangePicker
-                    startDate={startDate}
-                    endDate={endDate}
-                    onStartDateChange={setStartDate}
-                    onEndDateChange={setEndDate}
-                    onClear={clearDateRange}
-                    className="w-64"
-                  />
+                {/* Filter Row 2: Clear Filters Button */}
+                <div className="flex justify-end">
+                  <Button
+                    variant="secondary"
+                    onClick={clearAllFilters}
+                    size="sm"
+                    className="w-full sm:w-auto"
+                  >
+                    Clear All Filters
+                  </Button>
                 </div>
               </div>
-              
-              {/* Clear Filters Button */}
-              <Button
-                variant="secondary"
-                onClick={clearAllFilters}
-                size="sm"
-                className="self-end"
-              >
-                Clear All Filters
-              </Button>
             </div>
           )}
         </div>
@@ -1099,26 +1134,28 @@ const Jobs: React.FC = () => {
               ? 'bg-slate-800 border-slate-700 text-slate-300' 
               : 'bg-slate-50 border-slate-200 text-slate-700'
           }`}>
-            <div className="flex items-center gap-2 text-sm">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 text-sm">
               <span className="font-medium">Active Filters:</span>
-              {selectedUser !== 'all' && (
-                <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded text-xs">
-                  User: {selectedUser}
+              <div className="flex flex-wrap gap-2">
+                {selectedUser !== 'all' && (
+                  <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded text-xs">
+                    User: {selectedUser}
+                  </span>
+                )}
+                {startDate && (
+                  <span className="px-2 py-1 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded text-xs">
+                    From: {startDate.toLocaleDateString()}
+                  </span>
+                )}
+                {endDate && (
+                  <span className="px-2 py-1 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded text-xs">
+                    To: {endDate.toLocaleDateString()}
+                  </span>
+                )}
+                <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded text-xs">
+                  {filteredJobs.length} jobs found
                 </span>
-              )}
-              {startDate && (
-                <span className="px-2 py-1 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded text-xs">
-                  From: {startDate.toLocaleDateString()}
-                </span>
-              )}
-              {endDate && (
-                <span className="px-2 py-1 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded text-xs">
-                  To: {endDate.toLocaleDateString()}
-                </span>
-              )}
-              <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded text-xs">
-                {filteredJobs.length} jobs found
-              </span>
+              </div>
             </div>
           </div>
         )}
@@ -1445,11 +1482,13 @@ const Jobs: React.FC = () => {
               <div className="pt-2">
                   <Button 
                   onClick={finishNewJobPicking}
-                  disabled={newJobItems.length === 0}
+                  disabled={newJobItems.length === 0 || isJobCreationInProgress}
+                  isLoading={isJobCreationInProgress}
                   className="w-full flex items-center justify-center gap-2"
                     size="sm" 
                   >
-                  <CheckSquare size={16} /> Finish Picking
+                  <CheckSquare size={16} /> 
+                  {isJobCreationInProgress ? 'Creating Job...' : 'Finish Picking'}
                   </Button>
                 </div>     
               </div>

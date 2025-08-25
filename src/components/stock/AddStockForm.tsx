@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Plus, Barcode, Trash2, CheckCircle } from 'lucide-react';
 import Input from '../ui/Input';
 import Button from '../ui/Button';
@@ -279,7 +279,7 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
     asin: '',
     status: 'pending',
     damagedItems: '0',
-    fulfillmentType: 'fba',
+    fulfillmentType: 'mf', // Default to MF since default store is 'supply & serve'
     storeName: 'supply & serve' // Default to first store
   });
 
@@ -304,6 +304,13 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
   const [successMessage, setSuccessMessage] = useState('');
   const [isAddProductModalOpen, setIsAddProductModalOpen] = useState(false);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Ensure fulfillment type is consistent with store name
+  useEffect(() => {
+    if (formData.storeName === 'supply & serve' && formData.fulfillmentType !== 'mf') {
+      setFormData(prev => ({ ...prev, fulfillmentType: 'mf' }));
+    }
+  }, [formData.storeName, formData.fulfillmentType]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -721,10 +728,14 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
             name="fulfillmentType"
             value={formData.fulfillmentType}
             onChange={handleChange}
-            options={[
-              { value: 'fba', label: 'FBA' },
-              { value: 'mf', label: 'MF' }
-            ]}
+            options={
+              formData.storeName === 'supply & serve' 
+                ? [{ value: 'mf', label: 'MF' }]
+                : [
+                    { value: 'fba', label: 'FBA' },
+                    { value: 'mf', label: 'MF' }
+                  ]
+            }
             fullWidth
           />
           {user?.role === 'admin' ? (
@@ -802,7 +813,12 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
               value={formData.storeName}
               onChange={(e) => {
                 const value = e.target.value;
-                setFormData(prev => ({ ...prev, storeName: value }));
+                setFormData(prev => ({ 
+                  ...prev, 
+                  storeName: value,
+                  // Automatically set fulfillment type to 'mf' for 'supply & serve'
+                  fulfillmentType: value === 'supply & serve' ? 'mf' : prev.fulfillmentType
+                }));
                 setShowOtherStoreInput(value === 'other');
                 if (value !== 'other') {
                   setOtherStoreName('');

@@ -340,65 +340,66 @@ const OutboundStock: React.FC = () => {
           />
         </div>
         
-        {/* Status Filter */}
-        <div className="relative status-filter-dropdown">
-          <Button
-            variant="secondary"
-            onClick={() => setIsStatusFilterOpen(!isStatusFilterOpen)}
-            className={`flex items-center gap-2 ${statusFilter !== 'all' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' : ''}`}
-          >
-            {statusFilter === 'all' ? 'Status Filter' : statusFilter === 'active' ? 'Active' : 'Pending'}
-            <ChevronDown size={16} />
-          </Button>
-          {isStatusFilterOpen && (
-            <div className={`absolute top-full left-0 mt-1 w-32 z-50 rounded-lg border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-lg`}>
-              <div className="p-2">
-                <div className={`text-sm font-medium mb-2 ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>Filter by Status</div>
-                <div 
-                  className={`px-3 py-2 text-sm cursor-pointer rounded transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-700' : 'text-slate-700 hover:bg-slate-100'} ${statusFilter === 'all' ? (isDarkMode ? 'bg-slate-700' : 'bg-slate-100') : ''}`}
-                  onClick={() => {
-                    setStatusFilter('all');
-                    setIsStatusFilterOpen(false);
-                  }}
-                >
-                  All
-                </div>
-                <div 
-                  className={`px-3 py-2 text-sm cursor-pointer rounded transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-700' : 'text-slate-700 hover:bg-slate-100'} ${statusFilter === 'active' ? (isDarkMode ? 'bg-slate-700' : 'bg-slate-100') : ''}`}
-                  onClick={() => {
-                    setStatusFilter('active');
-                    setIsStatusFilterOpen(false);
-                  }}
-                >
-                  Active
-                </div>
-                <div 
-                  className={`px-3 py-2 text-sm cursor-pointer rounded transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-700' : 'text-slate-700 hover:bg-slate-100'} ${statusFilter === 'pending' ? (isDarkMode ? 'bg-slate-700' : 'bg-slate-100') : ''}`}
-                  onClick={() => {
-                    setStatusFilter('pending');
-                    setIsStatusFilterOpen(false);
-                  }}
-                >
-                  Pending
-                </div>
-                <div className={`border-t ${isDarkMode ? 'border-slate-700' : 'border-slate-200'} mt-2 pt-2`}>
-                  <button
-                    className={`w-full text-left px-3 py-2 text-sm cursor-pointer rounded transition-colors ${isDarkMode ? 'text-red-400 hover:bg-slate-700' : 'text-red-600 hover:bg-slate-100'}`}
+        <div className="flex flex-row gap-2">
+          {/* Status Filter */}
+          <div className="relative status-filter-dropdown">
+            <Button
+              variant="secondary"
+              onClick={() => setIsStatusFilterOpen(!isStatusFilterOpen)}
+              className={`flex items-center gap-2 ${statusFilter !== 'all' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' : ''}`}
+            >
+              {statusFilter === 'all' ? 'Status Filter' : statusFilter === 'active' ? 'Active' : 'Pending'}
+              <ChevronDown size={16} />
+            </Button>
+            {isStatusFilterOpen && (
+              <div className={`absolute top-full left-0 mt-1 w-32 z-50 rounded-lg border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-lg`}>
+                <div className="p-2">
+                  <div className={`text-sm font-medium mb-2 ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>Filter by Status</div>
+                  <div 
+                    className={`px-3 py-2 text-sm cursor-pointer rounded transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-700' : 'text-slate-700 hover:bg-slate-100'} ${statusFilter === 'all' ? (isDarkMode ? 'bg-slate-700' : 'bg-slate-100') : ''}`}
                     onClick={() => {
                       setStatusFilter('all');
                       setIsStatusFilterOpen(false);
                     }}
                   >
-                    Clear Filter
-                  </button>
+                    All
+                  </div>
+                  <div 
+                    className={`px-3 py-2 text-sm cursor-pointer rounded transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-700' : 'text-slate-700 hover:bg-slate-100'} ${statusFilter === 'active' ? (isDarkMode ? 'bg-slate-700' : 'bg-slate-100') : ''}`}
+                    onClick={() => {
+                      setStatusFilter('active');
+                      setIsStatusFilterOpen(false);
+                    }}
+                  >
+                    Active
+                  </div>
+                  <div 
+                    className={`px-3 py-2 text-sm cursor-pointer rounded transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-700' : 'text-slate-700 hover:bg-slate-100'} ${statusFilter === 'pending' ? (isDarkMode ? 'bg-slate-700' : 'bg-slate-100') : ''}`}
+                    onClick={() => {
+                      setStatusFilter('pending');
+                      setIsStatusFilterOpen(false);
+                    }}
+                  >
+                    Pending
+                  </div>
+                  <div className={`border-t ${isDarkMode ? 'border-slate-700' : 'border-slate-200'} mt-2 pt-2`}>
+                    <button
+                      className={`w-full text-left px-3 py-2 text-sm cursor-pointer rounded transition-colors ${isDarkMode ? 'text-red-400 hover:bg-slate-700' : 'text-red-600 hover:bg-slate-100'}`}
+                      onClick={() => {
+                        setStatusFilter('all');
+                        setIsStatusFilterOpen(false);
+                      }}
+                    >
+                      Clear Filter
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-        </div>
-        
-        {/* Store Filter */}
-        <div className="relative store-filter-dropdown">
+            )}
+          </div>
+          
+          {/* Store Filter */}
+          <div className="relative store-filter-dropdown">
           <Button
             variant="secondary"
             onClick={() => setIsStoreFilterOpen(!isStoreFilterOpen)}
@@ -452,6 +453,7 @@ const OutboundStock: React.FC = () => {
               </div>
             </div>
           )}
+        </div>
         </div>
         <Button
             variant="secondary"

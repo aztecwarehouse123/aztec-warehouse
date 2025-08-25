@@ -69,18 +69,26 @@ const DateRangePicker: React.FC<DateRangePickerProps> = ({
           <span className="whitespace-nowrap overflow-hidden text-ellipsis">{getDisplayText()}</span>
         </div>
         {(startDate || endDate) && (
-          <button
+          <span
             onClick={(e) => {
               e.stopPropagation();
               handleClear();
             }}
-            className={`ml-3 p-1 rounded-full hover:bg-opacity-80 flex-shrink-0 ${
+            className={`ml-3 p-1 rounded-full hover:bg-opacity-80 flex-shrink-0 cursor-pointer ${
               isDarkMode ? 'hover:bg-slate-600' : 'hover:bg-slate-200'
             }`}
             title="Clear date range"
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleClear();
+              }
+            }}
           >
             <X className="h-3 w-3" />
-          </button>
+          </span>
         )}
       </button>
 
