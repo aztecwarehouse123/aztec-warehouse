@@ -329,6 +329,10 @@ const Stock: React.FC = () => {
             changes.unit = data.unit;
             logChanges.push(`unit from "${originalItem.unit || 'none'}" to "${data.unit || 'none'}"`);
         }
+        if (data.barcode !== originalItem.barcode) {
+            changes.barcode = data.barcode;
+            logChanges.push(`barcode from "${originalItem.barcode || 'none'}" to "${data.barcode || 'none'}"`);
+        }
 
 
         // If there are changes other than quantity, update them immediately
