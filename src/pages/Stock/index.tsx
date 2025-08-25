@@ -868,15 +868,17 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
                       {storeName}
                     </div>
                     <div className={`absolute right-full top-0 mr-1 hidden group-hover:block w-24 ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border rounded-lg shadow-lg`}>
-                      <div 
-                        className={`px-3 py-2 text-sm cursor-pointer transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-700' : 'text-slate-700 hover:bg-slate-100'} ${storeFilter?.storeName === storeName && storeFilter?.fulfillmentType === 'fba' ? (isDarkMode ? 'bg-slate-700' : 'bg-slate-100') : ''}`}
-                        onClick={() => {
-                          setStoreFilter({ storeName, fulfillmentType: 'fba' });
-                          setIsStoreFilterOpen(false);
-                        }}
-                      >
-                        FBA
-                      </div>
+                      {storeName !== 'supply & serve' && (
+                        <div 
+                          className={`px-3 py-2 text-sm cursor-pointer transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-700' : 'text-slate-700 hover:bg-slate-100'} ${storeFilter?.storeName === storeName && storeFilter?.fulfillmentType === 'fba' ? (isDarkMode ? 'bg-slate-700' : 'bg-slate-100') : ''}`}
+                          onClick={() => {
+                            setStoreFilter({ storeName, fulfillmentType: 'fba' });
+                            setIsStoreFilterOpen(false);
+                          }}
+                        >
+                          FBA
+                        </div>
+                      )}
                       <div 
                         className={`px-3 py-2 text-sm cursor-pointer transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-700' : 'text-slate-700 hover:bg-slate-100'} ${storeFilter?.storeName === storeName && storeFilter?.fulfillmentType === 'mf' ? (isDarkMode ? 'bg-slate-700' : 'bg-slate-100') : ''}`}
                         onClick={() => {

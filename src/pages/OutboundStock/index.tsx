@@ -244,7 +244,7 @@ const OutboundStock: React.FC = () => {
       // Add activity log
       await addDoc(collection(db, 'activityLogs'), {
         
-        detail: `${originalItem.quantity - data.quantity} units deducted from stock "${originalItem.name}" (Reason: ${data.reason}, Store: ${data.storeName}) by ${user.role}`,
+        detail: `${originalItem.quantity - data.quantity} units deducted from stock "${originalItem.name}" (Reason: ${data.reason}, Store: ${data.storeName}) by ${user.role} from location ${originalItem.locationCode} shelf ${originalItem.shelfNumber}`,
         time: new Date().toISOString(),
         user: user.name,
         role: user.role

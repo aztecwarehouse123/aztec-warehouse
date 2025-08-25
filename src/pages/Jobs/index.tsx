@@ -447,7 +447,7 @@ const Jobs: React.FC = () => {
         
         // Add activity log for each stock update
         await addDoc(collection(db, 'activityLogs'), {
-          detail: `${update.deductedQuantity} units deducted from stock "${update.stockItem.name}" (Reason: ${update.reason}, Store: ${update.storeName}) by ${user?.role}`,
+          detail: `${update.deductedQuantity} units deducted from stock "${update.stockItem.name}"  (Reason: ${update.reason}, Store: ${update.storeName}) by ${user?.role} from location ${update.locationCode} shelf ${update.shelfNumber}`,
           time: new Date().toISOString(),
           user: user?.name,
           role: user?.role
