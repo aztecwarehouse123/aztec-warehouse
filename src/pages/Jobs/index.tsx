@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Plus, RefreshCw, CheckSquare, ClipboardList, Trash2, Edit, ChevronUp, ChevronDown, Search, X, ArrowLeft } from 'lucide-react';
+import { Plus, RefreshCw, CheckSquare, ClipboardList, Trash2, Edit, ChevronUp, ChevronDown, Search, ArrowLeft } from 'lucide-react';
 import { db } from '../../config/firebase';
-import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, orderBy, query, serverTimestamp, Timestamp, updateDoc, where } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, getDocs, orderBy, query, serverTimestamp, Timestamp, updateDoc, where } from 'firebase/firestore';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '../../contexts/ToastContext';
 import Button from '../../components/ui/Button';
@@ -82,6 +82,12 @@ const Jobs: React.FC = () => {
   const [verifyingItems, setVerifyingItems] = useState<Set<string>>(new Set());
   // State to prevent duplicate job creation when button is clicked multiple times
   const [isJobCreationInProgress, setIsJobCreationInProgress] = useState(false);
+  
+  // State to track locally verified items (not yet saved to database)
+  const [locallyVerifiedItems, setLocallyVerifiedItems] = useState<Set<string>>(new Set());
+  
+  // State to track expanded jobs to prevent collapse on re-render
+  const [expandedJobs, setExpandedJobs] = useState<Set<string>>(new Set());
   
   // Search functionality state
   const [searchQuery, setSearchQuery] = useState('');
@@ -182,6 +188,9 @@ const Jobs: React.FC = () => {
     setStartDate(null);
     setEndDate(null);
     setSelectedUser('all');
+    // Clear local verification state when refreshing
+    setLocallyVerifiedItems(new Set());
+    // Keep expanded state when refreshing (don't clear expandedJobs)
     try {
       const q = query(collection(db, 'jobs'), orderBy('createdAt', 'desc'));
       const snapshot = await getDocs(q);
@@ -242,6 +251,27 @@ const Jobs: React.FC = () => {
   }, [showToast]);
 
   useEffect(() => { fetchJobs(); }, [fetchJobs]);
+
+  // Clear local verification state when jobs change or component unmounts
+  useEffect(() => {
+    return () => {
+      setLocallyVerifiedItems(new Set());
+      setExpandedJobs(new Set());
+    };
+  }, [jobs]);
+
+  // Function to toggle job expansion
+  const toggleJobExpansion = (jobId: string) => {
+    setExpandedJobs(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(jobId)) {
+        newSet.delete(jobId);
+      } else {
+        newSet.add(jobId);
+      }
+      return newSet;
+    });
+  };
 
   // Timer for job creation
   useEffect(() => {
@@ -563,90 +593,26 @@ const Jobs: React.FC = () => {
     try {
       // Validate inputs
       if (!job.id || !barcode) {
-        // throw new Error('Invalid job or barcode');
         showToast('Invalid job or barcode', 'error');
         return;
       }
 
-      // Optimistically update the UI immediately for better performance
-      setJobs(prev => prev.map(j => {
-        if (j.id === job.id) {
-          return {
-            ...j,
-            items: j.items.map(item => 
-              item.barcode === barcode 
-                ? { ...item, verified } 
-                : item
-            )
-          };
-        }
-        return j;
-      }));
-
-      // Update the database in the background
-      const jobRef = doc(db, 'jobs', job.id);
-      const snap = await getDoc(jobRef);
-      
-      if (!snap.exists()) {
-        // throw new Error('Job not found in database');
-        showToast('Job not found in database', 'error');
-        return;
+      // Track locally verified items instead of updating database immediately
+      if (verified) {
+        setLocallyVerifiedItems(prev => new Set(prev).add(itemKey));
+      } else {
+        setLocallyVerifiedItems(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(itemKey);
+          return newSet;
+        });
       }
       
-      const data = snap.data() as FirestoreJob;
-      
-      if (!data.items || !Array.isArray(data.items)) {
-        // throw new Error('Invalid job items data');
-        showToast('Invalid job items data', 'error');
-        return;
-      }
-      
-      const items: JobItem[] = data.items.map((it: FirestoreJobItem) => ({
-        barcode: String(it.barcode || ''),
-        name: it.name ?? null,
-        asin: it.asin ?? null,
-        quantity: Number(it.quantity || 1),
-        verified: Boolean(it.verified),
-        locationCode: it.locationCode,
-        shelfNumber: it.shelfNumber,
-        reason: it.reason || 'Unknown',
-        storeName: it.storeName || 'Unknown',
-      }));
-      
-      const idx = items.findIndex(i => i.barcode === barcode);
-      if (idx === -1) {
-        // throw new Error('Item not found in job');
-        showToast('Item not found in job', 'error');
-        return;
-      }
-      
-      items[idx] = { ...items[idx], verified };
-      await updateDoc(jobRef, { items });
+      // showToast(`Item ${verified ? 'verified' : 'unverified'} locally`, 'success');
       
     } catch (error) { 
       console.error('Error verifying item:', error);
-      
-      // Revert the optimistic update on error
-      setJobs(prev => prev.map(j => {
-        if (j.id === job.id) {
-          return {
-            ...j,
-            items: j.items.map(item => 
-              item.barcode === barcode 
-                ? { ...item, verified: !verified } 
-                : item
-            )
-          };
-        }
-        return j;
-      }));
-      
-      // Show more specific error message
-      if (error instanceof Error) {
-        showToast(`Failed to verify item: ${error.message}`, 'error');
-      } else {
-        showToast('Failed to verify item', 'error');
-      }
+      showToast('Failed to verify item', 'error');
     } finally {
       // Clear loading state
       setVerifyingItems(prev => {
@@ -659,13 +625,48 @@ const Jobs: React.FC = () => {
 
   const completePacking = async (job: Job) => {
     try {
-      await updateDoc(doc(db, 'jobs', job.id), { status: 'completed', packer: user?.name || job.packer || null });
+      // Get all locally verified items for this job
+      const jobVerifiedItems = Array.from(locallyVerifiedItems)
+        .filter(itemKey => itemKey.startsWith(job.id))
+        .map(itemKey => itemKey.split('-')[1]); // Extract barcode from itemKey
+      
+      // Count total verified items (both from database and locally)
+      const totalVerifiedCount = job.items.filter(item => 
+        item.verified || jobVerifiedItems.includes(item.barcode)
+      ).length;
+      
+      // Update job items with verification status
+      const updatedItems = job.items.map(item => ({
+        ...item,
+        verified: jobVerifiedItems.includes(item.barcode) || item.verified
+      }));
+      
+      // Update the job in database with all verified items
+      await updateDoc(doc(db, 'jobs', job.id), { 
+        status: 'completed', 
+        packer: user?.name || job.packer || null,
+        items: updatedItems
+      });
+      
       await logActivity(  
-        `completed packing for job ${job.jobId} with ${job.items.length} items (${job.items.reduce((sum, item) => sum + item.quantity, 0)} total units)`
+        `completed packing for job ${job.jobId} with ${job.items.length} items (${job.items.reduce((sum, item) => sum + item.quantity, 0)} total units) - ${totalVerifiedCount} items verified`
       );
-      showToast(`Job ${job.jobId} completed and awaiting pack`, 'success');
+      
+      // Clear locally verified items for this job
+      setLocallyVerifiedItems(prev => {
+        const newSet = new Set(prev);
+        jobVerifiedItems.forEach(barcode => {
+          newSet.delete(`${job.id}-${barcode}`);
+        });
+        return newSet;
+      });
+      
+      showToast(`Job ${job.jobId} completed successfully with ${totalVerifiedCount}/${job.items.length} items verified`, 'success');
       fetchJobs();
-    } catch { showToast('Failed to complete job', 'error'); }
+    } catch (error) { 
+      console.error('Error completing job:', error);
+      showToast('Failed to complete job', 'error'); 
+    }
   };
 
   const requestDeleteJob = (job: Job) => {
@@ -679,6 +680,15 @@ const Jobs: React.FC = () => {
         `deleted job ${jobToDelete.jobId} (status: ${jobToDelete.status} with ${jobToDelete.items.length} items (${jobToDelete.items.reduce((sum, item) => sum + item.quantity, 0)} total units))`
       );
       await deleteDoc(doc(db, 'jobs', jobToDelete.id));
+      
+      // Clear local verification state for the deleted job
+      setLocallyVerifiedItems(prev => {
+        const newSet = new Set(prev);
+        jobToDelete.items.forEach(item => {
+          newSet.delete(`${jobToDelete.id}-${item.barcode}`);
+        });
+        return newSet;
+      });
       
       showToast('Job deleted', 'success');
       setJobToDelete(null);
@@ -793,7 +803,7 @@ const Jobs: React.FC = () => {
     const isAwaitingPack = job.status === 'awaiting_pack';
     const isPicking = job.status === 'picking';
     const isCompleted = job.status === 'completed';
-    const [isExpanded, setIsExpanded] = useState(false);
+    const isExpanded = expandedJobs.has(job.id);
     
     return (
       <div className={`${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} rounded-lg shadow-sm border`}>        
@@ -813,7 +823,7 @@ const Jobs: React.FC = () => {
                       Job {job.jobId}
                     </h3>
                     <button
-                      onClick={() => setIsExpanded(!isExpanded)}
+                      onClick={() => toggleJobExpansion(job.id)}
                       className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors flex-shrink-0 ${
                         isDarkMode 
                           ? 'text-slate-300 hover:text-white hover:bg-slate-700' 
@@ -848,6 +858,13 @@ const Jobs: React.FC = () => {
                     <div className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-xs mt-2`}>
                       {job.items.length} item{job.items.length !== 1 ? 's' : ''} • 
                       Total Qty: {job.items.reduce((sum, item) => sum + item.quantity, 0)}
+                      {isAwaitingPack && (
+                        <span className="ml-2">
+                          • Verified: {job.items.filter(item => 
+                            item.verified || locallyVerifiedItems.has(`${job.id}-${item.barcode}`)
+                          ).length}/{job.items.length}
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>
@@ -878,6 +895,13 @@ const Jobs: React.FC = () => {
                 <Button onClick={() => setIsStockUpdateModalOpen(true)} className="flex items-center gap-1" size='sm'>
                   <ClipboardList size={14} /> <span className="hidden sm:inline">Scan</span>
                 </Button>
+              )}
+              {isAwaitingPack && (
+                <div className={`text-sm ${isDarkMode ? 'text-slate-300' : 'text-slate-600'} bg-slate-100 dark:bg-slate-700 px-3 py-2 rounded-lg`}>
+                  Verification Status: {job.items.filter(item => 
+                    item.verified || locallyVerifiedItems.has(`${job.id}-${item.barcode}`)
+                  ).length}/{job.items.length} items verified
+                </div>
               )}
             </div>
             
@@ -941,12 +965,12 @@ const Jobs: React.FC = () => {
                         <div className="flex items-center gap-2 flex-shrink-0">
                           {isAwaitingPack && (
                             <Button
-                              variant={it.verified ? "success" : "primary"}
+                              variant={it.verified || locallyVerifiedItems.has(`${job.id}-${it.barcode}`) ? "success" : "primary"}
                               size="sm"
-                              onClick={() => verifyItem(job, it.barcode, !it.verified)}
+                              onClick={() => verifyItem(job, it.barcode, !(it.verified || locallyVerifiedItems.has(`${job.id}-${it.barcode}`)))}
                               disabled={verifyingItems.has(`${job.id}-${it.barcode}`)}
                               className={`h-7 px-2 text-xs transition-all duration-200 ${
-                                it.verified 
+                                it.verified || locallyVerifiedItems.has(`${job.id}-${it.barcode}`)
                                   ? 'bg-green-500 hover:bg-green-600 text-white' 
                                   : 'bg-blue-500 hover:bg-blue-600 text-white'
                               }`}
@@ -954,10 +978,14 @@ const Jobs: React.FC = () => {
                               {verifyingItems.has(`${job.id}-${it.barcode}`) ? (
                                 <RefreshCw size={12} className="animate-spin" />
                               ) : (
-                                <span className="hidden sm:inline">{it.verified ? 'Verified' : 'Verify'}</span>
+                                <span className="hidden sm:inline">
+                                  {it.verified || locallyVerifiedItems.has(`${job.id}-${it.barcode}`) ? 'Verified' : 'Verify'}
+                                </span>
                               )}
                             </Button>
                           )}
+                          
+
                           
                           {isAwaitingPack && !editingJobItem && (
                             <>
@@ -974,19 +1002,19 @@ const Jobs: React.FC = () => {
                                   reason: it.reason,
                                   storeName: it.storeName
                                 })} 
-                                className="h-7 w-7 p-0"
+                                className="h-8 w-8 p-0 flex items-center justify-center"
                                 title="Edit item"
                               >
-                                <Edit size={14} />
+                                <Edit size={16} />
                               </Button>
                               <Button 
                                 variant="danger" 
                                 size="sm" 
                                 onClick={() => removeJobItem(job, itemIndex)} 
-                                className="h-7 w-7 p-0"
+                                className="h-8 w-8 p-0 flex items-center justify-center"
                                 title="Remove item"
                               >
-                                <Trash2 size={14} />
+                                <Trash2 size={16} />
                               </Button>
                             </>
                           )}
