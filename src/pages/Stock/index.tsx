@@ -20,8 +20,10 @@ import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy,
 import { format } from 'date-fns';
 
 const Stock: React.FC = () => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+  const [nameSearchQuery, setNameSearchQuery] = useState(''); // New state for name search
+  const [debouncedNameSearchQuery, setDebouncedNameSearchQuery] = useState(''); // Debounced name search
+  const [barcodeAsinSearchQuery, setBarcodeAsinSearchQuery] = useState(''); // New state for barcode/ASIN search
+  const [debouncedBarcodeAsinSearchQuery, setDebouncedBarcodeAsinSearchQuery] = useState(''); // Debounced barcode/ASIN search
   const [sortBy, setSortBy] = useState('name');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -53,15 +55,25 @@ const Stock: React.FC = () => {
   const [totalCount, setTotalCount] = useState<number | null>(null);
 
 
-  //debounce search input
+  // Debounce name search input
   useEffect(() => {
-    const handler = setTimeout(()=>{
-      setDebouncedSearchQuery(searchQuery);
+    const handler = setTimeout(() => {
+      setDebouncedNameSearchQuery(nameSearchQuery);
     }, 300);
     return () => {
       clearTimeout(handler);
     };
-  }, [searchQuery]);
+  }, [nameSearchQuery]);
+
+  // Debounce barcode/ASIN search input
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedBarcodeAsinSearchQuery(barcodeAsinSearchQuery);
+    }, 300);
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [barcodeAsinSearchQuery]);
 
   // Fetch stock items from Firestore
   const fetchStockItems = useCallback (async () => {
@@ -136,44 +148,46 @@ const Stock: React.FC = () => {
 
   // Filter and sort items
   const filteredItems = useMemo(() => {
-    const searchLower = debouncedSearchQuery.toLowerCase();
+    const nameSearchLower = debouncedNameSearchQuery.toLowerCase();
+    const barcodeAsinSearchLower = debouncedBarcodeAsinSearchQuery.toLowerCase();
+    
     return items.filter(item => {
-    
-    const matchesName = item.name.toLowerCase().includes(searchLower);
-    const matchesLocation = `${item.locationCode} - ${item.shelfNumber}`.toLowerCase().includes(searchLower);
-    
-    // Handle comma-separated ASINs
-    const matchesAsin = item.asin ? item.asin.split(',').some(asin => 
-      asin.trim().toLowerCase().includes(searchLower)
-    ) : false;
-
-    // Handle barcode search
-    const matchesBarcode = item.barcode ? item.barcode.toLowerCase().includes(searchLower) : false;
-    
-    // Handle store and fulfillment type filter
-    const matchesStoreFilter = storeFilter 
-      ? (storeFilter.storeName === 'other' 
-          ? !predefinedStores.includes(item.storeName) && item.fulfillmentType === storeFilter.fulfillmentType
-          : item.storeName === storeFilter.storeName && item.fulfillmentType === storeFilter.fulfillmentType)
-      : true;
-    
-    // Handle status filter
-    const matchesStatusFilter = statusFilter === 'all' || item.status === statusFilter;
-    
-    return (matchesName || matchesLocation || matchesAsin || matchesBarcode) && matchesStoreFilter && matchesStatusFilter;
-  }).sort((a, b) => {
-    if (sortBy === 'name') {
-      return a.name.localeCompare(b.name);
-    } else if (sortBy === 'quantity') {
-      return b.quantity - a.quantity;
-    } else if (sortBy === 'price') {
-      return b.price - a.price;
-    } else if (sortBy === 'date') {
-      return new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime();
-    }
-    return 0;
-  });
-}, [items, debouncedSearchQuery, storeFilter, statusFilter, sortBy,predefinedStores]);
+      // Name search: check if name starts with the search query
+      const matchesName = debouncedNameSearchQuery === '' || 
+        item.name.toLowerCase().startsWith(nameSearchLower);
+      
+      // Barcode/ASIN search: check if barcode or ASIN contains the search query
+      const matchesBarcodeAsin = debouncedBarcodeAsinSearchQuery === '' || 
+        (item.barcode && item.barcode.toLowerCase().includes(barcodeAsinSearchLower)) ||
+        (item.asin && item.asin.split(',').some(asin => 
+          asin.trim().toLowerCase().includes(barcodeAsinSearchLower)
+        ));
+      
+      // Handle store and fulfillment type filter
+      const matchesStoreFilter = storeFilter 
+        ? (storeFilter.storeName === 'other' 
+            ? !predefinedStores.includes(item.storeName) && item.fulfillmentType === storeFilter.fulfillmentType
+            : item.storeName === storeFilter.storeName && item.fulfillmentType === storeFilter.fulfillmentType)
+        : true;
+      
+      // Handle status filter
+      const matchesStatusFilter = statusFilter === 'all' || item.status === statusFilter;
+      
+      // Both name and barcode/ASIN searches must match (if both are provided)
+      return matchesName && matchesBarcodeAsin && matchesStoreFilter && matchesStatusFilter;
+    }).sort((a, b) => {
+      if (sortBy === 'name') {
+        return a.name.localeCompare(b.name);
+      } else if (sortBy === 'quantity') {
+        return b.quantity - a.quantity;
+      } else if (sortBy === 'price') {
+        return b.price - a.price;
+      } else if (sortBy === 'date') {
+        return new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime();
+      }
+      return 0;
+    });
+  }, [items, debouncedNameSearchQuery, debouncedBarcodeAsinSearchQuery, storeFilter, statusFilter, sortBy, predefinedStores]);
 
   const checkLocationForExistingProducts = useCallback((locationCode: string, shelfNumber: string): StockItem[] => {
     return items.filter(item => 
@@ -779,15 +793,30 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
 
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="flex-1">
-          <div className="relative">
-            <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 ${isDarkMode ? 'text-slate-400' : 'text-slate-400'}`} size={16} />
-            <Input
-              type="text"
-              placeholder="Search by name, location, ASIN or barcode"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Name Search */}
+            <div className="relative">
+              <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 ${isDarkMode ? 'text-slate-400' : 'text-slate-400'}`} size={16} />
+              <Input
+                type="text"
+                placeholder="Search by product name"
+                value={nameSearchQuery}
+                onChange={(e) => setNameSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            
+            {/* Barcode/ASIN Search */}
+            <div className="relative">
+              <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 ${isDarkMode ? 'text-slate-400' : 'text-slate-400'}`} size={16} />
+              <Input
+                type="text"
+                placeholder="Search by barcode or ASIN"
+                value={barcodeAsinSearchQuery}
+                onChange={(e) => setBarcodeAsinSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
           </div>
         </div>
         <div className="w-full sm:w-48">
@@ -1212,6 +1241,7 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
         message={`Are you sure you want to delete ${selectedItems.size} selected item${selectedItems.size > 1 ? 's' : ''}? This action cannot be undone.`}
         isLoading={isLoading}
       />
+      
       <Modal
         isOpen={isQuantityConfirmModalOpen}
         onClose={() => {

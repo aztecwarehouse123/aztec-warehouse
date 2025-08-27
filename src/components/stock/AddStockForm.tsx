@@ -32,6 +32,7 @@ interface FormData {
   barcode?: string;
   fulfillmentType: 'fba' | 'mf';
   storeName: string;
+  selectedAsins: string[]; // Add this new field for multiple ASINs
 }
 
 interface LocationEntry {
@@ -280,7 +281,8 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
     status: 'pending',
     damagedItems: '0',
     fulfillmentType: 'mf', // Default to MF since default store is 'supply & serve'
-    storeName: 'supply & serve' // Default to first store
+    storeName: 'supply & serve', // Default to first store
+    selectedAsins: [] // Initialize empty array for multiple ASINs
   });
 
   const [locationEntries, setLocationEntries] = useState<LocationEntry[]>([
@@ -307,6 +309,7 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
   const [multipleAsins, setMultipleAsins] = useState<string[]>([]);
   const [isAsinSelectionModalOpen, setIsAsinSelectionModalOpen] = useState(false);
   const [pendingAsinData, setPendingAsinData] = useState<{ name: string; unit: string; asin: string } | null>(null);
+  const [selectedMultipleAsins, setSelectedMultipleAsins] = useState<string[]>([]); // Add state for selected multiple ASINs
 
   // Ensure fulfillment type is consistent with store name
   useEffect(() => {
@@ -418,13 +421,14 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
           const asinArray = asinValue.split(' ').filter((asin: string) => asin.trim());
           if (asinArray.length > 1) {
             setMultipleAsins(asinArray);
+            setSelectedMultipleAsins([]); // Reset selected ASINs
             setPendingAsinData({
               name: docData.name || '',
               unit: docData.unit || '',
               asin: asinArray[0] // Set first ASIN as default
             });
             setIsAsinSelectionModalOpen(true);
-            setBarcodeSearchMessage('Multiple ASINs detected. Please select one.');
+            setBarcodeSearchMessage('Multiple ASINs detected. Please select one or more.');
             searchSuccessful = true;
             return;
           }
@@ -434,7 +438,8 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
           ...prev,
           name: docData.name || prev.name,
           unit: docData.unit || prev.unit,
-          asin: asinValue || prev.asin
+          asin: asinValue || prev.asin,
+          selectedAsins: asinValue ? [asinValue] : []
         }));
         setBarcodeSearchMessage('Product name, unit, and ASIN auto-filled from scanned products.');
         searchSuccessful = true;
@@ -453,13 +458,14 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
             const asinArray = asinValue.split(' ').filter((asin: string) => asin.trim());
             if (asinArray.length > 1) {
               setMultipleAsins(asinArray);
+              setSelectedMultipleAsins([]); // Reset selected ASINs
               setPendingAsinData({
                 name: item.title || '',
                 unit: '',
                 asin: asinArray[0] // Set first ASIN as default
             });
               setIsAsinSelectionModalOpen(true);
-              setBarcodeSearchMessage('Multiple ASINs detected. Please select one.');
+              setBarcodeSearchMessage('Multiple ASINs detected. Please select one or more.');
               searchSuccessful = true;
               return;
             }
@@ -468,7 +474,8 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
           setFormData(prev => ({
             ...prev,
             name: item.title || prev.name,
-            asin: asinValue || prev.asin
+            asin: asinValue || prev.asin,
+            selectedAsins: asinValue ? [asinValue] : []
           }));
           setBarcodeSearchMessage('Product name and ASIN auto-filled from external database.');
           searchSuccessful = true;
@@ -510,13 +517,14 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
           const asinArray = asinValue.split(' ').filter((asin: string) => asin.trim());
           if (asinArray.length > 1) {
             setMultipleAsins(asinArray);
+            setSelectedMultipleAsins([]); // Reset selected ASINs
             setPendingAsinData({
               name: docData.name || '',
               unit: docData.unit || '',
               asin: asinArray[0] // Set first ASIN as default
             });
             setIsAsinSelectionModalOpen(true);
-            setBarcodeSearchMessage('Multiple ASINs detected. Please select one.');
+            setBarcodeSearchMessage('Multiple ASINs detected. Please select one or more.');
             setIsFetchingProductInfo(false);
             return;
           }
@@ -526,7 +534,8 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
           ...prev,
           name: docData.name || prev.name,
           unit: docData.unit || prev.unit,
-          asin: asinValue || prev.asin
+          asin: asinValue || prev.asin,
+          selectedAsins: asinValue ? [asinValue] : []
         }));
         setBarcodeSearchMessage('Product name, unit, and ASIN auto-filled from scanned products.');
         setIsFetchingProductInfo(false);
@@ -546,13 +555,14 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
           const asinArray = asinValue.split(' ').filter((asin: string) => asin.trim());
           if (asinArray.length > 1) {
             setMultipleAsins(asinArray);
+            setSelectedMultipleAsins([]); // Reset selected ASINs
             setPendingAsinData({
               name: item.title || '',
               unit: '',
               asin: asinArray[0] // Set first ASIN as default
             });
             setIsAsinSelectionModalOpen(true);
-            setBarcodeSearchMessage('Multiple ASINs detected. Please select one.');
+            setBarcodeSearchMessage('Multiple ASINs detected. Please select one or more.');
             setIsFetchingProductInfo(false);
             return;
           }
@@ -561,7 +571,8 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
         setFormData(prev => ({
           ...prev,
           name: item.title || prev.name,
-          asin: asinValue || prev.asin
+          asin: asinValue || prev.asin,
+          selectedAsins: asinValue ? [asinValue] : []
         }));
         setBarcodeSearchMessage('Product name and ASIN auto-filled from UPC database.');
       } else {
@@ -598,6 +609,10 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
       // Ensure supplier and storeName are set to first option if not selected
       const supplier = formData.supplier || supplierOptions[0].value;
       const storeName = formData.storeName || 'supply & serve';
+      
+      // Use selected ASINs if available, otherwise fall back to single ASIN
+      const asinsToUse = formData.selectedAsins.length > 0 ? formData.selectedAsins : (formData.asin ? [formData.asin] : []);
+      
       const stockData = locationEntries.map(entry => ({
         name: formData.name,
         quantity: parseInt(entry.quantity),
@@ -606,7 +621,7 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
         supplier: supplier === 'other' ? otherSupplier : supplier,
         locationCode: entry.locationCode,
         shelfNumber: entry.shelfNumber,
-        asin: formData.asin || null,
+        asin: asinsToUse.length > 0 ? asinsToUse.join(', ') : null, // Join multiple ASINs with commas
         status: formData.status as 'pending' | 'active',
         damagedItems: parseInt(formData.damagedItems),
         barcode: formData.barcode || null,
@@ -614,6 +629,7 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
         lastUpdated: new Date(),
         storeName: storeName === 'other' ? otherStoreName : storeName
       }));
+      
       // Check for duplicate (same name, barcode, and location)
       const duplicate = stockData.find(newItem =>
         existingStockItems.some(existing =>
@@ -669,26 +685,39 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
     setIsSuccessModalOpen(true);
   };
 
-  const handleAsinSelection = (selectedAsin: string) => {
+  const handleAsinSelection = (selectedAsins: string[]) => {
     if (pendingAsinData) {
       setFormData(prev => ({
         ...prev,
         name: pendingAsinData.name || prev.name,
         unit: pendingAsinData.unit || prev.unit,
-        asin: selectedAsin
+        asin: selectedAsins.join(', '), // Join multiple ASINs for display
+        selectedAsins: selectedAsins // Store the array of selected ASINs
       }));
-      setBarcodeSearchMessage('Product info and selected ASIN auto-filled.');
+      setBarcodeSearchMessage(`Product info and ${selectedAsins.length} selected ASIN(s) auto-filled.`);
     }
     setIsAsinSelectionModalOpen(false);
     setMultipleAsins([]);
     setPendingAsinData(null);
+    setSelectedMultipleAsins([]);
   };
 
   const handleCancelAsinSelection = () => {
     setIsAsinSelectionModalOpen(false);
     setMultipleAsins([]);
     setPendingAsinData(null);
+    setSelectedMultipleAsins([]);
     setBarcodeSearchMessage('ASIN selection cancelled. Please enter details manually.');
+  };
+
+  const handleAsinToggle = (asin: string) => {
+    setSelectedMultipleAsins(prev => {
+      if (prev.includes(asin)) {
+        return prev.filter(a => a !== asin);
+      } else {
+        return [...prev, asin];
+      }
+    });
   };
 
   return (
@@ -895,7 +924,7 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
               
             </div>
           <Input
-            label="ASIN (seperated by commas, if multiple)"
+            label="ASIN (separated by commas, if multiple)"
             name="asin"
             value={formData.asin}
             onChange={handleChange}
@@ -1044,7 +1073,7 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
       >
         <div className="space-y-4">
           <p className={isDarkMode ? 'text-slate-200' : 'text-slate-700'}>
-            Multiple ASINs were found for this product. Please select the appropriate one:
+            Multiple ASINs were found for this product. Please select one or more:
           </p>
           
           <div className="space-y-3">
@@ -1052,31 +1081,55 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
               <div
                 key={index}
                 className={`p-3 rounded-lg border cursor-pointer transition-colors ${
-                  isDarkMode 
-                    ? 'border-slate-600 hover:border-blue-400 hover:bg-slate-700' 
-                    : 'border-slate-300 hover:border-blue-400 hover:bg-blue-50'
+                  selectedMultipleAsins.includes(asin)
+                    ? isDarkMode 
+                      ? 'border-blue-400 bg-blue-900/20' 
+                      : 'border-blue-400 bg-blue-50'
+                    : isDarkMode 
+                      ? 'border-slate-600 hover:border-blue-400 hover:bg-slate-700' 
+                      : 'border-slate-300 hover:border-blue-400 hover:bg-blue-50'
                 }`}
-                onClick={() => handleAsinSelection(asin)}
+                onClick={() => handleAsinToggle(asin)}
               >
                 <div className="flex items-center justify-between">
                   <span className={`font-mono text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
                     {asin}
                   </span>
-                  <span className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                    ASIN {index + 1}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {selectedMultipleAsins.includes(asin) && (
+                      <CheckCircle size={16} className="text-blue-500" />
+                    )}
+                    <span className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                      ASIN {index + 1}
+                    </span>
+                  </div>
                 </div>
               </div>
             ))}
           </div>
 
-          <div className="flex justify-end gap-2 pt-4">
-            <Button
-              variant="secondary"
-              onClick={handleCancelAsinSelection}
-            >
-              Cancel
-            </Button>
+          <div className="flex justify-between items-center pt-4">
+            <div className="text-sm text-slate-500">
+              {selectedMultipleAsins.length > 0 
+                ? `${selectedMultipleAsins.length} ASIN(s) selected`
+                : 'No ASINs selected'
+              }
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="secondary"
+                onClick={handleCancelAsinSelection}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => handleAsinSelection(selectedMultipleAsins)}
+                disabled={selectedMultipleAsins.length === 0}
+              >
+                Confirm Selection
+              </Button>
+            </div>
           </div>
         </div>
       </Modal>
