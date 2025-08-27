@@ -18,6 +18,7 @@ interface ScannedProduct {
   id: string;
   name: string;
   unit: string;
+  asin: string;
   barcode: string;
   createdAt: Date;
 }
@@ -28,7 +29,7 @@ const Add: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [products, setProducts] = useState<ScannedProduct[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [form, setForm] = useState({ name: '', unit: '', barcode: '' });
+  const [form, setForm] = useState({ name: '', unit: '', asin: '', barcode: '' });
   const [error, setError] = useState<string | null>(null);
   const [editProduct, setEditProduct] = useState<ScannedProduct | null>(null);
   const [isScanModalOpen, setIsScanModalOpen] = useState(false);
@@ -41,6 +42,8 @@ const Add: React.FC = () => {
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [totalCount, setTotalCount] = useState<number | null>(null);
+  const [showDuplicates, setShowDuplicates] = useState(false);
+  const [duplicateProducts, setDuplicateProducts] = useState<{ name: string; products: ScannedProduct[] }[]>([]);
 
   useEffect(() => {
     fetchProducts();
@@ -52,12 +55,13 @@ const Add: React.FC = () => {
     try {
       let q;
       if (search && search.trim() !== '') {
-        // Search by name or barcode (case-insensitive)
-        // Firestore does not support OR queries directly, so do two queries and merge results
+        // Search by name, barcode, or ASIN (case-insensitive)
+        // Firestore does not support OR queries directly, so do three queries and merge results
         const nameQ = query(collection(db, 'scannedProducts'), where('name', '>=', search), where('name', '<=', search + '\uf8ff'), orderBy('name'), limit(100));
         const barcodeQ = query(collection(db, 'scannedProducts'), where('barcode', '>=', search), where('barcode', '<=', search + '\uf8ff'), orderBy('barcode'), limit(100));
-        const [nameSnap, barcodeSnap] = await Promise.all([getDocs(nameQ), getDocs(barcodeQ)]);
-        const items = [...nameSnap.docs, ...barcodeSnap.docs].reduce((acc, doc) => {
+        const asinQ = query(collection(db, 'scannedProducts'), where('asin', '>=', search), where('asin', '<=', search + '\uf8ff'), orderBy('asin'), limit(100));
+        const [nameSnap, barcodeSnap, asinSnap] = await Promise.all([getDocs(nameQ), getDocs(barcodeQ), getDocs(asinQ)]);
+        const items = [...nameSnap.docs, ...barcodeSnap.docs, ...asinSnap.docs].reduce((acc, doc) => {
           if (!acc.some(d => d.id === doc.id)) acc.push(doc);
           return acc;
         }, [] as typeof nameSnap.docs);
@@ -67,6 +71,7 @@ const Add: React.FC = () => {
             id: doc.id,
             name: data.name,
             unit: data.unit,
+            asin: data.asin || '',
             barcode: data.barcode,
             createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(data.createdAt)
           };
@@ -81,6 +86,7 @@ const Add: React.FC = () => {
           id: doc.id,
           name: data.name,
           unit: data.unit,
+          asin: data.asin || '',
           barcode: data.barcode,
           createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(data.createdAt)
         };
@@ -104,16 +110,46 @@ const Add: React.FC = () => {
     }
   };
 
+  const findDuplicateProducts = () => {
+    const nameGroups: { [key: string]: ScannedProduct[] } = {};
+    
+    // Group products by name
+    products.forEach(product => {
+      if (!nameGroups[product.name]) {
+        nameGroups[product.name] = [];
+      }
+      nameGroups[product.name].push(product);
+    });
+    
+    // Filter only groups with more than one product (duplicates)
+    const duplicates = Object.entries(nameGroups)
+      .filter(([, productList]) => productList.length > 1)
+      .map(([name, productList]) => ({
+        name,
+        products: productList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      }))
+      .sort((a, b) => b.products.length - a.products.length); // Sort by number of duplicates
+    
+    setDuplicateProducts(duplicates);
+    setShowDuplicates(true);
+  };
+
+  const clearDuplicatesFilter = () => {
+    setShowDuplicates(false);
+    setDuplicateProducts([]);
+  };
+
   const handleOpenModal = (product?: ScannedProduct) => {
     if (product) {
       setForm({
         name: product.name || '',
         unit: product.unit || '',
+        asin: product.asin || '',
         barcode: product.barcode || ''
       });
       setEditProduct(product);
     } else {
-      setForm({ name: '', unit: '', barcode: '' });
+      setForm({ name: '', unit: '', asin: '', barcode: '' });
       setEditProduct(null);
     }
     setIsModalOpen(true);
@@ -143,7 +179,8 @@ const Add: React.FC = () => {
         const item = data.items[0];
         setForm(prev => ({
           ...prev,
-          name: item.title || prev.name
+          name: item.title || prev.name,
+          asin: item.asin || item.amazon_asin || ''
         }));
       } else {
         setFetchError('No product info found for this barcode.');
@@ -158,7 +195,7 @@ const Add: React.FC = () => {
   const handleAddOrEditProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name.trim() || !form.unit.trim() || !form.barcode.trim()) {
-      setError('All fields are required');
+      setError('Name, Unit, and Barcode are required');
       return;
     }
     setIsLoading(true);
@@ -172,7 +209,8 @@ const Add: React.FC = () => {
         await updateDoc(ref, {
           name: uppercaseName,
           unit: form.unit,
-          barcode: form.barcode
+          barcode: form.barcode,
+          asin: form.asin
         });
         // Add activity log for edit
         if (user && editProduct) {
@@ -180,6 +218,7 @@ const Add: React.FC = () => {
           if (editProduct.name !== uppercaseName) changes.push(`name from "${editProduct.name}" to "${uppercaseName}"`);
           if (editProduct.unit !== form.unit) changes.push(`unit from ${editProduct.unit || 'none'} to ${form.unit || 'none'}`);
           if (editProduct.barcode !== form.barcode) changes.push(`barcode from "${editProduct.barcode || 'none'}" to "${form.barcode || 'none'}"`);
+          if (editProduct.asin !== form.asin) changes.push(`asin from "${editProduct.asin || 'none'}" to "${form.asin || 'none'}"`);
           if (changes.length > 0) {
             await addDoc(collection(db, 'activityLogs'), {
               user: user.name,
@@ -195,6 +234,7 @@ const Add: React.FC = () => {
           name: uppercaseName,
           unit: form.unit,
           barcode: form.barcode,
+          asin: form.asin,
           createdAt: Timestamp.fromDate(new Date())
         });
         // Add activity log for add
@@ -259,6 +299,7 @@ const Add: React.FC = () => {
         products = allRows.map(row => ({
           name: row['Description']?.toString().trim() || '',
           unit: row['Unit']?.toString().trim() || '',
+          asin: row['ASIN']?.toString().trim() || '',
           barcode: row['EAN']?.toString().trim() || ''
         })).filter(p => p.name || p.unit || p.barcode);
         const skipped = allRows.length - products.length;
@@ -275,6 +316,7 @@ const Add: React.FC = () => {
         products = allRows.map(row => ({
           name: row['Description']?.toString().trim() || '',
           unit: row['Unit']?.toString().trim() || '',
+          asin: row['ASIN']?.toString().trim() || '',
           barcode: row['EAN']?.toString().trim() || ''
         })).filter(p => p.name || p.unit || p.barcode);
         const skipped = allRows.length - products.length;
@@ -298,6 +340,7 @@ const Add: React.FC = () => {
           name: p.name.toUpperCase(),
           unit: p.unit,
           barcode: p.barcode,
+          asin: '', // ASIN will be fetched later
           createdAt: Timestamp.fromDate(new Date())
         });
       }
@@ -347,6 +390,14 @@ const Add: React.FC = () => {
               disabled={isLoading}
               icon={<RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />}
             />
+            <Button 
+              variant={showDuplicates ? "primary" : "secondary"}
+              onClick={showDuplicates ? clearDuplicatesFilter : findDuplicateProducts}
+              className="w-full md:w-auto"
+              icon={showDuplicates ? <RefreshCw size={18} /> : <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M7 12h10"/><path d="M9 18h6"/></svg>}
+            >
+              {showDuplicates ? 'Clear Filter' : 'Show Duplicates'}
+            </Button>
             <Button icon={<Upload size={18} />} onClick={() => fileInputRef.current?.click()} className="w-full md:w-auto">
               Upload CSV/XLSX
             </Button>
@@ -366,7 +417,7 @@ const Add: React.FC = () => {
           <div className="flex-1 relative">
             <Input
               type="text"
-              placeholder="Search by name or barcode"
+              placeholder="Search by name, barcode, or ASIN"
               value={displaySearchQuery}
               onChange={e => {
                 const inputValue = e.target.value;
@@ -399,6 +450,14 @@ const Add: React.FC = () => {
               onChange={handleChange}
               placeholder="e.g. 350ML, 75GM, 1PC"
               required
+              fullWidth
+            />
+            <Input
+              label="ASIN"
+              name="asin"
+              value={form.asin}
+              onChange={handleChange}
+              placeholder="Amazon Standard Identification Number"
               fullWidth
             />
             <div className="relative w-full">
@@ -466,6 +525,7 @@ const Add: React.FC = () => {
               <tr>
                 <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Name</th>
                 <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Unit</th>
+                <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>ASIN</th>
                 <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Barcode</th>
                 <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Created At</th>
                 <th className={`px-4 py-3 text-right text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Actions</th>
@@ -474,18 +534,67 @@ const Add: React.FC = () => {
             <tbody className={`divide-y ${isDarkMode ? 'divide-slate-700' : 'divide-slate-200'}`}>
               {isLoading ? (
                 <tr>
-                  <td colSpan={5} style={{ border: 0, padding: 0 }}>
+                  <td colSpan={6} style={{ border: 0, padding: 0 }}>
                     <div className="flex flex-col items-center justify-center min-h-[200px] w-full py-12">
                       <Loader2 className={`w-8 h-8 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'} animate-spin`} />
                       <p className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>Loading products...</p>
                     </div>
                   </td>
                 </tr>
+              ) : showDuplicates && duplicateProducts.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className={`text-center py-8 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>No duplicate products found.</td>
+                </tr>
+              ) : showDuplicates && duplicateProducts.length > 0 ? (
+                // Display duplicate products grouped by name
+                duplicateProducts.flatMap((group, groupIndex) => [
+                  // Group header row
+                  <tr key={`header-${group.name}`} className={`${isDarkMode ? 'bg-slate-700/30' : 'bg-slate-100/50'}`}>
+                    <td colSpan={6} className={`px-4 py-2 text-sm font-semibold ${isDarkMode ? 'text-blue-300' : 'text-blue-600'}`}>
+                      {group.name} - {group.products.length} duplicates
+                    </td>
+                  </tr>,
+                  // Product rows
+                  ...group.products.map((product, index) => (
+                    <motion.tr
+                      key={product.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3, delay: (groupIndex * 0.1) + (index * 0.05), ease: 'easeOut' }}
+                      className={`hover:${isDarkMode ? 'bg-slate-700/50' : 'bg-slate-50'} cursor-pointer ${isDarkMode ? 'bg-slate-800/50' : 'bg-slate-50/50'}`}
+                      onClick={() => setSelectedProduct(product)}
+                    >
+                      <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-blue-400' : 'text-blue-700'} font-medium`}>{product.name}</td>
+                      <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{product.unit || '-'}</td>
+                      <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{product.asin || '-'}</td>
+                      <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{product.barcode}</td>
+                      <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{format(product.createdAt, 'MMM d, yyyy, h:mm a')}</td>
+                      <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'} text-right`}>
+                        <button
+                          onClick={e => { e.stopPropagation(); handleOpenModal(product); }}
+                          className={`p-1 ${isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'} transition-colors`}
+                          title="Edit"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                        <button
+                          onClick={e => { e.stopPropagation(); setDeleteProductId(product.id); }}
+                          className={`p-1 ml-2 ${isDarkMode ? 'text-red-400 hover:text-red-300' : 'text-red-600 hover:text-red-700'} transition-colors`}
+                          title="Delete"
+                          disabled={isDeleting && deleteProductId === product.id}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </td>
+                    </motion.tr>
+                  ))
+                ])
               ) : products.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className={`text-center py-8 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>No products found.</td>
+                  <td colSpan={6} className={`text-center py-8 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>No products found.</td>
                 </tr>
-              ) :
+              ) : (
+                // Display normal products list
                 products.map((product, index) => (
                   <motion.tr
                     key={product.id}
@@ -496,7 +605,8 @@ const Add: React.FC = () => {
                     onClick={() => setSelectedProduct(product)}
                   >
                     <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-blue-400' : 'text-blue-700'} font-medium`}>{product.name}</td>
-                    <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{product.unit}</td>
+                    <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{product.unit || '-'}</td>
+                    <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{product.asin || '-'}</td>
                     <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{product.barcode}</td>
                     <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{format(product.createdAt, 'MMM d, yyyy, h:mm a')}</td>
                     <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'} text-right`}>
@@ -518,7 +628,7 @@ const Add: React.FC = () => {
                     </td>
                   </motion.tr>
                 ))
-              }
+              )}
             </tbody>
           </table>
         </div>
@@ -529,9 +639,59 @@ const Add: React.FC = () => {
               <Loader2 className={`w-8 h-8 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'} animate-spin`} />
               <p className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>Loading products...</p>
             </div>
+          ) : showDuplicates && duplicateProducts.length === 0 ? (
+            <div className={`text-center py-8 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>No duplicate products found.</div>
+          ) : showDuplicates && duplicateProducts.length > 0 ? (
+            // Display duplicate products grouped by name for mobile
+            duplicateProducts.map((group) => (
+              <div key={group.name} className="space-y-3">
+                {/* Group header */}
+                <div className={`text-center py-2 px-4 rounded-lg ${isDarkMode ? 'bg-slate-700/30 text-blue-300' : 'bg-slate-100/50 text-blue-600'} font-semibold`}>
+                  {group.name} - {group.products.length} duplicates
+                </div>
+                {/* Product cards */}
+                {group.products.map((product) => (
+                  <div
+                    key={product.id}
+                    className={`rounded-lg shadow p-4 flex flex-col gap-2 ${isDarkMode ? 'bg-slate-800/50' : 'bg-slate-50/50'} cursor-pointer`}
+                    onClick={() => setSelectedProduct(product)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className={`font-semibold ${isDarkMode ? 'text-blue-300' : 'text-blue-700'}`}>{product.name}</div>
+                        <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Unit: {product.unit || '-'}</div>
+                        <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>ASIN: {product.asin || '-'}</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={e => { e.stopPropagation(); handleOpenModal(product); }}
+                          className={`${isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'}`}
+                        >
+                          <Edit2 size={16} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={e => { e.stopPropagation(); setDeleteProductId(product.id); }}
+                          className={`${isDarkMode ? 'text-red-400 hover:text-red-300' : 'text-red-600 hover:text-red-700'}`}
+                          disabled={isDeleting && deleteProductId === product.id}
+                        >
+                          <Trash2 size={16} />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Barcode: <span className={`font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{product.barcode}</span></div>
+                    <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Created: <span className={`font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{format(product.createdAt, 'MMM d, yyyy, h:mm a')}</span></div>
+                  </div>
+                ))}
+              </div>
+            ))
           ) : products.length === 0 ? (
             <div className={`text-center py-8 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>No products found.</div>
           ) : (
+            // Display normal products list for mobile
             products.map((product) => (
               <div
                 key={product.id}
@@ -541,7 +701,8 @@ const Add: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <div className={`font-semibold ${isDarkMode ? 'text-blue-300' : 'text-blue-700'}`}>{product.name}</div>
-                    <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{product.unit}</div>
+                    <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Unit: {product.unit || '-'}</div>
+                    <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>ASIN: {product.asin || '-'}</div>
                   </div>
                   <div className="flex items-center gap-2">
                     <Button
@@ -600,6 +761,10 @@ const Add: React.FC = () => {
                 <div>
                   <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Unit</p>
                   <p className={`font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{selectedProduct.unit || '-'}</p>
+                </div>
+                <div>
+                  <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>ASIN</p>
+                  <p className={`font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{selectedProduct.asin || '-'}</p>
                 </div>
                 <div>
                   <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Barcode</p>

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Barcode, Trash2, CheckCircle } from 'lucide-react';
 import Input from '../ui/Input';
 import Button from '../ui/Button';
@@ -303,7 +303,10 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [isAddProductModalOpen, setIsAddProductModalOpen] = useState(false);
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [searchTimeoutRef, setSearchTimeoutRef] = useState<NodeJS.Timeout | null>(null);
+  const [multipleAsins, setMultipleAsins] = useState<string[]>([]);
+  const [isAsinSelectionModalOpen, setIsAsinSelectionModalOpen] = useState(false);
+  const [pendingAsinData, setPendingAsinData] = useState<{ name: string; unit: string; asin: string } | null>(null);
 
   // Ensure fulfillment type is consistent with store name
   useEffect(() => {
@@ -331,22 +334,23 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
     // Auto-search when barcode is manually entered and is 13 digits
     if (name === 'barcode' && value.length === 13 && !isFetchingProductInfo) {
       // Clear any existing timeout
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
+      if (searchTimeoutRef) {
+        clearTimeout(searchTimeoutRef);
       }
       
       // Add a small delay to avoid searching while user is still typing
-      searchTimeoutRef.current = setTimeout(() => {
+      const timeoutId = setTimeout(() => {
         // Use the current value directly since we know it's 13 digits
         if (value.length === 13) {
           fetchBarcodeInfo(value);
         }
       }, 500);
+      setSearchTimeoutRef(timeoutId);
     } else if (name === 'barcode' && value.length !== 13) {
       // Clear timeout if barcode is not 13 digits
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-        searchTimeoutRef.current = null;
+      if (searchTimeoutRef) {
+        clearTimeout(searchTimeoutRef);
+        setSearchTimeoutRef(null);
       }
     }
   };
@@ -407,12 +411,32 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
       const snapshot = await getDocs(q);
       if (!snapshot.empty) {
         const docData = snapshot.docs[0].data();
+        const asinValue = docData.asin || '';
+        
+        // Check if ASIN contains multiple values (space-separated)
+        if (asinValue && asinValue.includes(' ')) {
+          const asinArray = asinValue.split(' ').filter((asin: string) => asin.trim());
+          if (asinArray.length > 1) {
+            setMultipleAsins(asinArray);
+            setPendingAsinData({
+              name: docData.name || '',
+              unit: docData.unit || '',
+              asin: asinArray[0] // Set first ASIN as default
+            });
+            setIsAsinSelectionModalOpen(true);
+            setBarcodeSearchMessage('Multiple ASINs detected. Please select one.');
+            searchSuccessful = true;
+            return;
+          }
+        }
+        
         setFormData(prev => ({
           ...prev,
           name: docData.name || prev.name,
-          unit: docData.unit || prev.unit
+          unit: docData.unit || prev.unit,
+          asin: asinValue || prev.asin
         }));
-        setBarcodeSearchMessage('Product name and unit auto-filled from scanned products.');
+        setBarcodeSearchMessage('Product name, unit, and ASIN auto-filled from scanned products.');
         searchSuccessful = true;
       } else {
         // Try external API
@@ -422,11 +446,31 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
         const data = await response.json();
         if (data && data.items && data.items.length > 0) {
           const item = data.items[0];
+          const asinValue = item.asin || item.amazon_asin || '';
+          
+          // Check if ASIN contains multiple values (space-separated)
+          if (asinValue && asinValue.includes(' ')) {
+            const asinArray = asinValue.split(' ').filter((asin: string) => asin.trim());
+            if (asinArray.length > 1) {
+              setMultipleAsins(asinArray);
+              setPendingAsinData({
+                name: item.title || '',
+                unit: '',
+                asin: asinArray[0] // Set first ASIN as default
+            });
+              setIsAsinSelectionModalOpen(true);
+              setBarcodeSearchMessage('Multiple ASINs detected. Please select one.');
+              searchSuccessful = true;
+              return;
+            }
+          }
+          
           setFormData(prev => ({
             ...prev,
-            name: item.title || prev.name
+            name: item.title || prev.name,
+            asin: asinValue || prev.asin
           }));
-          setBarcodeSearchMessage('Product name auto-filled from external database.');
+          setBarcodeSearchMessage('Product name and ASIN auto-filled from external database.');
           searchSuccessful = true;
         } else {
           setBarcodeSearchMessage('No product found for this barcode. Please enter details manually.');
@@ -459,12 +503,32 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
       const snapshot = await getDocs(q);
       if (!snapshot.empty) {
         const docData = snapshot.docs[0].data();
+        const asinValue = docData.asin || '';
+        
+        // Check if ASIN contains multiple values (space-separated)
+        if (asinValue && asinValue.includes(' ')) {
+          const asinArray = asinValue.split(' ').filter((asin: string) => asin.trim());
+          if (asinArray.length > 1) {
+            setMultipleAsins(asinArray);
+            setPendingAsinData({
+              name: docData.name || '',
+              unit: docData.unit || '',
+              asin: asinArray[0] // Set first ASIN as default
+            });
+            setIsAsinSelectionModalOpen(true);
+            setBarcodeSearchMessage('Multiple ASINs detected. Please select one.');
+            setIsFetchingProductInfo(false);
+            return;
+          }
+        }
+        
         setFormData(prev => ({
           ...prev,
           name: docData.name || prev.name,
-          unit: docData.unit || prev.unit
+          unit: docData.unit || prev.unit,
+          asin: asinValue || prev.asin
         }));
-        setBarcodeSearchMessage('Product name and unit auto-filled from scanned products.');
+        setBarcodeSearchMessage('Product name, unit, and ASIN auto-filled from scanned products.');
         setIsFetchingProductInfo(false);
         return;
       }
@@ -475,11 +539,31 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
       const data = await response.json();
       if (data && data.items && data.items.length > 0) {
         const item = data.items[0];
+        const asinValue = item.asin || item.amazon_asin || '';
+        
+        // Check if ASIN contains multiple values (space-separated)
+        if (asinValue && asinValue.includes(' ')) {
+          const asinArray = asinValue.split(' ').filter((asin: string) => asin.trim());
+          if (asinArray.length > 1) {
+            setMultipleAsins(asinArray);
+            setPendingAsinData({
+              name: item.title || '',
+              unit: '',
+              asin: asinArray[0] // Set first ASIN as default
+            });
+            setIsAsinSelectionModalOpen(true);
+            setBarcodeSearchMessage('Multiple ASINs detected. Please select one.');
+            setIsFetchingProductInfo(false);
+            return;
+          }
+        }
+        
         setFormData(prev => ({
           ...prev,
-          name: item.title || prev.name
+          name: item.title || prev.name,
+          asin: asinValue || prev.asin
         }));
-        setBarcodeSearchMessage('Product name auto-filled from UPC database.');
+        setBarcodeSearchMessage('Product name and ASIN auto-filled from UPC database.');
       } else {
         setFetchError('No product info found for this barcode.');
       }
@@ -583,6 +667,28 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
     // Show success message
     setSuccessMessage('Product has been successfully added to the database!');
     setIsSuccessModalOpen(true);
+  };
+
+  const handleAsinSelection = (selectedAsin: string) => {
+    if (pendingAsinData) {
+      setFormData(prev => ({
+        ...prev,
+        name: pendingAsinData.name || prev.name,
+        unit: pendingAsinData.unit || prev.unit,
+        asin: selectedAsin
+      }));
+      setBarcodeSearchMessage('Product info and selected ASIN auto-filled.');
+    }
+    setIsAsinSelectionModalOpen(false);
+    setMultipleAsins([]);
+    setPendingAsinData(null);
+  };
+
+  const handleCancelAsinSelection = () => {
+    setIsAsinSelectionModalOpen(false);
+    setMultipleAsins([]);
+    setPendingAsinData(null);
+    setBarcodeSearchMessage('ASIN selection cancelled. Please enter details manually.');
   };
 
   return (
@@ -924,6 +1030,52 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
               onClick={() => setIsSuccessModalOpen(false)}
             >
               OK
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ASIN Selection Modal */}
+      <Modal
+        isOpen={isAsinSelectionModalOpen}
+        onClose={handleCancelAsinSelection}
+        title="Multiple ASINs Detected"
+        size="md"
+      >
+        <div className="space-y-4">
+          <p className={isDarkMode ? 'text-slate-200' : 'text-slate-700'}>
+            Multiple ASINs were found for this product. Please select the appropriate one:
+          </p>
+          
+          <div className="space-y-3">
+            {multipleAsins.map((asin, index) => (
+              <div
+                key={index}
+                className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                  isDarkMode 
+                    ? 'border-slate-600 hover:border-blue-400 hover:bg-slate-700' 
+                    : 'border-slate-300 hover:border-blue-400 hover:bg-blue-50'
+                }`}
+                onClick={() => handleAsinSelection(asin)}
+              >
+                <div className="flex items-center justify-between">
+                  <span className={`font-mono text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                    {asin}
+                  </span>
+                  <span className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                    ASIN {index + 1}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex justify-end gap-2 pt-4">
+            <Button
+              variant="secondary"
+              onClick={handleCancelAsinSelection}
+            >
+              Cancel
             </Button>
           </div>
         </div>
