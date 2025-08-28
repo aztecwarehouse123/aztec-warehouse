@@ -25,8 +25,10 @@ const LocationConfirmationModal: React.FC<LocationConfirmationModalProps> = ({
   existingProducts,
   newProductName
 }) => {
-  const totalProducts = existingProducts.length;
-  const totalQuantity = existingProducts.reduce((sum, product) => sum + product.quantity, 0);
+  // Filter out products with 0 quantity
+  const activeProducts = existingProducts.filter(product => product.quantity > 0);
+  const totalProducts = activeProducts.length;
+  const totalQuantity = activeProducts.reduce((sum, product) => sum + product.quantity, 0);
 
   return (
     <Modal
@@ -43,19 +45,27 @@ const LocationConfirmationModal: React.FC<LocationConfirmationModalProps> = ({
               The location <strong>{locationCode}-{shelfNumber}</strong> already contains products.
             </p>
             <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
-              <p className="text-sm text-amber-800 dark:text-amber-200 font-medium">
-                Current products in this location:
-              </p>
-              <ul className="mt-2 space-y-1">
-                {existingProducts.map((product, index) => (
-                  <li key={index} className="text-sm text-amber-700 dark:text-amber-300">
-                    • {product.name} ({product.quantity} units)
-                  </li>
-                ))}
-              </ul>
-              <p className="text-sm text-amber-800 dark:text-amber-200 mt-2">
-                Total: {totalProducts} product{totalProducts !== 1 ? 's' : ''} ({totalQuantity} units)
-              </p>
+              {activeProducts.length > 0 ? (
+                <>
+                  <p className="text-sm text-amber-800 dark:text-amber-200 font-medium">
+                    Current products in this location:
+                  </p>
+                  <ul className="mt-2 space-y-1">
+                    {activeProducts.map((product, index) => (
+                      <li key={index} className="text-sm text-amber-700 dark:text-amber-300">
+                        • {product.name} ({product.quantity} units)
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="text-sm text-amber-800 dark:text-amber-200 mt-2">
+                    Total: {totalProducts} product{totalProducts !== 1 ? 's' : ''} ({totalQuantity} units)
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-amber-800 dark:text-amber-200 font-medium">
+                  This location appears to be empty (all products have 0 quantity).
+                </p>
+              )}
             </div>
             <p className="text-gray-700 dark:text-gray-300">
               Do you still want to add <strong>{newProductName}</strong> to this location?

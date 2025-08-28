@@ -16,7 +16,7 @@ import { useToast } from '../../contexts/ToastContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../config/firebase';
-import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, Timestamp, getCountFromServer } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, Timestamp, getCountFromServer, where } from 'firebase/firestore';
 import { format } from 'date-fns';
 
 const Stock: React.FC = () => {
@@ -152,6 +152,9 @@ const Stock: React.FC = () => {
     const barcodeAsinSearchLower = debouncedBarcodeAsinSearchQuery.toLowerCase();
     
     return items.filter(item => {
+      // Hide products with quantity 0
+      if (item.quantity === 0) return false;
+      
       // Name search: check if name starts with the search query
       const matchesName = debouncedNameSearchQuery === '' || 
         item.name.toLowerCase().startsWith(nameSearchLower);
@@ -195,44 +198,43 @@ const Stock: React.FC = () => {
     );
   }, [items]);
 
-  const handleAddStock = useCallback( async (data: Omit<StockItem, 'id'>[]) => {
-    // Check if any of the locations have existing products
-    const locationsWithProducts: { locationCode: string; shelfNumber: string; products: StockItem[] }[] = [];
-    
-    for (const item of data) {
-      const existingProducts = checkLocationForExistingProducts(item.locationCode, item.shelfNumber);
-      if (existingProducts.length > 0) {
-        locationsWithProducts.push({
-          locationCode: item.locationCode,
-          shelfNumber: item.shelfNumber,
-          products: existingProducts
-        });
-      }
-    }
-
-    // If there are locations with existing products, show confirmation modal
-    if (locationsWithProducts.length > 0) {
-      const firstLocation = locationsWithProducts[0];
-      setLocationConfirmationData({
-        locationCode: firstLocation.locationCode,
-        shelfNumber: firstLocation.shelfNumber,
-        existingProducts: firstLocation.products,
-        newProductName: data[0].name
-      });
-      setPendingStockData(data);
-      setIsLocationConfirmModalOpen(true);
-      return;
-    }
-
-    // If no existing products, proceed with adding
-    await performAddStock(data);
-  }, [checkLocationForExistingProducts]);
-
   const performAddStock = useCallback( async (data: Omit<StockItem, 'id'>[]) => {
     setIsLoading(true);
     
     try {
       const newItems: StockItem[] = [];
+      
+      // Check for hidden products with the same barcode and delete them
+      for (const item of data) {
+        if (item.barcode) {
+          const hiddenProductQuery = query(
+            collection(db, 'inventory'), 
+            where('barcode', '==', item.barcode), 
+            where('quantity', '==', 0)
+          );
+          const hiddenProductSnapshot = await getDocs(hiddenProductQuery);
+          
+          if (!hiddenProductSnapshot.empty) {
+            // Delete the hidden product
+            const hiddenProductDoc = hiddenProductSnapshot.docs[0];
+            await deleteDoc(doc(db, 'inventory', hiddenProductDoc.id));
+            
+            // Remove from local state
+            setItems(prev => prev.filter(existingItem => existingItem.id !== hiddenProductDoc.id));
+            
+            // Add activity log for deletion
+            if (user) {
+              const hiddenProductData = hiddenProductDoc.data();
+              await addDoc(collection(db, 'activityLogs'), {
+                user: user.name,
+                role: user.role,
+                detail: `deleted hidden product "${hiddenProductData.name}" with barcode ${item.barcode} from location ${hiddenProductData.locationCode}-${hiddenProductData.shelfNumber}`,
+                time: new Date().toISOString()
+              });
+            }
+          }
+        }
+      }
       
       // Add documents to Firestore
       for (const item of data) {
@@ -275,6 +277,41 @@ const Stock: React.FC = () => {
       setIsLoading(false);
     }
   }, [user,showToast]);
+
+  const handleAddStock = useCallback( async (data: Omit<StockItem, 'id'>[]) => {
+    // Check if any of the locations have existing products
+    const locationsWithProducts: { locationCode: string; shelfNumber: string; products: StockItem[] }[] = [];
+    
+    for (const item of data) {
+      const existingProducts = checkLocationForExistingProducts(item.locationCode, item.shelfNumber);
+      if (existingProducts.length > 0) {
+        locationsWithProducts.push({
+          locationCode: item.locationCode,
+          shelfNumber: item.shelfNumber,
+          products: existingProducts
+        });
+      }
+    }
+
+    // If there are locations with existing products, show confirmation modal
+    if (locationsWithProducts.length > 0) {
+      const firstLocation = locationsWithProducts[0];
+      setLocationConfirmationData({
+        locationCode: firstLocation.locationCode,
+        shelfNumber: firstLocation.shelfNumber,
+        existingProducts: firstLocation.products,
+        newProductName: data[0].name
+      });
+      setPendingStockData(data);
+      setIsLocationConfirmModalOpen(true);
+      return;
+    }
+
+    // If no existing products, proceed with adding
+    await performAddStock(data);
+  }, [checkLocationForExistingProducts, performAddStock]);
+
+  
 
   const handleLocationConfirm = useCallback(async () => {
     if (pendingStockData) {

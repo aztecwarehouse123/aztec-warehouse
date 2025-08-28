@@ -6,6 +6,8 @@ import Select from '../ui/Select';
 import { StockItem } from '../../types';
 import BarcodeScanModal from '../modals/BarcodeScanModal';
 import AddProductModal from '../modals/AddProductModal';
+import LocationReminderModal from '../modals/LocationReminderModal';
+
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { db } from '../../config/firebase';
@@ -310,6 +312,13 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
   const [isAsinSelectionModalOpen, setIsAsinSelectionModalOpen] = useState(false);
   const [pendingAsinData, setPendingAsinData] = useState<{ name: string; unit: string; asin: string } | null>(null);
   const [selectedMultipleAsins, setSelectedMultipleAsins] = useState<string[]>([]); // Add state for selected multiple ASINs
+  
+  // Location reminder modal state
+  const [isLocationReminderModalOpen, setIsLocationReminderModalOpen] = useState(false);
+  const [locationReminderData, setLocationReminderData] = useState<{
+    hiddenProduct: StockItem;
+    newProductName: string;
+  } | null>(null);
 
   // Ensure fulfillment type is consistent with store name
   useEffect(() => {
@@ -499,11 +508,37 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
     }
   };
 
+  // Check for hidden products with the same barcode
+  const checkForHiddenProducts = async (barcode: string) => {
+    try {
+      const q = query(collection(db, 'inventory'), where('barcode', '==', barcode), where('quantity', '==', 0));
+      const snapshot = await getDocs(q);
+      if (!snapshot.empty) {
+        const hiddenProduct = snapshot.docs[0].data() as StockItem;
+        setLocationReminderData({
+          hiddenProduct: {
+            ...hiddenProduct,
+            id: snapshot.docs[0].id,
+            lastUpdated: hiddenProduct.lastUpdated instanceof Date ? hiddenProduct.lastUpdated : new Date(hiddenProduct.lastUpdated)
+          },
+          newProductName: formData.name || 'New Product'
+        });
+        setIsLocationReminderModalOpen(true);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error checking for hidden products:', error);
+      return false;
+    }
+  };
+
   const fetchBarcodeInfo = async (barcodeToSearch?: string) => {
     const barcode = barcodeToSearch || formData.barcode;
     if (!barcode || isFetchingProductInfo) return;
     setFetchError(null);
     setIsFetchingProductInfo(true);
+    
     try {
       // First, try to fetch from scannedProducts collection (like scan button)
       const q = query(collection(db, 'scannedProducts'), where('barcode', '==', barcode));
@@ -582,6 +617,9 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
       setFetchError('Failed to fetch product info.');
     } finally {
       setIsFetchingProductInfo(false);
+      
+      // After processing product info, check for hidden products with the same barcode
+      await checkForHiddenProducts(barcode);
     }
   };
 
@@ -712,12 +750,29 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
 
   const handleAsinToggle = (asin: string) => {
     setSelectedMultipleAsins(prev => {
-      if (prev.includes(asin)) {
-        return prev.filter(a => a !== asin);
-      } else {
-        return [...prev, asin];
-      }
+      const newSelection = prev.includes(asin) 
+        ? prev.filter(a => a !== asin)
+        : [...prev, asin];
+      return newSelection;
     });
+  };
+
+  // Handle location reminder modal actions
+  const handleUseLocation = (locationCode: string, shelfNumber: string) => {
+    if (locationEntries.length > 0) {
+      setLocationEntries(prev => {
+        const newEntries = [...prev];
+        newEntries[0] = { ...newEntries[0], locationCode, shelfNumber };
+        return newEntries;
+      });
+    }
+    setIsLocationReminderModalOpen(false);
+    setLocationReminderData(null);
+  };
+
+  const handleManualLocation = () => {
+    setIsLocationReminderModalOpen(false);
+    setLocationReminderData(null);
   };
 
   return (
@@ -1133,6 +1188,18 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
           </div>
         </div>
       </Modal>
+
+      {/* Location Reminder Modal */}
+      {locationReminderData?.hiddenProduct && (
+        <LocationReminderModal
+          isOpen={isLocationReminderModalOpen}
+          onClose={() => setIsLocationReminderModalOpen(false)}
+          onUseLocation={handleUseLocation}
+          onManualLocation={handleManualLocation}
+          hiddenProduct={locationReminderData.hiddenProduct}
+          newProductName={locationReminderData.newProductName || 'New Product'}
+        />
+      )}
     </>
   );
 };

@@ -523,21 +523,18 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
             placeholder="Enter barcode manually"
             fullWidth
             style={{ paddingRight: 44 }}
-            disabled={user?.role !== 'admin'}
           />
-          {user?.role === 'admin' && (
-            <button
-              type="button"
-              onClick={() => setIsBarcodeScanModalOpen(true)}
-              className="absolute right-2 top-1/2 -translate-y-1 flex items-center justify-center w-8 h-8 rounded-md transition bg-transparent hover:bg-blue-50 focus:bg-blue-100 outline-none border-none p-0"
-              style={{ zIndex: 2 }}
-              title="Scan barcode"
-              tabIndex={0}
-              aria-label="Scan barcode"
-            >
-              <Barcode size={18} className="text-blue-500" />
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => setIsBarcodeScanModalOpen(true)}
+            className="absolute right-2 top-1/2 -translate-y-1 flex items-center justify-center w-8 h-8 rounded-md transition bg-transparent hover:bg-blue-50 focus:bg-blue-100 outline-none border-none p-0"
+            style={{ zIndex: 2 }}
+            title="Scan barcode"
+            tabIndex={0}
+            aria-label="Scan barcode"
+          >
+            <Barcode size={18} className="text-blue-500" />
+          </button>
         </div>
         <Input
           label="ASIN"
