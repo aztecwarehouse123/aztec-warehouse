@@ -993,7 +993,7 @@ const Jobs: React.FC = () => {
                           
                           {isAwaitingPack && !editingJobItem && (
                             <>
-                              <Button 
+                              {/* <Button 
                                 variant="secondary" 
                                 size="sm" 
                                 onClick={() => setEditingJobItem({
@@ -1010,7 +1010,7 @@ const Jobs: React.FC = () => {
                                 title="Edit item"
                               >
                                 <Edit size={16} />
-                              </Button>
+                              </Button> */}
                               <Button 
                                 variant="danger" 
                                 size="sm" 

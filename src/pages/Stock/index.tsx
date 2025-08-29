@@ -144,7 +144,7 @@ const Stock: React.FC = () => {
     { value: 'date', label: 'Date Updated' }
   ], []);
 
-  const predefinedStores = useMemo(() => ['supply & serve', 'APHY', 'AZTEC', 'ZK'], []);
+  const predefinedStores = useMemo(() => ['supply & serve', 'APHY', 'AZTEC', 'ZK', 'Fahiz'], []);
 
 
   // Filter and sort items
@@ -1000,7 +1000,7 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
             <div className={`absolute top-full left-0 mt-1 w-64 z-50 rounded-lg border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-lg`}>
               <div className="p-2">
                 <div className={`text-sm font-medium mb-2 ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>Filter by Store & Type</div>
-                {['supply & serve', 'APHY', 'AZTEC', 'ZK', 'other'].map((storeName) => (
+                {['supply & serve', 'APHY', 'AZTEC', 'ZK', 'Fahiz', 'other'].map((storeName) => (
                   <div key={storeName} className="group relative">
                     <div className={`px-3 py-2 text-sm cursor-pointer rounded transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-700' : 'text-slate-700 hover:bg-slate-100'} ${storeFilter?.storeName === storeName ? (isDarkMode ? 'bg-slate-700' : 'bg-slate-100') : ''}`}>
                       {storeName}

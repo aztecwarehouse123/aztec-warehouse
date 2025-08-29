@@ -249,7 +249,7 @@ const generateShelfOptionsForLocation = (locationCode: string) => {
   return generateShelfOptions(locationCode);
 };
 
-const predefinedStores = ['supply & serve', 'APHY', 'AZTEC', 'ZK'];
+  const predefinedStores = ['supply & serve', 'APHY', 'AZTEC', 'ZK', 'Fahiz'];
 
 const supplierOptions = [
   { value: 'Rayburns Trading', label: 'Rayburns Trading' },
@@ -588,6 +588,7 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
               { value: 'APHY', label: 'APHY' },
               { value: 'AZTEC', label: 'AZTEC' },
               { value: 'ZK', label: 'ZK' },
+              { value: 'Fahiz', label: 'Fahiz' },
               { value: 'other', label: 'Other' }
             ]}
           />

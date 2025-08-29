@@ -12,7 +12,7 @@ interface OutboundEditFormProps {
   isLoading: boolean;
 }
 
-const predefinedStores = ['supply & serve', 'APHY', 'AZTEC', 'ZK'];
+  const predefinedStores = ['supply & serve', 'APHY', 'AZTEC', 'ZK', 'Fahiz'];
 
 const OutboundEditForm: React.FC<OutboundEditFormProps> = ({ item, onSubmit, isLoading }) => {
   const [deductQuantity, setDeductQuantity] = useState<string>('');

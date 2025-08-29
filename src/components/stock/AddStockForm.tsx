@@ -1019,6 +1019,7 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
                 { value: 'APHY', label: 'APHY' },
                 { value: 'AZTEC', label: 'AZTEC' },
                 { value: 'ZK', label: 'ZK' },
+                { value: 'Fahiz', label: 'Fahiz' },
                 { value: 'other', label: 'Other' }
               ]}
             />

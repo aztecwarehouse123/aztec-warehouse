@@ -21,7 +21,7 @@ interface LocationInfo {
   quantity: number;
 }
 
-const predefinedStores = ['supply & serve', 'APHY', 'AZTEC', 'ZK'];
+  const predefinedStores = ['supply & serve', 'APHY', 'AZTEC', 'ZK', 'Fahiz'];
 
 const JobStockUpdateForm: React.FC<JobStockUpdateFormProps> = ({ item, onSubmit, onCancel, isLoading }) => {
   const [deductQuantity, setDeductQuantity] = useState<string>('');
