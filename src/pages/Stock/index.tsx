@@ -47,6 +47,7 @@ const Stock: React.FC = () => {
     shelfNumber: string;
     existingProducts: StockItem[];
     newProductName: string;
+    newProductBarcode?: string;
   } | null>(null);
   const [storeFilter, setStoreFilter] = useState<{ storeName: string; fulfillmentType: string } | null>(null);
   const [isStoreFilterOpen, setIsStoreFilterOpen] = useState(false);
@@ -300,7 +301,8 @@ const Stock: React.FC = () => {
         locationCode: firstLocation.locationCode,
         shelfNumber: firstLocation.shelfNumber,
         existingProducts: firstLocation.products,
-        newProductName: data[0].name
+        newProductName: data[0].name,
+        newProductBarcode: data[0].barcode || undefined
       });
       setPendingStockData(data);
       setIsLocationConfirmModalOpen(true);
@@ -319,6 +321,9 @@ const Stock: React.FC = () => {
       setIsLocationConfirmModalOpen(false);
       setPendingStockData(null);
       setLocationConfirmationData(null);
+      // Close the add stock modals after location confirmation
+      setIsAddModalOpen(false);
+      setIsQuickAddModalOpen(false);
     }
   },[pendingStockData, performAddStock]);
 
@@ -326,7 +331,69 @@ const Stock: React.FC = () => {
     setIsLocationConfirmModalOpen(false);
     setPendingStockData(null);
     setLocationConfirmationData(null);
+    // Close the add stock modals when canceling location confirmation
+    setIsAddModalOpen(false);
+    setIsQuickAddModalOpen(false);
   },[]);
+
+  const handleLocationMerge = useCallback(async () => {
+    if (pendingStockData && locationConfirmationData) {
+      try {
+        setIsLoading(true);
+        
+        // Find the existing product to merge with
+        const existingProduct = locationConfirmationData.existingProducts.find(product => 
+          product.barcode === locationConfirmationData.newProductBarcode
+        );
+        
+        if (existingProduct) {
+          // Calculate new quantity
+          const newQuantity = existingProduct.quantity + pendingStockData[0].quantity;
+          
+          // Update the existing product's quantity
+          const stockRef = doc(db, 'inventory', existingProduct.id);
+          await updateDoc(stockRef, { 
+            quantity: newQuantity,
+            lastUpdated: Timestamp.fromDate(new Date())
+          });
+          
+          // Log the merge activity
+          if (user) {
+            await addDoc(collection(db, 'activityLogs'), {
+              user: user.name,
+              role: user.role,
+              detail: `merged ${pendingStockData[0].quantity} units of "${pendingStockData[0].name}" with existing stock "${existingProduct.name}" at location ${locationConfirmationData.locationCode}-${locationConfirmationData.shelfNumber}`,
+              time: new Date().toISOString()
+            });
+            
+            // Log the quantity update
+            await addDoc(collection(db, 'activityLogs'), {
+              user: user.name,
+              role: user.role,
+              detail: `edited product "${existingProduct.name}": quantity from ${existingProduct.quantity} to ${newQuantity}`,
+              time: new Date().toISOString()
+            });
+          }
+          
+          // Refresh the stock list
+          await fetchStockItems();
+          
+          showToast('Products merged successfully', 'success');
+        }
+      } catch (error) {
+        console.error('Error merging products:', error);
+        showToast('Failed to merge products', 'error');
+      } finally {
+        setIsLoading(false);
+        setIsLocationConfirmModalOpen(false);
+        setPendingStockData(null);
+        setLocationConfirmationData(null);
+        // Close the add stock modals after merging products
+        setIsAddModalOpen(false);
+        setIsQuickAddModalOpen(false);
+      }
+    }
+  }, [pendingStockData, locationConfirmationData, user, fetchStockItems, showToast]);
 
   const handleEditStock = useCallback(async (data: StockItem, originalItem: StockItem) => {
     setIsLoading(true);
@@ -423,7 +490,7 @@ const Stock: React.FC = () => {
           await addDoc(collection(db, 'activityLogs'), {
             user: user.name,
             role: user.role,
-                    detail: `edited product "${data.name}": quantity from ${originalItem.quantity} to ${data.quantity}`,
+            detail: `edited product "${data.name}": quantity from ${originalItem.quantity} to ${data.quantity}`,
             time: now.toISOString()
           });
       }
@@ -1313,10 +1380,12 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
           onClose={handleLocationCancel}
           onConfirm={handleLocationConfirm}
           onCancel={handleLocationCancel}
+          onMerge={handleLocationMerge}
           locationCode={locationConfirmationData.locationCode}
           shelfNumber={locationConfirmationData.shelfNumber}
           existingProducts={locationConfirmationData.existingProducts}
           newProductName={locationConfirmationData.newProductName}
+          newProductBarcode={locationConfirmationData.newProductBarcode}
         />
       )}
     </div>

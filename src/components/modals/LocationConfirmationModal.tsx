@@ -9,10 +9,12 @@ interface LocationConfirmationModalProps {
   onClose: () => void;
   onConfirm: () => void;
   onCancel: () => void;
+  onMerge?: () => void; // New prop for merge functionality
   locationCode: string;
   shelfNumber: string;
   existingProducts: StockItem[];
   newProductName: string;
+  newProductBarcode?: string; // New prop for new product's barcode
 }
 
 const LocationConfirmationModal: React.FC<LocationConfirmationModalProps> = ({
@@ -20,15 +22,27 @@ const LocationConfirmationModal: React.FC<LocationConfirmationModalProps> = ({
   onClose,
   onConfirm,
   onCancel,
+  onMerge,
   locationCode,
   shelfNumber,
   existingProducts,
-  newProductName
+  newProductName,
+  newProductBarcode
 }) => {
   // Filter out products with 0 quantity
   const activeProducts = existingProducts.filter(product => product.quantity > 0);
   const totalProducts = activeProducts.length;
   const totalQuantity = activeProducts.reduce((sum, product) => sum + product.quantity, 0);
+
+  // Check if new product can be merged with existing product
+  const canMerge = newProductBarcode && activeProducts.some(product => 
+    product.barcode === newProductBarcode
+  );
+
+  // Find the product to merge with
+  const productToMerge = canMerge ? activeProducts.find(product => 
+    product.barcode === newProductBarcode
+  ) : null;
 
   return (
     <Modal
@@ -54,6 +68,11 @@ const LocationConfirmationModal: React.FC<LocationConfirmationModalProps> = ({
                     {activeProducts.map((product, index) => (
                       <li key={index} className="text-sm text-amber-700 dark:text-amber-300">
                         • {product.name} ({product.quantity} units)
+                        {product.barcode && (
+                          <span className="text-xs text-amber-600 dark:text-amber-400 ml-2">
+                            Barcode: {product.barcode}
+                          </span>
+                        )}
                       </li>
                     ))}
                   </ul>
@@ -67,6 +86,19 @@ const LocationConfirmationModal: React.FC<LocationConfirmationModalProps> = ({
                 </p>
               )}
             </div>
+            
+            {canMerge && productToMerge && (
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                <p className="text-sm text-blue-800 dark:text-blue-200 font-medium">
+                  Merge Available!
+                </p>
+                <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                  The product "{newProductName}" has the same barcode ({newProductBarcode}) as "{productToMerge.name}" 
+                  which is already in this location. You can merge them to add quantity instead of creating a duplicate entry.
+                </p>
+              </div>
+            )}
+            
             <p className="text-gray-700 dark:text-gray-300">
               Do you still want to add <strong>{newProductName}</strong> to this location?
             </p>
@@ -80,6 +112,16 @@ const LocationConfirmationModal: React.FC<LocationConfirmationModalProps> = ({
           >
             Cancel
           </Button>
+          
+          {canMerge && onMerge && (
+            <Button
+              onClick={onMerge}
+              className="bg-blue-600 hover:bg-blue-700 focus:ring-blue-500"
+            >
+              Merge Products
+            </Button>
+          )}
+          
           <Button
             onClick={onConfirm}
             className="bg-amber-600 hover:bg-amber-700 focus:ring-amber-500"
