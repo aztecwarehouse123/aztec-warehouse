@@ -266,7 +266,7 @@ const supplierOptions = [
 const EditStockForm: React.FC<EditStockFormProps> = ({ 
   item, 
   onSubmit, 
-  onCancel, 
+  // onCancel, 
   isLoading = false 
 }) => {
   const { isDarkMode } = useTheme();
