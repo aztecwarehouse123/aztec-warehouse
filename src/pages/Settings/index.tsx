@@ -811,7 +811,7 @@ const Settings: React.FC = () => {
                       <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>{userItem.username}</td>
                       <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>{userItem.email || '-'}</td>
                       <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>{userItem.name}</td>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>{userItem.role}</td>
+                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>{userItem.role === 'admin' ? 'Admin' : userItem.role === 'staff' ? 'Staff' : 'Supply & Serve'}</td>
                       <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}> 
                         <div className="flex items-center gap-2">
                           <Button 
@@ -869,7 +869,7 @@ const Settings: React.FC = () => {
                     </div>
                   </div>
                   <div className={`text-sm ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>{userItem.email || '-'}</div>
-                  <div className={`text-xs font-medium ${isDarkMode ? 'text-blue-300' : 'text-blue-700'}`}>{userItem.role}</div>
+                  <div className={`text-xs font-medium ${isDarkMode ? 'text-blue-300' : 'text-blue-700'}`}>{userItem.role === 'admin' ? 'Admin' : userItem.role === 'staff' ? 'Staff' : 'Supply & Serve'}</div>
                 </div>
               ))}
             </div>
@@ -924,6 +924,7 @@ const Settings: React.FC = () => {
                   options={[
                     { value: 'admin', label: 'Admin' },
                     { value: 'staff', label: 'Staff' },
+                    { value: 'supply_serve', label: 'Supply & Serve' },
                   ]}
                   fullWidth
                 />

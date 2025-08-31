@@ -19,8 +19,10 @@ import { generateShelfOptions } from '../../utils/shelfUtils';
 
 interface AddStockFormProps {
   onSubmit: (data: Omit<StockItem, 'id'>[]) => Promise<void>;
+  onCancel: () => void;
   isLoading?: boolean;
   existingStockItems: StockItem[];
+  isSupplyServe?: boolean;
 }
 
 interface FormData {
@@ -996,35 +998,37 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
             
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <Select
-            label="Store Name"
-              value={formData.storeName}
-              onChange={(e) => {
-                const value = e.target.value;
-                setFormData(prev => ({ 
-                  ...prev, 
-                  storeName: value,
-                  // Automatically set fulfillment type to 'mf' for 'supply & serve'
-                  fulfillmentType: value === 'supply & serve' ? 'mf' : prev.fulfillmentType
-                }));
-                setShowOtherStoreInput(value === 'other');
-                if (value !== 'other') {
-                  setOtherStoreName('');
-                }
-              }}
-              options={[
-                { value: 'supply & serve', label: 'Supply & Serve' },
-                { value: 'APHY', label: 'APHY' },
-                { value: 'AZTEC', label: 'AZTEC' },
-                { value: 'ZK', label: 'ZK' },
-                { value: 'Fahiz', label: 'Fahiz' },
-                { value: 'other', label: 'Other' }
-              ]}
-            />
+        {!isSupplyServe && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Select
+              label="Store Name"
+                value={formData.storeName}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setFormData(prev => ({ 
+                    ...prev, 
+                    storeName: value,
+                    // Automatically set fulfillment type to 'mf' for 'supply & serve'
+                    fulfillmentType: value === 'supply & serve' ? 'mf' : prev.fulfillmentType
+                  }));
+                  setShowOtherStoreInput(value === 'other');
+                  if (value !== 'other') {
+                    setOtherStoreName('');
+                  }
+                }}
+                options={[
+                  { value: 'supply & serve', label: 'Supply & Serve' },
+                  { value: 'APHY', label: 'APHY' },
+                  { value: 'AZTEC', label: 'AZTEC' },
+                  { value: 'ZK', label: 'ZK' },
+                  { value: 'Fahiz', label: 'Fahiz' },
+                  { value: 'other', label: 'Other' }
+                ]}
+              />
+            </div>
           </div>
-        </div>
+        )}
 
         {showOtherStoreInput && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

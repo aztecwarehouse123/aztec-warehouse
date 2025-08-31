@@ -3,7 +3,7 @@ export type User = {
   username: string;
   email: string;
   name: string;
-  role: 'admin' | 'staff';
+  role: 'admin' | 'staff' | 'supply_serve';
   password?: string;
 };
 

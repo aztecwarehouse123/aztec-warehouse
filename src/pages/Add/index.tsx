@@ -364,7 +364,7 @@ const Add: React.FC = () => {
     }
   };
 
-  if (!user || (user.role !== 'admin' && user.role !== 'staff')) {
+      if (!user || (user.role !== 'admin' && user.role !== 'staff' && user.role !== 'supply_serve')) {
     return <div className="p-8 text-center text-red-500 font-semibold">You are not authorized to access this page.</div>;
   }
 

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Plus, RefreshCw, CheckSquare, ClipboardList, Trash2, ChevronUp, ChevronDown, Search, ArrowLeft } from 'lucide-react';
+import { Plus, RefreshCw, CheckSquare, ClipboardList, Trash2, ChevronUp, ChevronDown, Search, ArrowLeft, Calculator } from 'lucide-react';
 import { db } from '../../config/firebase';
 import { addDoc, collection, deleteDoc, doc, getDocs, orderBy, query, serverTimestamp, Timestamp, updateDoc, where, onSnapshot } from 'firebase/firestore';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -2221,7 +2221,7 @@ const Jobs: React.FC = () => {
                 size="sm"
                 className="px-3 py-2"
               >
-                Calculator
+                <Calculator size={16} />
               </Button>
             </div>
           )}
@@ -2252,7 +2252,7 @@ const Jobs: React.FC = () => {
                     size="sm"
                     className="px-3 py-2"
                   >
-                    Calculator
+                    <Calculator size={16} />
                   </Button>
                 </div>
               

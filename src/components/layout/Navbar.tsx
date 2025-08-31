@@ -48,6 +48,7 @@ const Navbar: React.FC = () => {
     { to: "/reports-analytics", icon: <BarChart size={20} />, label: "Reports", roles: ['admin'] },
     { to: "/warehouse-operations", icon: <Activity size={20} />, label: "Logs", roles: ['admin','staff'] },
     { to: "/settings", icon: <Settings size={20} />, label: "Settings", roles: ['admin', 'staff'] },
+    { to: "/supply-serve", icon: <PackagePlus size={20} />, label: "Supply & Serve", roles: ['supply_serve'] },
     
   ];
 

@@ -14,6 +14,7 @@ import { useAuth } from './contexts/AuthContext';
 import OutboundStock from './pages/OutboundStock';
 import WarehouseLocations from './pages/WarehouseLocations';
 import Add from './pages/Add';
+import SupplyServe from './pages/SupplyServe';
 
 const ProtectedRoute: React.FC<{
   children: React.ReactNode;
@@ -92,6 +93,11 @@ function App() {
         <Route path="add" element={
           <ProtectedRoute allowedRoles={['admin','staff']}>
             <Add />
+          </ProtectedRoute>
+        } />
+        <Route path="supply-serve" element={
+          <ProtectedRoute allowedRoles={['supply_serve']}>
+            <SupplyServe />
           </ProtectedRoute>
         } />
       </Route>
