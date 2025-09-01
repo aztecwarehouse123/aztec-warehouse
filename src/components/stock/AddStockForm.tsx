@@ -274,7 +274,7 @@ const supplierOptions = [
   { value: 'other', label: 'Other' }
 ];
 
-const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false, existingStockItems }) => {
+const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false, existingStockItems, isSupplyServe = false }) => {
   const { user } = useAuth();
   const [formData, setFormData] = useState<FormData>({
     name: '',
