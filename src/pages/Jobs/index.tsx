@@ -209,6 +209,46 @@ const Jobs: React.FC = () => {
     };
   };
 
+  // Cleanup function to remove old live job sessions
+  const cleanupOldLiveJobSessions = useCallback(async () => {
+    try {
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+      
+      // Query for sessions older than 1 hour
+      const cleanupQuery = query(
+        collection(db, 'liveJobSessions'),
+        where('startTime', '<', oneHourAgo)
+      );
+      
+      const snapshot = await getDocs(cleanupQuery);
+      const sessionsToDelete: string[] = [];
+      
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        const items = data.items || [];
+        
+        // Only delete if no items have been scanned (empty items array)
+        if (items.length === 0) {
+          sessionsToDelete.push(doc.id);
+        }
+      });
+      
+      // Delete the old sessions with no items
+      if (sessionsToDelete.length > 0) {
+        console.log(`Cleaning up ${sessionsToDelete.length} old live job sessions with no items`);
+        
+        const deletePromises = sessionsToDelete.map(sessionId => 
+          deleteDoc(doc(db, 'liveJobSessions', sessionId))
+        );
+        
+        await Promise.all(deletePromises);
+        console.log(`Successfully cleaned up ${sessionsToDelete.length} old live job sessions`);
+      }
+    } catch (error) {
+      console.error('Error cleaning up old live job sessions:', error);
+    }
+  }, []);
+
   // Generate reports data
   const generateReports = useCallback(async (date: Date) => {
     setIsLoadingReports(true);
@@ -401,6 +441,20 @@ const Jobs: React.FC = () => {
 
   useEffect(() => { fetchJobs(); }, [fetchJobs]);
 
+  // Cleanup old live job sessions on component mount
+  useEffect(() => {
+    cleanupOldLiveJobSessions();
+  }, [cleanupOldLiveJobSessions]);
+
+  // Set up periodic cleanup every 30 minutes
+  useEffect(() => {
+    const cleanupInterval = setInterval(() => {
+      cleanupOldLiveJobSessions();
+    }, 30 * 60 * 1000); // 30 minutes
+
+    return () => clearInterval(cleanupInterval);
+  }, [cleanupOldLiveJobSessions]);
+
   // Clear local verification state when jobs change or component unmounts
   useEffect(() => {
     return () => {
@@ -419,6 +473,9 @@ const Jobs: React.FC = () => {
   // Real-time listener for live job sessions
   useEffect(() => {
     if (!showLiveJobs) return; // Only listen when Live Jobs view is active
+
+    // Cleanup old sessions when live jobs view is shown
+    cleanupOldLiveJobSessions();
 
     const unsubscribe = onSnapshot(
       collection(db, 'liveJobSessions'),
@@ -452,7 +509,7 @@ const Jobs: React.FC = () => {
     );
 
     return () => unsubscribe();
-  }, [showLiveJobs]);
+  }, [showLiveJobs, cleanupOldLiveJobSessions]);
 
   // Generate reports when Reports view is shown
   useEffect(() => {
@@ -1567,7 +1624,7 @@ const Jobs: React.FC = () => {
           </div>
         )}
         
-        {filteredJobs.map(job => (
+        {!showReports && filteredJobs.map(job => (
           <JobRow key={job.id} job={job} />
         ))}
         
@@ -1584,31 +1641,19 @@ const Jobs: React.FC = () => {
                   {getLiveJobs().totalCount} active
                 </span>
               </div>
-              {/* <Button 
+              <Button 
                 variant="secondary" 
                 onClick={() => {
                   // Refresh both database jobs and clean up old sessions
                   fetchJobs();
-                  // Clean up any remaining old sessions from Firebase
-                  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-                  const cleanupQuery = query(
-                    collection(db, 'liveJobSessions'),
-                    where('createdAt', '<', oneHourAgo)
-                  );
-                  getDocs(cleanupQuery).then(snapshot => {
-                    snapshot.docs.forEach(doc => {
-                      deleteDoc(doc.ref);
-                    });
-                  }).catch(error => {
-                    console.error('Error cleaning up old sessions:', error);
-                  });
+                  cleanupOldLiveJobSessions();
                 }} 
                 className="flex items-center gap-2"
                 size='sm'
               >
                 <RefreshCw size={16} />
                 Refresh Live Jobs
-              </Button> */}
+              </Button>
             </div>
 
             {/* Show Live Jobs UI Sessions */}
@@ -2156,7 +2201,7 @@ const Jobs: React.FC = () => {
           </>
         )}
         
-        {filteredJobs.length === 0 && getLiveJobs().uiSessions.length === 0 && (
+        {!showReports && filteredJobs.length === 0 && getLiveJobs().uiSessions.length === 0 && (
           <div className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-center py-8`}>
             {showArchived ? (
               <div className="space-y-2">
@@ -2165,7 +2210,7 @@ const Jobs: React.FC = () => {
                   <p className="text-sm">Try adjusting your filters or clearing them to see more results.</p>
                 )}
               </div>
-            ) : showCompleted ? 'No completed jobs found.' : showLiveJobs ? 'No live jobs found.' : showReports ? '' : 'No active jobs found.'}
+            ) : showCompleted ? 'No completed jobs found.' : showLiveJobs ? 'No live jobs found.' : 'No active jobs found.'}
           </div>
         )}
       </div>
