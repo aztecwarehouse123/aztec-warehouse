@@ -110,6 +110,9 @@ const Jobs: React.FC = () => {
   
   // User filter for archived jobs
   const [selectedUser, setSelectedUser] = useState<string>('all');
+  
+  // Search functionality for archived jobs
+  const [archivedJobsSearchQuery, setArchivedJobsSearchQuery] = useState('');
 
   // State to track currently active job creation sessions
   const [activeJobSessions, setActiveJobSessions] = useState<Array<{
@@ -185,9 +188,26 @@ const Jobs: React.FC = () => {
     return job.createdBy === selectedUser;
   };
 
+  // Check if job matches search query
+  const isJobMatchingSearch = (job: Job): boolean => {
+    if (!archivedJobsSearchQuery.trim()) return true;
+    
+    const searchTerm = archivedJobsSearchQuery.toLowerCase().trim();
+    
+    // Search by job ID
+    if (job.jobId.toLowerCase().includes(searchTerm)) {
+      return true;
+    }
+    
+    // Search by item names in the job
+    return job.items.some(item => 
+      item.name && item.name.toLowerCase().includes(searchTerm)
+    );
+  };
+
   const filteredJobs = jobs.filter(job => {
     if (showArchived) {
-      return isJobArchived(job) && isJobInDateRange(job) && isJobMatchingUser(job);
+      return isJobArchived(job) && isJobInDateRange(job) && isJobMatchingUser(job) && isJobMatchingSearch(job);
     } else if (showCompleted) {
       return job.status === 'completed' && !isJobArchived(job);
     } else if (showLiveJobs) {
@@ -803,6 +823,7 @@ const Jobs: React.FC = () => {
       setEndDate(null);
     }
     setSelectedUser('all');
+    setArchivedJobsSearchQuery('');
   };
 
   const finishNewJobPicking = async () => {
@@ -1534,8 +1555,31 @@ const Jobs: React.FC = () => {
           {showArchived && (
             <div className="w-full">
               <div className="flex flex-col gap-4 p-4 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
-                {/* Filter Row 1: User Filter and Date Range */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Filter Row 1: Search, User Filter and Date Range */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {/* Search Filter */}
+                  <div className="flex flex-col gap-1">
+                    <label className={`text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                      Search Jobs:
+                    </label>
+                    <div className="relative">
+                      <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 ${
+                        isDarkMode ? 'text-slate-400' : 'text-slate-500'
+                      }`} />
+                      <input
+                        type="text"
+                        placeholder="Search by job ID or item name..."
+                        value={archivedJobsSearchQuery}
+                        onChange={(e) => setArchivedJobsSearchQuery(e.target.value)}
+                        className={`pl-10 pr-3 py-2 border rounded-md text-sm w-full ${
+                          isDarkMode 
+                            ? 'bg-slate-700 border-slate-600 text-white placeholder-slate-400' 
+                            : 'bg-white border-slate-300 text-slate-900 placeholder-slate-500'
+                        }`}
+                      />
+                    </div>
+                  </div>
+                  
                   {/* User Filter */}
                   <div className="flex flex-col gap-1">
                     <label className={`text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
@@ -1592,7 +1636,7 @@ const Jobs: React.FC = () => {
 
       <div className="space-y-4">
         {/* Filter Summary for Archived Jobs */}
-        {showArchived && (startDate || endDate || selectedUser !== 'all') && (
+        {showArchived && (startDate || endDate || selectedUser !== 'all' || archivedJobsSearchQuery.trim()) && (
           <div className={`p-3 rounded-lg border ${
             isDarkMode 
               ? 'bg-slate-800 border-slate-700 text-slate-300' 
@@ -1601,6 +1645,11 @@ const Jobs: React.FC = () => {
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 text-sm">
               <span className="font-medium">Active Filters:</span>
               <div className="flex flex-wrap gap-2">
+                {archivedJobsSearchQuery.trim() && (
+                  <span className="px-2 py-1 bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 rounded text-xs">
+                    Search: "{archivedJobsSearchQuery}"
+                  </span>
+                )}
                 {selectedUser !== 'all' && (
                   <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded text-xs">
                     User: {selectedUser}
