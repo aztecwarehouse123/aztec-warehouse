@@ -19,25 +19,22 @@ interface LocationInfo {
   locationCode: string;
   shelfNumber: string;
   quantity: number;
+  storeName: string;
 }
 
-  const predefinedStores = ['supply & serve', 'APHY', 'AZTEC', 'ZK', 'Fahiz'];
+  // const predefinedStores = ['supply & serve', 'APHY', 'AZTEC', 'ZK', 'Fahiz'];
 
 const JobStockUpdateForm: React.FC<JobStockUpdateFormProps> = ({ item, onSubmit, onCancel, isLoading }) => {
   const [deductQuantity, setDeductQuantity] = useState<string>('');
   const [reason, setReason] = useState<string>('stock sold');
   const [otherReason, setOtherReason] = useState<string>('');
-  const [storeName, setStoreName] = useState<string>(item.storeName || predefinedStores[0] || '');
-  const [otherStoreName, setOtherStoreName] = useState<string>('');
+  const [storeName, setStoreName] = useState<string>('');
   const [availableLocations, setAvailableLocations] = useState<LocationInfo[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<string>('');
   const [isLoadingLocations, setIsLoadingLocations] = useState(false);
   const { isDarkMode } = useTheme();
 
-  const storeOptions = predefinedStores.includes(item.storeName)
-    ? predefinedStores
-    : [item.storeName, ...predefinedStores];
-  const storeSelectOptions = [...storeOptions, 'other'];
+  // Remove store selection logic since we'll auto-populate from location
 
   // Fetch available locations for this product
   useEffect(() => {
@@ -70,7 +67,8 @@ const JobStockUpdateForm: React.FC<JobStockUpdateFormProps> = ({ item, onSubmit,
             locations.push({
               locationCode: data.locationCode,
               shelfNumber: data.shelfNumber,
-              quantity: data.quantity || 0
+              quantity: data.quantity || 0,
+              storeName: data.storeName || 'Unknown'
             });
           }
         });
@@ -86,7 +84,9 @@ const JobStockUpdateForm: React.FC<JobStockUpdateFormProps> = ({ item, onSubmit,
         
         // Auto-select first location if available
         if (uniqueLocations.length > 0) {
-          setSelectedLocation(`${uniqueLocations[0].locationCode}-${uniqueLocations[0].shelfNumber}`);
+          const firstLocation = uniqueLocations[0];
+          setSelectedLocation(`${firstLocation.locationCode}-${firstLocation.shelfNumber}`);
+          setStoreName(firstLocation.storeName);
         }
       } catch (error) {
         console.error('Error fetching locations:', error);
@@ -97,6 +97,22 @@ const JobStockUpdateForm: React.FC<JobStockUpdateFormProps> = ({ item, onSubmit,
 
     fetchLocations();
   }, [item.barcode]);
+
+  // Handle location selection and auto-populate store name
+  const handleLocationChange = (locationValue: string) => {
+    setSelectedLocation(locationValue);
+    
+    if (locationValue) {
+      const [locationCode, shelfNumber] = locationValue.split('-');
+      const selectedLocationData = availableLocations.find(loc => 
+        loc.locationCode === locationCode && loc.shelfNumber === shelfNumber
+      );
+      
+      if (selectedLocationData) {
+        setStoreName(selectedLocationData.storeName);
+      }
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -110,7 +126,7 @@ const JobStockUpdateForm: React.FC<JobStockUpdateFormProps> = ({ item, onSubmit,
     if (!selectedLocation) return;
     
     const finalReason = reason === 'other' ? otherReason : reason;
-    const finalStoreName = storeName === 'other' ? otherStoreName.trim() : storeName.trim();
+    const finalStoreName = storeName.trim();
     
     const [locationCode, shelfNumber] = selectedLocation.split('-');
     
@@ -150,9 +166,6 @@ const JobStockUpdateForm: React.FC<JobStockUpdateFormProps> = ({ item, onSubmit,
     }
     if (reason === 'other' && !otherReason.trim()) {
       return "Please specify the reason";
-    }
-    if (!storeName.trim() || (storeName === 'other' && !otherStoreName.trim())) {
-      return "Please select or enter the store name";
     }
     if (!selectedLocation) {
       return "Please select a location";
@@ -201,13 +214,13 @@ const JobStockUpdateForm: React.FC<JobStockUpdateFormProps> = ({ item, onSubmit,
             <Select
               id="location"
               value={selectedLocation}
-              onChange={(e) => setSelectedLocation(e.target.value)}
+              onChange={(e) => handleLocationChange(e.target.value)}
               required
               options={[
                 { value: '', label: 'Select a location' },
                 ...availableLocations.map(loc => ({
                   value: `${loc.locationCode}-${loc.shelfNumber}`,
-                  label: `${loc.locationCode} - Shelf ${loc.shelfNumber} (${loc.quantity} units)${loc.quantity === 0 ? ' - Out of Stock' : ''}`
+                  label: `${loc.locationCode} - Shelf ${loc.shelfNumber} (${loc.quantity} units) - ${loc.storeName?.toUpperCase()}${loc.quantity === 0 ? ' - Out of Stock' : ''}`
                 }))
               ]}
               className={`${isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-300 text-gray-900'} ${validationMessage ? 'border-red-500 focus:border-red-500' : ''}`}
@@ -294,33 +307,24 @@ const JobStockUpdateForm: React.FC<JobStockUpdateFormProps> = ({ item, onSubmit,
           </div>
         )}
 
-        <div className="space-y-2">
-          <label 
-            htmlFor="storeName" 
-            className={`block text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}
-          >
-            Store Name
-          </label>
-          <Select
-            id="storeName"
-            value={storeName}
-            onChange={(e) => setStoreName(e.target.value)}
-            options={storeSelectOptions.map(store => ({ value: store, label: store === 'other' ? 'Other' : store }))}
-            required
-            className={`${isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-300 text-gray-900'} ${validationMessage ? 'border-red-500 focus:border-red-500' : ''}`}
-          />
-          {storeName === 'other' && (
-            <Input
-              id="otherStoreName"
-              type="text"
-              value={otherStoreName}
-              onChange={(e) => setOtherStoreName(e.target.value)}
-              placeholder="Enter store name"
-              required
-              className={`${isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-300 text-gray-900'} ${validationMessage ? 'border-red-500 focus:border-red-500' : ''}`}
-            />
-          )}
-        </div>
+        {/* Display selected store name */}
+        {selectedLocation && storeName && (
+          <div className="space-y-2">
+            <label 
+              className={`block text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}
+            >
+              Store Name
+            </label>
+            <div className={`p-3 rounded-lg ${isDarkMode ? 'bg-slate-700 border-slate-600' : 'bg-slate-100 border-slate-300'} border`}>
+              <span className={`text-sm font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                {storeName?.toUpperCase()}
+              </span>
+              <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} mt-1`}>
+                Automatically selected based on location
+              </p>
+            </div>
+          </div>
+        )}
 
         {validationMessage ? (
           <div className={`flex items-center space-x-2 text-sm ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>

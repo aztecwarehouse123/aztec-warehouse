@@ -71,7 +71,7 @@ const StockDetailsModal: React.FC<StockDetailsModalProps> = ({
               
               <div>
                 <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Supplier</p>
-                <p className={`font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{item.supplier}</p>
+                <p className={`font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{item.supplier?.toUpperCase() || '-'}</p>
               </div>
               
               <div>
@@ -156,7 +156,7 @@ const StockDetailsModal: React.FC<StockDetailsModalProps> = ({
                 <div>
                 <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Store Name</p>
                 <p className={`font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
-                  {item.storeName || '-'}
+                  {item.storeName?.toUpperCase() || '-'}
                 </p>
               </div>
             </div>

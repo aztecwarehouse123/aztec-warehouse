@@ -18,13 +18,29 @@ const StockCard: React.FC<StockCardProps> = ({ item, onClick }) => {
       <div className="p-4">
         <div className="flex items-start justify-between mb-2">
           <h3 className="font-medium text-slate-800">{item.name}</h3>
-          <span className={`text-sm font-medium px-2 py-0.5 rounded-full ${
-            item.status === 'active' 
-              ? 'bg-green-100 text-green-700'
-              : 'bg-yellow-100 text-yellow-700'
-          }`}>
-            {item.status === 'active' ? 'Active' : 'Pending'}
-          </span>
+          <div className="flex flex-col gap-1">
+            <span className={`text-sm font-medium px-2 py-0.5 rounded-full ${
+              item.status === 'active' 
+                ? 'bg-green-100 text-green-700'
+                : 'bg-yellow-100 text-yellow-700'
+            }`}>
+              {item.status === 'active' ? 'Active' : 'Pending'}
+            </span>
+            {item.storeName && item.storeName !== 'not set' ? (
+              <span className={`text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${
+                item.storeName === 'supply & serve' ? 'bg-blue-100 text-blue-700' :
+                item.storeName === 'APHY' ? 'bg-green-100 text-green-700' :
+                item.storeName === 'AZTEC' ? 'bg-purple-100 text-purple-700' :
+                item.storeName === 'ZK' ? 'bg-orange-100 text-orange-700' :
+                item.storeName === 'Fahiz' ? 'bg-pink-100 text-pink-700' :
+                'bg-gray-100 text-gray-700'
+              }`}>
+                {item.storeName?.toUpperCase()}
+              </span>
+            ) : (
+              <span className="text-xs text-slate-400">-</span>
+            )}
+          </div>
         </div>
         
         

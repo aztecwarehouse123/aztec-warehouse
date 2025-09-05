@@ -11,6 +11,7 @@ import QuickAddStockForm from '../../components/stock/QuickAddStockForm';
 import StockDetailsModal from '../../components/modals/StockDetailsModal';
 import DeleteConfirmationModal from '../../components/modals/DeleteConfirmationModal';
 import LocationConfirmationModal from '../../components/modals/LocationConfirmationModal';
+import ProductLocationInfoModal from '../../components/modals/ProductLocationInfoModal';
 import { StockItem } from '../../types';
 import { useToast } from '../../contexts/ToastContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -54,6 +55,12 @@ const Stock: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'pending'>('all');
   const [isStatusFilterOpen, setIsStatusFilterOpen] = useState(false);
   const [totalCount, setTotalCount] = useState<number | null>(null);
+  const [isProductLocationInfoModalOpen, setIsProductLocationInfoModalOpen] = useState(false);
+  const [productLocationInfo, setProductLocationInfo] = useState<{
+    productName: string;
+    barcode: string;
+    existingLocations: StockItem[];
+  } | null>(null);
 
 
   // Debounce name search input
@@ -146,6 +153,19 @@ const Stock: React.FC = () => {
 
   const predefinedStores = useMemo(() => ['supply & serve', 'APHY', 'AZTEC', 'ZK', 'Fahiz'], []);
 
+  // Function to get store badge color based on store name
+  const getStoreBadgeColor = useCallback((storeName: string) => {
+    const storeColors: { [key: string]: string } = {
+      'supply & serve': 'bg-blue-100 text-blue-700',
+      'APHY': 'bg-green-100 text-green-700',
+      'AZTEC': 'bg-purple-100 text-purple-700',
+      'ZK': 'bg-orange-100 text-orange-700',
+      'Fahiz': 'bg-pink-100 text-pink-700',
+    };
+    
+    return storeColors[storeName] || 'bg-gray-100 text-gray-700';
+  }, []);
+
 
   // Filter and sort items
   const filteredItems = useMemo(() => {
@@ -198,6 +218,26 @@ const Stock: React.FC = () => {
       item.locationCode === locationCode && item.shelfNumber === shelfNumber
     );
   }, [items]);
+
+  // Function to check all existing locations for a product by barcode
+  const checkExistingProductLocations = useCallback((barcode: string): StockItem[] => {
+    return items.filter(item => 
+      item.barcode === barcode && item.quantity > 0
+    );
+  }, [items]);
+
+  // Function to show product location info modal
+  const showProductLocationInfo = useCallback((productName: string, barcode: string) => {
+    const existingLocations = checkExistingProductLocations(barcode);
+    if (existingLocations.length > 0) {
+      setProductLocationInfo({
+        productName,
+        barcode,
+        existingLocations
+      });
+      setIsProductLocationInfoModalOpen(true);
+    }
+  }, [checkExistingProductLocations]);
 
   const performAddStock = useCallback( async (data: Omit<StockItem, 'id'>[]) => {
     setIsLoading(true);
@@ -280,11 +320,16 @@ const Stock: React.FC = () => {
   }, [user,showToast]);
 
   const handleAddStock = useCallback( async (data: Omit<StockItem, 'id'>[]) => {
+    console.log('handleAddStock called with data:', data);
+    
     // Check if any of the locations have existing products
     const locationsWithProducts: { locationCode: string; shelfNumber: string; products: StockItem[] }[] = [];
     
     for (const item of data) {
+      console.log(`Checking location ${item.locationCode}-${item.shelfNumber} for existing products`);
       const existingProducts = checkLocationForExistingProducts(item.locationCode, item.shelfNumber);
+      console.log(`Found ${existingProducts.length} existing products at ${item.locationCode}-${item.shelfNumber}:`, existingProducts);
+      
       if (existingProducts.length > 0) {
         locationsWithProducts.push({
           locationCode: item.locationCode,
@@ -294,8 +339,11 @@ const Stock: React.FC = () => {
       }
     }
 
+    console.log('Locations with products:', locationsWithProducts);
+
     // If there are locations with existing products, show confirmation modal
     if (locationsWithProducts.length > 0) {
+      console.log('Showing location confirmation modal');
       const firstLocation = locationsWithProducts[0];
       setLocationConfirmationData({
         locationCode: firstLocation.locationCode,
@@ -309,6 +357,7 @@ const Stock: React.FC = () => {
       return;
     }
 
+    console.log('No existing products found, proceeding with add stock');
     // If no existing products, proceed with adding
     await performAddStock(data);
   }, [checkLocationForExistingProducts, performAddStock]);
@@ -660,7 +709,7 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
     } finally {
       setIsLoading(false);
     }
-  },[selectedItem, items, user, showToast]);
+  },[selectedItems, items, user, showToast]);
 
   const handleBulkActivate = useCallback(async () => {
     if (selectedItems.size === 0) return;
@@ -713,7 +762,7 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedItem, items, user, showToast]);
+  }, [selectedItems, items, user, showToast]);
 
   const toggleSelectionMode = useCallback(() => {
     setIsSelectionMode(!isSelectionMode);
@@ -752,13 +801,13 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
         </span>
       </td>
       <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
-        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-          item.fulfillmentType === 'fba' 
-            ? 'bg-green-100 text-green-700'
-            : 'bg-orange-100 text-orange-700'
-        }`}>
-          {item.fulfillmentType.toUpperCase()}
-        </span>
+        {item.storeName && item.storeName !== 'not set' ? (
+          <span className={`px-2 py-1 text-xs font-medium rounded-full whitespace-nowrap ${getStoreBadgeColor(item.storeName)}`}>
+            {item.storeName?.toUpperCase()}
+          </span>
+        ) : (
+          <span className="text-slate-400">-</span>
+        )}
       </td>
       <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{item.locationCode} - {item.shelfNumber}</td>
       <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
@@ -813,7 +862,7 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
         </div>
       </td>
     </tr>
-  ), [isSelectionMode, selectedItems, isDarkMode, user, handleItemClick, handleSelectItem, handleEditClick, handleDeleteClick]);
+  ), [isSelectionMode, selectedItems, isDarkMode, user, handleItemClick, handleSelectItem, handleEditClick, handleDeleteClick, getStoreBadgeColor]);
 
   return (
     <div className="space-y-6">
@@ -993,7 +1042,7 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
             onClick={() => setIsStoreFilterOpen(!isStoreFilterOpen)}
             className={`flex items-center gap-2 ${storeFilter ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' : ''}`}
           >
-            {storeFilter ? `${storeFilter.storeName === 'other' ? 'Other' : storeFilter.storeName} - ${storeFilter.fulfillmentType.toUpperCase()}` : 'Store Filter'}
+            {storeFilter ? `${storeFilter.storeName === 'other' ? 'OTHER' : storeFilter.storeName?.toUpperCase()} - ${storeFilter.fulfillmentType.toUpperCase()}` : 'Store Filter'}
             <ChevronDown size={16} />
           </Button>
           {isStoreFilterOpen && (
@@ -1086,7 +1135,7 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
                 <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Name</th>
                 <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Unit</th>
                 <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Status</th>
-                <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>FT</th>
+                <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Store</th>
                 <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Location</th>
                 <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>ASIN</th>
                 {user?.role === 'admin' && (
@@ -1219,13 +1268,13 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
                     }`}>
                       {item.status === 'active' ? 'Active' : 'Pending'}
                     </span>
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                      item.fulfillmentType === 'fba'
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-orange-100 text-orange-700'
-                    }`}>
-                      {item.fulfillmentType.toUpperCase()}
-                    </span>
+                    {item.storeName && item.storeName !== 'not set' ? (
+                      <span className={`px-2 py-1 text-xs font-medium rounded-full whitespace-nowrap ${getStoreBadgeColor(item.storeName)}`}>
+                        {item.storeName}
+                      </span>
+                    ) : (
+                      <span className="text-slate-400">-</span>
+                    )}
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2 text-xs">
@@ -1275,8 +1324,10 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
       >
         <AddStockForm 
           onSubmit={handleAddStock}
+          onCancel={() => setIsAddModalOpen(false)}
           isLoading={isLoading}
           existingStockItems={items}
+          onShowProductLocationInfo={showProductLocationInfo}
         />
       </Modal>
 
@@ -1386,6 +1437,20 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
           existingProducts={locationConfirmationData.existingProducts}
           newProductName={locationConfirmationData.newProductName}
           newProductBarcode={locationConfirmationData.newProductBarcode}
+        />
+      )}
+
+      {/* Product Location Info Modal */}
+      {productLocationInfo && (
+        <ProductLocationInfoModal
+          isOpen={isProductLocationInfoModalOpen}
+          onClose={() => {
+            setIsProductLocationInfoModalOpen(false);
+            setProductLocationInfo(null);
+          }}
+          productName={productLocationInfo.productName}
+          barcode={productLocationInfo.barcode}
+          existingLocations={productLocationInfo.existingLocations}
         />
       )}
     </div>

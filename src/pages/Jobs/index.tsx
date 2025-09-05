@@ -1230,6 +1230,13 @@ const Jobs: React.FC = () => {
                     )}
                   </p>
                   
+                  {/* Verified by packer info for completed and archived jobs */}
+                  {(showCompleted || showArchived) && job.packer && (
+                    <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-xs leading-relaxed`}>
+                      Verified by {job.packer}
+                    </p>
+                  )}
+                  
                   {/* Quick summary when collapsed */}
                   {!isExpanded && job.items.length > 0 && (
                     <div className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-xs mt-2`}>
@@ -2584,7 +2591,7 @@ const Jobs: React.FC = () => {
                           )}
                           {item.storeName && (
                             <span className="text-xs text-slate-500 block">
-                              Store: {item.storeName}
+                              Store: {item.storeName?.toUpperCase()}
                             </span>
                           )}
                         </div>

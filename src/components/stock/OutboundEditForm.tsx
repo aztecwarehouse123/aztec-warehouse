@@ -149,7 +149,7 @@ const OutboundEditForm: React.FC<OutboundEditFormProps> = ({ item, onSubmit, isL
             id="storeName"
             value={storeName}
             onChange={(e) => setStoreName(e.target.value)}
-            options={storeSelectOptions.map(store => ({ value: store, label: store === 'other' ? 'Other' : store }))}
+            options={storeSelectOptions.map(store => ({ value: store, label: store === 'other' ? 'OTHER' : store?.toUpperCase() }))}
             required
             className={`${isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-300 text-gray-900'} ${validationMessage ? 'border-red-500 focus:border-red-500' : ''}`}
           />

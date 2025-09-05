@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { User, Moon, Sun, Edit2, Trash2, RefreshCw } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
@@ -50,7 +50,7 @@ const Settings: React.FC = () => {
   });
 
   // Fetch all users when component mounts
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     if (user?.role === 'admin') {
       setIsLoading(true);
       try {
@@ -68,11 +68,11 @@ const Settings: React.FC = () => {
         setIsLoading(false);
       }
     }
-  };
+  }, [user?.role, showToast]);
 
   useEffect(() => {
     fetchUsers();
-  }, [user?.role, showToast]);
+  }, [user?.role, showToast, fetchUsers]);
 
   // Function to get initials from name
   const getInitials = (name: string) => {
@@ -811,7 +811,14 @@ const Settings: React.FC = () => {
                       <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>{userItem.username}</td>
                       <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>{userItem.email || '-'}</td>
                       <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>{userItem.name}</td>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>{userItem.role === 'admin' ? 'Admin' : userItem.role === 'staff' ? 'Staff' : 'Supply & Serve'}</td>
+                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>
+                        {userItem.role === 'admin' ? 'Admin' : 
+                         userItem.role === 'staff' ? 'Staff' : 
+                         userItem.role === 'supply_serve' ? 'Supply & Serve' :
+                         userItem.role === 'fahiz' ? 'Fahiz' :
+                         userItem.role === 'aphy' ? 'APHY' : 
+                         userItem.role}
+                      </td>
                       <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}> 
                         <div className="flex items-center gap-2">
                           <Button 
@@ -869,7 +876,14 @@ const Settings: React.FC = () => {
                     </div>
                   </div>
                   <div className={`text-sm ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>{userItem.email || '-'}</div>
-                  <div className={`text-xs font-medium ${isDarkMode ? 'text-blue-300' : 'text-blue-700'}`}>{userItem.role === 'admin' ? 'Admin' : userItem.role === 'staff' ? 'Staff' : 'Supply & Serve'}</div>
+                  <div className={`text-xs font-medium ${isDarkMode ? 'text-blue-300' : 'text-blue-700'}`}>
+                    {userItem.role === 'admin' ? 'Admin' : 
+                     userItem.role === 'staff' ? 'Staff' : 
+                     userItem.role === 'supply_serve' ? 'Supply & Serve' :
+                     userItem.role === 'fahiz' ? 'Fahiz' :
+                     userItem.role === 'aphy' ? 'APHY' : 
+                     userItem.role}
+                  </div>
                 </div>
               ))}
             </div>
@@ -925,6 +939,8 @@ const Settings: React.FC = () => {
                     { value: 'admin', label: 'Admin' },
                     { value: 'staff', label: 'Staff' },
                     { value: 'supply_serve', label: 'Supply & Serve' },
+                    { value: 'fahiz', label: 'Fahiz' },
+                    { value: 'aphy', label: 'APHY' },
                   ]}
                   fullWidth
                 />

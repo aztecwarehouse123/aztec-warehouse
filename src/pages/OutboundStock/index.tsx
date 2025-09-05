@@ -244,7 +244,7 @@ const OutboundStock: React.FC = () => {
       // Add activity log
       await addDoc(collection(db, 'activityLogs'), {
         
-        detail: `${originalItem.quantity - data.quantity} units deducted from stock "${originalItem.name}" (Reason: ${data.reason}, Store: ${data.storeName}) by ${user.role} from location ${originalItem.locationCode} shelf ${originalItem.shelfNumber}`,
+        detail: `${originalItem.quantity - data.quantity} units deducted from stock "${originalItem.name}" (Reason: ${data.reason}, Store: ${data.storeName?.toUpperCase()}) by ${user.role} from location ${originalItem.locationCode} shelf ${originalItem.shelfNumber}`,
         time: new Date().toISOString(),
         user: user.name,
         role: user.role
@@ -405,7 +405,7 @@ const OutboundStock: React.FC = () => {
             onClick={() => setIsStoreFilterOpen(!isStoreFilterOpen)}
             className={`flex items-center gap-2 ${storeFilter ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' : ''}`}
           >
-            {storeFilter ? `${storeFilter.storeName === 'other' ? 'Other' : storeFilter.storeName} - ${storeFilter.fulfillmentType.toUpperCase()}` : 'Store Filter'}
+            {storeFilter ? `${storeFilter.storeName === 'other' ? 'OTHER' : storeFilter.storeName?.toUpperCase()} - ${storeFilter.fulfillmentType.toUpperCase()}` : 'Store Filter'}
             <ChevronDown size={16} />
           </Button>
           {isStoreFilterOpen && (
@@ -415,7 +415,7 @@ const OutboundStock: React.FC = () => {
                 {['supply & serve', 'APHY', 'AZTEC', 'ZK', 'Fahiz', 'other'].map((storeName) => (
                   <div key={storeName} className="group relative">
                     <div className={`px-3 py-2 text-sm cursor-pointer rounded transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-700' : 'text-slate-700 hover:bg-slate-100'} ${storeFilter?.storeName === storeName ? (isDarkMode ? 'bg-slate-700' : 'bg-slate-100') : ''}`}>
-                      {storeName}
+                      {storeName?.toUpperCase()}
                     </div>
                     <div className={`absolute right-full top-0 mr-1 hidden group-hover:block w-24 ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border rounded-lg shadow-lg`}>
                       <div 

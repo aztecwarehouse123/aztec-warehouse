@@ -23,6 +23,7 @@ interface AddStockFormProps {
   isLoading?: boolean;
   existingStockItems: StockItem[];
   isSupplyServe?: boolean;
+  onShowProductLocationInfo?: (productName: string, barcode: string) => void;
 }
 
 interface FormData {
@@ -263,19 +264,34 @@ const generateShelfOptionsForLocation = (locationCode: string) => {
 };
 
 const supplierOptions = [
-  { value: 'Rayburns Trading', label: 'Rayburns Trading' },
-  { value: 'Intamarque', label: 'Intamarque' },
-  { value: 'Sian Wholesale', label: 'Sian Wholesale' },
+  { value: 'Rayburns Trading', label: 'RAYBURNS TRADING' },
+  { value: 'Intamarque', label: 'INTAMARQUE' },
+  { value: 'Sian Wholesale', label: 'SIAN WHOLESALE' },
   { value: 'DMG', label: 'DMG' },
   { value: 'CVT', label: 'CVT' },
-  { value: 'Wholesale Trading Supplies', label: 'Wholesale Trading Supplies' },
+  { value: 'Wholesale Trading Supplies', label: 'WHOLESALE TRADING SUPPLIES' },
   { value: 'HJA', label: 'HJA' },
-  { value: 'Price Check', label: 'Price Check' },
-  { value: 'other', label: 'Other' }
+  { value: 'Price Check', label: 'PRICE CHECK' },
+  { value: 'other', label: 'OTHER' }
 ];
 
-const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false, existingStockItems, isSupplyServe = false }) => {
+const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false, existingStockItems, isSupplyServe = false, onShowProductLocationInfo }) => {
   const { user } = useAuth();
+  
+  // Get store name based on user role
+  const getStoreNameForUser = () => {
+    switch (user?.role) {
+      case 'fahiz':
+        return 'fahiz';
+      case 'aphy':
+        return 'APHY';
+      case 'supply_serve':
+        return 'supply & serve';
+      default:
+        return 'supply & serve';
+    }
+  };
+
   const [formData, setFormData] = useState<FormData>({
     name: '',
     price: '',
@@ -285,7 +301,7 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
     status: 'pending',
     damagedItems: '0',
     fulfillmentType: 'mf', // Default to MF since default store is 'supply & serve'
-    storeName: 'supply & serve', // Default to first store
+    storeName: getStoreNameForUser(), // Set based on user role
     selectedAsins: [] // Initialize empty array for multiple ASINs
   });
 
@@ -453,6 +469,12 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
           selectedAsins: asinValue ? [asinValue] : []
         }));
         setBarcodeSearchMessage('Product name, unit, and ASIN auto-filled from scanned products.');
+        
+        // Show existing product locations if available
+        if (onShowProductLocationInfo && docData.name) {
+          onShowProductLocationInfo(docData.name, barcode);
+        }
+        
         searchSuccessful = true;
       } else {
         // Try external API
@@ -489,6 +511,12 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
             selectedAsins: asinValue ? [asinValue] : []
           }));
           setBarcodeSearchMessage('Product name and ASIN auto-filled from external database.');
+          
+          // Show existing product locations if available
+          if (onShowProductLocationInfo && item.title) {
+            onShowProductLocationInfo(item.title, barcode);
+          }
+          
           searchSuccessful = true;
         } else {
           setBarcodeSearchMessage('No product found for this barcode. Please enter details manually.');
@@ -575,6 +603,12 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
           selectedAsins: asinValue ? [asinValue] : []
         }));
         setBarcodeSearchMessage('Product name, unit, and ASIN auto-filled from scanned products.');
+        
+        // Show existing product locations if available
+        if (onShowProductLocationInfo && docData.name) {
+          onShowProductLocationInfo(docData.name, barcode);
+        }
+        
         setIsFetchingProductInfo(false);
         return;
       }
@@ -612,6 +646,11 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
           selectedAsins: asinValue ? [asinValue] : []
         }));
         setBarcodeSearchMessage('Product name and ASIN auto-filled from UPC database.');
+        
+        // Show existing product locations if available
+        if (onShowProductLocationInfo && item.title) {
+          onShowProductLocationInfo(item.title, barcode);
+        }
       } else {
         setFetchError('No product info found for this barcode.');
       }
@@ -656,7 +695,7 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
       const stockData = locationEntries.map(entry => ({
         name: formData.name,
         quantity: parseInt(entry.quantity),
-        price: user?.role === 'admin' ? parseFloat(formData.price) : 0,
+        price: (user?.role === 'admin' || user?.role === 'fahiz' || user?.role === 'aphy' || user?.role === 'supply_serve') ? parseFloat(formData.price) : 0,
         unit: formData.unit || null,
         supplier: supplier === 'other' ? otherSupplier : supplier,
         locationCode: entry.locationCode,
@@ -670,6 +709,9 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
         storeName: storeName === 'other' ? otherStoreName : storeName
       }));
       
+      console.log('AddStockForm submitting data:', stockData);
+      console.log('Location entries:', locationEntries);
+      
       // Check for duplicate (same name, barcode, and location)
       const duplicate = stockData.find(newItem =>
         existingStockItems.some(existing =>
@@ -680,6 +722,7 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
         )
       );
       if (duplicate) {
+        console.log('Duplicate found:', duplicate);
         setDuplicateInfo({
           name: duplicate.name,
           location: `${duplicate.locationCode}-${duplicate.shelfNumber}`
@@ -689,6 +732,7 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
         return;
       }
       try {
+        console.log('Calling onSubmit with stockData:', stockData);
         await onSubmit(stockData);
       } catch (error) {
         console.error('Error adding stock:', error);
@@ -806,7 +850,7 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {user?.role === 'admin' && (
+          {(user?.role === 'admin' || user?.role === 'fahiz' || user?.role === 'aphy' || user?.role === 'supply_serve') && (
             <Input
               label="Price"
               name="price"
@@ -930,28 +974,18 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
             }
             fullWidth
           />
-          {user?.role === 'admin' ? (
-            <Select
-              label="Status"
-              name="status"
-              value={formData.status}
-              onChange={handleChange}
-              options={[
-                { value: 'pending', label: 'Pending' },
-                { value: 'active', label: 'Active' }
-              ]}
-              fullWidth
-              required
-            />
-          ) : (
-            <Input
-              label="Status"
-              name="status"
-              value="pending"
-              disabled
-              fullWidth
-            />
-          )}
+          <Select
+            label="Status"
+            name="status"
+            value={formData.status}
+            onChange={handleChange}
+            options={[
+              { value: 'pending', label: 'Pending' },
+              { value: 'active', label: 'Active' }
+            ]}
+            fullWidth
+            required
+          />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="flex gap-2 relative w-full">
@@ -998,7 +1032,7 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
             
         </div>
 
-        {!isSupplyServe && (
+        {!isSupplyServe && user?.role === 'admin' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Select
@@ -1018,12 +1052,12 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
                   }
                 }}
                 options={[
-                  { value: 'supply & serve', label: 'Supply & Serve' },
+                  { value: 'supply & serve', label: 'SUPPLY & SERVE' },
                   { value: 'APHY', label: 'APHY' },
                   { value: 'AZTEC', label: 'AZTEC' },
                   { value: 'ZK', label: 'ZK' },
-                  { value: 'Fahiz', label: 'Fahiz' },
-                  { value: 'other', label: 'Other' }
+                  { value: 'Fahiz', label: 'FAHIZ' },
+                  { value: 'other', label: 'OTHER' }
                 ]}
               />
             </div>

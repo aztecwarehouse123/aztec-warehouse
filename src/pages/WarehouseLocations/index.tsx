@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Package, ChevronUp, ChevronDown, Search, Barcode, RefreshCw } from 'lucide-react';
-import { collection, query, getDocs, orderBy, Timestamp, doc, setDoc, addDoc, getDoc } from 'firebase/firestore';
+import { Package, ChevronUp, ChevronDown, Search, Barcode, RefreshCw, Trash2 } from 'lucide-react';
+import { collection, query, getDocs, orderBy, Timestamp, doc, setDoc, addDoc, getDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { useToast } from '../../contexts/ToastContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -8,6 +8,7 @@ import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import Modal from '../../components/modals/Modal';
 import BarcodeScanModal from '../../components/modals/BarcodeScanModal';
+import DeleteConfirmationModal from '../../components/modals/DeleteConfirmationModal';
 import { useAuth } from '../../contexts/AuthContext';
 import { StockItem } from '../../types';
 import Button from '../../components/ui/Button';
@@ -39,6 +40,8 @@ const WarehouseLocations: React.FC = () => {
   const [lastNotifiedProductQuery, setLastNotifiedProductQuery] = useState('');
   // const [lastNotifiedLocationQuery, setLastNotifiedLocationQuery] = useState('');
   const [moveShelfOptions, setMoveShelfOptions] = useState(generateShelfOptions('A1'));
+  const [productToDelete, setProductToDelete] = useState<StockItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const { user } = useAuth();
 
   // Update shelf options when move location changes
@@ -367,6 +370,33 @@ const WarehouseLocations: React.FC = () => {
     }
   };
 
+  const handleDelete = async () => {
+    if (!productToDelete) return;
+    
+    setIsDeleting(true);
+    try {
+      // Delete the product from Firestore
+      await deleteDoc(doc(db, 'inventory', productToDelete.id));
+      
+      // Log activity
+      await addDoc(collection(db, 'activityLogs'), {
+        user: user?.name || 'Unknown',
+        role: user?.role || 'Unknown',
+        detail: `deleted product "${productToDelete.name}" (${productToDelete.quantity} units) from location ${productToDelete.locationCode}-${productToDelete.shelfNumber}`,
+        time: new Date().toISOString()
+      });
+      
+      showToast('Product deleted successfully', 'success');
+      setProductToDelete(null);
+      fetchLocations();
+    } catch (error) {
+      showToast('Failed to delete product', 'error');
+      console.error('Error deleting product:', error);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <div className={`space-y-6 ${isDarkMode ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-800'}`}>
       <div>
@@ -590,24 +620,43 @@ const WarehouseLocations: React.FC = () => {
                                 <p className={`font-medium ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
                                   {location.quantity} units
                                 </p>
-                                <button
-                                  className="px-2 py-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-600"
-                                  onClick={async e => {
-                                    e.stopPropagation();
-                                    // Fetch full product from Firestore
-                                    const fullDoc = await getDoc(doc(db, 'inventory', location.id));
-                                    if (fullDoc.exists()) {
-                                      const fullData = fullDoc.data() as StockItem;
-                                      setMoveProduct({ ...fullData, id: location.id });
-                                      setMoveQuantity(1);
-                                      setMoveLocation(location.locationCode);
-                                      setMoveShelf(location.shelfNumber);
-                                      setMoveModalOpen(true);
-                                    } else {
-                                      showToast('Failed to fetch product details', 'error');
-                                    }
-                                  }}
-                                >Move</button>
+                                <div className="flex gap-2">
+                                  <button
+                                    className="px-2 py-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-600 flex items-center gap-1"
+                                    onClick={async e => {
+                                      e.stopPropagation();
+                                      // Fetch full product from Firestore
+                                      const fullDoc = await getDoc(doc(db, 'inventory', location.id));
+                                      if (fullDoc.exists()) {
+                                        const fullData = fullDoc.data() as StockItem;
+                                        setMoveProduct({ ...fullData, id: location.id });
+                                        setMoveQuantity(1);
+                                        setMoveLocation(location.locationCode);
+                                        setMoveShelf(location.shelfNumber);
+                                        setMoveModalOpen(true);
+                                      } else {
+                                        showToast('Failed to fetch product details', 'error');
+                                      }
+                                    }}
+                                  >Move</button>
+                                  <button
+                                    className="px-2 py-1 bg-red-500 text-white rounded text-xs hover:bg-red-600 flex items-center gap-1"
+                                    onClick={async e => {
+                                      e.stopPropagation();
+                                      // Fetch full product from Firestore
+                                      const fullDoc = await getDoc(doc(db, 'inventory', location.id));
+                                      if (fullDoc.exists()) {
+                                        const fullData = fullDoc.data() as StockItem;
+                                        setProductToDelete({ ...fullData, id: location.id });
+                                      } else {
+                                        showToast('Failed to fetch product details', 'error');
+                                      }
+                                    }}
+                                  >
+                                    <Trash2 size={12} />
+                                    Delete
+                                  </button>
+                                </div>
                               </div>
                             </div>
                             <div className={`w-full ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'} rounded-full h-2`}>
@@ -685,6 +734,16 @@ const WarehouseLocations: React.FC = () => {
         isOpen={isScanModalOpen}
         onClose={() => setIsScanModalOpen(false)}
         onBarcodeScanned={handleBarcodeScanned}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmationModal
+        isOpen={!!productToDelete}
+        onClose={() => setProductToDelete(null)}
+        onConfirm={handleDelete}
+        title="Delete Product"
+        message={productToDelete ? `Are you sure you want to delete "${productToDelete.name}" (${productToDelete.quantity} units) from location ${productToDelete.locationCode}-${productToDelete.shelfNumber}? This action cannot be undone.` : ''}
+        isLoading={isDeleting}
       />
     </div>
   );

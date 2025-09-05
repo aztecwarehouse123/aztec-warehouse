@@ -96,7 +96,7 @@ function App() {
           </ProtectedRoute>
         } />
         <Route path="supply-serve" element={
-          <ProtectedRoute allowedRoles={['supply_serve']}>
+          <ProtectedRoute allowedRoles={['supply_serve', 'fahiz', 'aphy']}>
             <SupplyServe />
           </ProtectedRoute>
         } />

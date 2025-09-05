@@ -24,7 +24,7 @@ const Login: React.FC = () => {
       if (user.role === 'staff') {
         navigate('/add');
       } 
-      if (user.role === 'supply_serve'){
+      if (user.role === 'supply_serve' || user.role === 'fahiz' || user.role === 'aphy'){
         navigate('/supply-serve');
       }else {
         navigate('/');

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback} from 'react';
-import { Search, Loader2, RefreshCw, ChevronDown, Play } from 'lucide-react';
+import { Search, Loader2, RefreshCw, ChevronDown, Play, Edit2, Trash2, Plus } from 'lucide-react';
 // import { motion } from 'framer-motion';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
@@ -37,6 +37,33 @@ const Stock: React.FC = () => {
   const { showToast } = useToast();
   const { isDarkMode } = useTheme();
   const { user } = useAuth();
+
+  // Get dynamic page title and store name based on user role
+  const getPageInfo = useCallback(() => {
+    switch (user?.role) {
+      case 'fahiz':
+        return {
+          title: 'Fahiz Stock',
+          storeName: 'Fahiz',
+          storeNameDisplay: 'FAHIZ'
+        };
+      case 'aphy':
+        return {
+          title: 'APHY Stock',
+          storeName: 'APHY',
+          storeNameDisplay: 'APHY'
+        };
+      case 'supply_serve':
+      default:
+        return {
+          title: 'Supply & Serve Stock',
+          storeName: 'supply & serve',
+          storeNameDisplay: 'SUPPLY & SERVE'
+        };
+    }
+  }, [user?.role]);
+
+  const pageInfo = getPageInfo();
   const [isQuantityConfirmModalOpen, setIsQuantityConfirmModalOpen] = useState(false);
   const [pendingQuantityUpdate, setPendingQuantityUpdate] = useState<{ itemId: string; newQuantity: number } | null>(null);
   const [isQuickAddModalOpen, setIsQuickAddModalOpen] = useState(false);
@@ -138,17 +165,20 @@ const Stock: React.FC = () => {
   {/* predefinedStores removed - no longer needed */}
 
 
-  // Filter and sort items - only show supply & serve products
+  // Filter and sort items - show products based on user role
   const filteredItems = useMemo(() => {
     const nameSearchLower = debouncedNameSearchQuery.toLowerCase();
     const barcodeAsinSearchLower = debouncedBarcodeAsinSearchQuery.toLowerCase();
+    
+    // Use the dynamic store name from pageInfo
+    const targetStoreName = pageInfo.storeName;
     
     return items.filter(item => {
       // Hide products with quantity 0
       if (item.quantity === 0) return false;
       
-      // Only show products from "supply & serve" store
-      if (item.storeName !== 'supply & serve') {
+      // Only show products from the user's assigned store
+      if (item.storeName !== targetStoreName) {
         return false;
       }
       
@@ -180,14 +210,14 @@ const Stock: React.FC = () => {
       }
       return 0;
     });
-  }, [items, debouncedNameSearchQuery, debouncedBarcodeAsinSearchQuery, statusFilter, sortBy]);
+  }, [items, debouncedNameSearchQuery, debouncedBarcodeAsinSearchQuery, statusFilter, sortBy, pageInfo]);
 
-  // Calculate total count of supply & serve products only
+  // Calculate total count of products for the current user's store
   const supplyServeTotalCount = useMemo(() => {
     return items.filter(item => 
-      item.quantity > 0 && item.storeName === 'supply & serve'
+      item.quantity > 0 && item.storeName === pageInfo.storeName
     ).length;
-  }, [items]);
+  }, [items, pageInfo]);
 
   const checkLocationForExistingProducts = useCallback((locationCode: string, shelfNumber: string): StockItem[] => {
     return items.filter(item => 
@@ -437,7 +467,7 @@ const Stock: React.FC = () => {
         }
         if (data.storeName !== originalItem.storeName) {
             changes.storeName = data.storeName;
-            logChanges.push(`store name from "${originalItem.storeName}" to "${data.storeName}"`);
+            logChanges.push(`store name from "${originalItem.storeName?.toUpperCase()}" to "${data.storeName?.toUpperCase()}"`);
         }
         if (data.unit !== originalItem.unit) {
             changes.unit = data.unit;
@@ -656,7 +686,7 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
     } finally {
       setIsLoading(false);
     }
-  },[selectedItem, items, user, showToast]);
+  },[selectedItems, items, user, showToast]);
 
   const handleBulkActivate = useCallback(async () => {
     if (selectedItems.size === 0) return;
@@ -709,7 +739,7 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedItem, items, user, showToast]);
+  }, [selectedItems, items, user, showToast]);
 
   const toggleSelectionMode = useCallback(() => {
     setIsSelectionMode(!isSelectionMode);
@@ -766,16 +796,12 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
           '-'
         )}
       </td>
-      {user?.role === 'admin' && (
-        <>
           <td className={`px-4 py-3 text-right text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>
             {Number(item.price) > 0 ? `£${Number(item.price).toFixed(2)}` : '(Not set)'}
           </td>
           <td className={`px-4 py-3 text-right text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>
             {Number(item.quantity * item.price) > 0 ? `£${Number(item.quantity * item.price).toFixed(2)}` : '(Not set)'}
           </td>
-        </>
-      )}
       <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'} text-right`}>
         <div className="flex items-center justify-end gap-2">
           {item.quantity <= 10 && (
@@ -792,41 +818,42 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
         </div>
       </td>
         <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{format(new Date(item.lastUpdated), 'MMM d, yyyy')}</td>
-      {/* Actions column data hidden */}
-      {/* <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'} text-right`}>
+      <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'} text-right`}>
         <div className="flex items-center justify-end gap-2">
           <button
             onClick={(e) => handleEditClick(e, item)}
             className={`p-1 ${isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'} transition-colors`}
+            title="Edit"
           >
             <Edit2 size={16} />
           </button>
           <button
             onClick={(e) => handleDeleteClick(e, item)}
             className={`p-1 ${isDarkMode ? 'text-red-400 hover:text-red-300' : 'text-red-600 hover:text-red-700'} transition-colors`}
+            title="Delete"
           >
             <Trash2 size={16} />
           </button>
         </div>
-      </td> */}
+      </td>
     </tr>
-  ), [isSelectionMode, selectedItems, isDarkMode, user, handleItemClick, handleSelectItem, handleEditClick, handleDeleteClick]);
+  ), [isSelectionMode, selectedItems, isDarkMode, handleItemClick, handleSelectItem, handleEditClick, handleDeleteClick]);
 
   return (
     <div className="space-y-6">
       {/* Total Products Indicator */}
       <div className="flex items-center justify-between py-4">
         <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-          Supply & Serve Stock
+          {pageInfo.title}
         </h1>
         <span className={`px-3 py-1 rounded-full text-sm font-semibold ${isDarkMode ? 'bg-slate-800 text-blue-300' : 'bg-blue-100 text-blue-700'}`}>
-          Supply & Serve Products: {supplyServeTotalCount}
+          {pageInfo.storeNameDisplay} Products: {supplyServeTotalCount}
         </span>
       </div>
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 gap-4">
         <div>
           <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} mt-1`}>
-            Manage your supply & serve stock, track quantities, and monitor product status
+            Manage your {pageInfo.storeNameDisplay.toLowerCase()} stock, track quantities, and monitor product status
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
@@ -871,24 +898,22 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
                 <CheckSquare size={16} />
                 Select Items
               </Button> */}
-              {/* Quick Add Button - Hidden */}
-              {/* <Button
+              <Button
                 variant="secondary"
                 onClick={() => setIsQuickAddModalOpen(true)}
                 className="flex items-center gap-2 w-full sm:w-auto"
               >
                 <Plus size={16} />
                 Quick Add
-              </Button> */}
-              {/* Add New Stock Button - Hidden */}
-              {/* <Button
+              </Button>
+              <Button
                 variant="primary"
                 onClick={() => setIsAddModalOpen(true)}
                 className="flex items-center gap-2 w-full sm:w-auto"
               >
                 <Plus size={16} />
                 Add New Stock
-              </Button> */}
+              </Button>
               
             </>
           )}
@@ -994,7 +1019,7 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
             onClick={() => setIsStoreFilterOpen(!isStoreFilterOpen)}
             className={`flex items-center gap-2 ${storeFilter ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' : ''}`}
           >
-            {storeFilter ? `${storeFilter.storeName === 'other' ? 'Other' : storeFilter.storeName} - ${storeFilter.fulfillmentType.toUpperCase()}` : 'Store Filter'}
+            {storeFilter ? `${storeFilter.storeName === 'other' ? 'OTHER' : storeFilter.storeName?.toUpperCase()} - ${storeFilter.fulfillmentType.toUpperCase()}` : 'Store Filter'}
             <ChevronDown size={16} />
           </Button>
           {isStoreFilterOpen && (
@@ -1004,7 +1029,7 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
                 {['supply & serve', 'APHY', 'AZTEC', 'ZK', 'Fahiz', 'other'].map((storeName) => (
                   <div key={storeName} className="group relative">
                     <div className={`px-3 py-2 text-sm cursor-pointer rounded transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-700' : 'text-slate-700 hover:bg-slate-100'} ${storeFilter?.storeName === storeName ? (isDarkMode ? 'bg-slate-700' : 'bg-slate-100') : ''}`}>
-                      {storeName}
+                      {storeName?.toUpperCase()}
                     </div>
                     <div className={`absolute right-full top-0 mr-1 hidden group-hover:block w-24 ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border rounded-lg shadow-lg`}>
                       {storeName !== 'supply & serve' && (
@@ -1090,16 +1115,11 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
                 <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>FT</th>
                 <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Location</th>
                 <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>ASIN</th>
-                {user?.role === 'admin' && (
-                  <>
                     <th className={`px-4 py-3 text-right text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Price</th>
                     <th className={`px-4 py-3 text-right text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Total Price</th>
-                  </>
-                )}
                 <th className={`px-4 py-3 text-right text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Quantity</th>
                 <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Last Updated</th>
-                {/* Actions column hidden */}
-                {/* <th className={`px-4 py-3 text-right text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Actions</th> */}
+                <th className={`px-4 py-3 text-right text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Actions</th>
               </tr>
             </thead>
             <tbody className={`divide-y ${isDarkMode ? 'divide-slate-700' : 'divide-slate-200'}`}>
@@ -1234,16 +1254,11 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
                   <span className={isDarkMode ? 'text-slate-300' : 'text-slate-600'}>Location: <span className="font-medium">{item.locationCode} - {item.shelfNumber}</span></span>
                   <span className={isDarkMode ? 'text-slate-300' : 'text-slate-600'}>Qty: <span className="font-medium">{item.quantity}</span></span>
                   {item.asin && <span className={isDarkMode ? 'text-slate-300' : 'text-slate-600'}>ASIN: <span className="font-medium">{item.asin}</span></span>}
-                  {user?.role === 'admin' && (
-                    <>
                       <span className={isDarkMode ? 'text-slate-300' : 'text-slate-600'}>Price: <span className="font-medium">{Number(item.price) > 0 ? `£${Number(item.price).toFixed(2)}` : '(Not set)'}</span></span>
                       <span className={isDarkMode ? 'text-slate-300' : 'text-slate-600'}>Total: <span className="font-medium">{Number(item.quantity * item.price) > 0 ? `£${Number(item.quantity * item.price).toFixed(2)}` : '(Not set)'}</span></span>
-                    </>
-                  )}
                   <span className={isDarkMode ? 'text-slate-300' : 'text-slate-600'}>Updated: <span className="font-medium">{format(new Date(item.lastUpdated), 'MMM d, yyyy')}</span></span>
                 </div>
-                {/* Actions buttons hidden */}
-                {/* <div className="flex gap-2 mt-2">
+                <div className="flex gap-2 mt-2">
                   <Button
                     size="sm"
                     variant="secondary"
@@ -1258,7 +1273,7 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
                   >
                     <Trash2 size={14} /> Delete
                   </Button>
-                </div> */}
+                </div>
               </div>
             ))}
           </div>
@@ -1273,11 +1288,12 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
       <Modal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
-        title="Add New Stock Item"
+        title={`Add New ${pageInfo.storeNameDisplay} Stock Item`}
         size="xl"
       >
         <AddStockForm 
           onSubmit={handleAddStock}
+          onCancel={() => setIsAddModalOpen(false)}
           isLoading={isLoading}
           existingStockItems={items}
         />
@@ -1287,7 +1303,7 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
       <Modal
         isOpen={isQuickAddModalOpen}
         onClose={() => setIsQuickAddModalOpen(false)}
-        title="Quick Add Stock"
+        title={`Quick Add ${pageInfo.storeNameDisplay} Stock`}
         size="md"
       >
         <QuickAddStockForm 
@@ -1301,7 +1317,7 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
       <Modal
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
-        title="Edit Stock"
+        title={`Edit ${pageInfo.storeNameDisplay} Stock`}
         size='xl'
       >
         {selectedItem && (

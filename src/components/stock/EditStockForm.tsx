@@ -252,15 +252,15 @@ const generateShelfOptionsForLocation = (locationCode: string) => {
   const predefinedStores = ['supply & serve', 'APHY', 'AZTEC', 'ZK', 'Fahiz'];
 
 const supplierOptions = [
-  { value: 'Rayburns Trading', label: 'Rayburns Trading' },
-  { value: 'Intamarque', label: 'Intamarque' },
-  { value: 'Sian Wholesale', label: 'Sian Wholesale' },
+  { value: 'Rayburns Trading', label: 'RAYBURNS TRADING' },
+  { value: 'Intamarque', label: 'INTAMARQUE' },
+  { value: 'Sian Wholesale', label: 'SIAN WHOLESALE' },
   { value: 'DMG', label: 'DMG' },
   { value: 'CVT', label: 'CVT' },
-  { value: 'Wholesale Trading Supplies', label: 'Wholesale Trading Supplies' },
+  { value: 'Wholesale Trading Supplies', label: 'WHOLESALE TRADING SUPPLIES' },
   { value: 'HJA', label: 'HJA' },
-  { value: 'Price Check', label: 'Price Check' },
-  { value: 'other', label: 'Other' }
+  { value: 'Price Check', label: 'PRICE CHECK' },
+  { value: 'other', label: 'OTHER' }
 ];
 
 const EditStockForm: React.FC<EditStockFormProps> = ({ 
@@ -273,7 +273,21 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
   const { user } = useAuth();
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
 
-  const initialStoreName = item.storeName;
+  // Get store name based on user role for non-admin users
+  const getStoreNameForUser = () => {
+    switch (user?.role) {
+      case 'fahiz':
+        return 'fahiz';
+      case 'aphy':
+        return 'APHY';
+      case 'supply_serve':
+        return 'supply & serve';
+      default:
+        return item.storeName; // Keep original for admin
+    }
+  };
+
+  const initialStoreName = user?.role === 'admin' ? item.storeName : getStoreNameForUser();
   const isCustomStore = initialStoreName && !predefinedStores.includes(initialStoreName);
 
   // Supplier initialization logic
@@ -360,13 +374,13 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
           id: item.id,
           name: formData.name,
           quantity: parseInt(formData.quantity),
-          price: user?.role === 'admin' ? parseFloat(formData.price) : item.price,
+          price: (user?.role === 'admin' || user?.role === 'fahiz' || user?.role === 'aphy' || user?.role === 'supply_serve') ? parseFloat(formData.price) : item.price,
           unit: formData.unit || null,
           supplier: formData.supplier === 'other' ? otherSupplier : formData.supplier || null,
           locationCode: formData.locationCode,
           shelfNumber: formData.shelfNumber,
           asin: formData.asin || null,
-          status: user?.role === 'admin' ? formData.status : 'pending',
+          status: (user?.role === 'admin' || user?.role === 'fahiz' || user?.role === 'aphy' || user?.role === 'supply_serve') ? formData.status : 'pending',
           damagedItems: parseInt(formData.damagedItems),
           fulfillmentType: formData.fulfillmentType,
           lastUpdated: new Date(),
@@ -391,7 +405,7 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
       setValidationMessage('Quantity must be a positive number');
       return false;
     }
-    if (user?.role === 'admin' && (!formData.price || parseFloat(formData.price) < 0)) {
+    if ((user?.role === 'admin' || user?.role === 'fahiz' || user?.role === 'aphy' || user?.role === 'supply_serve') && (!formData.price || parseFloat(formData.price) < 0)) {
       setValidationMessage('Price must be a positive number');
       return false;
     }
@@ -415,7 +429,7 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
           required
           fullWidth
         />
-         {user?.role === 'admin' ? (
+         {(user?.role === 'admin' || user?.role === 'fahiz' || user?.role === 'aphy' || user?.role === 'supply_serve') ? (
           <Select
             label="Status"
             name="status"
@@ -453,7 +467,7 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
           fullWidth
         />
         
-        {user?.role === 'admin' && (
+        {( user?.role === 'admin' || user?.role === 'fahiz' || user?.role === 'aphy' || user?.role === 'supply_serve') && (
           <Input
             label="Price"
             name="price"
@@ -564,36 +578,38 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
           />
           
         </div>
-        <div>
-          <label className={`block text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'} mb-1`}>
-            Store Name
-          </label>
-          <Select
-            value={formData.storeName}
-            onChange={(e) => {
-              const value = e.target.value;
-              setFormData(prev => ({ 
-                ...prev, 
-                storeName: value,
-                // Automatically set fulfillment type to 'mf' for 'supply & serve'
-                fulfillmentType: value === 'supply & serve' ? 'mf' : prev.fulfillmentType
-              }));
-              setShowOtherStoreInput(value === 'other');
-              if (value !== 'other') {
-                setOtherStoreName('');
-              }
-            }}
-            options={[
-              { value: 'supply & serve', label: 'Supply & Serve' },
-              { value: 'APHY', label: 'APHY' },
-              { value: 'AZTEC', label: 'AZTEC' },
-              { value: 'ZK', label: 'ZK' },
-              { value: 'Fahiz', label: 'Fahiz' },
-              { value: 'other', label: 'Other' }
-            ]}
-          />
-          
-        </div>
+        {user?.role === 'admin' && (
+          <div>
+            <label className={`block text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'} mb-1`}>
+              Store Name
+            </label>
+            <Select
+              value={formData.storeName}
+              onChange={(e) => {
+                const value = e.target.value;
+                setFormData(prev => ({ 
+                  ...prev, 
+                  storeName: value,
+                  // Automatically set fulfillment type to 'mf' for 'supply & serve'
+                  fulfillmentType: value === 'supply & serve' ? 'mf' : prev.fulfillmentType
+                }));
+                setShowOtherStoreInput(value === 'other');
+                if (value !== 'other') {
+                  setOtherStoreName('');
+                }
+              }}
+              options={[
+                { value: 'supply & serve', label: 'SUPPLY & SERVE' },
+                { value: 'APHY', label: 'APHY' },
+                { value: 'AZTEC', label: 'AZTEC' },
+                { value: 'ZK', label: 'ZK' },
+                { value: 'Fahiz', label: 'FAHIZ' },
+                { value: 'other', label: 'OTHER' }
+              ]}
+            />
+            
+          </div>
+        )}
        
       </div>
 
@@ -610,7 +626,7 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
             />
           )}
       
-        {showOtherStoreInput && !showOtherSupplierInput && (
+        {user?.role === 'admin' && showOtherStoreInput && !showOtherSupplierInput && (
           <div>
             <label className={`block text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'} mb-1`}>
               Other Store Name
@@ -624,7 +640,7 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
             />
           </div>
         )}
-        {showOtherStoreInput && showOtherSupplierInput && (
+        {user?.role === 'admin' && showOtherStoreInput && showOtherSupplierInput && (
           <div>
             <label className={`block text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'} mb-1`}>
               Other Store Name

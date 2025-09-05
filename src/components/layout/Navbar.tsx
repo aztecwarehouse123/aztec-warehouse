@@ -36,6 +36,19 @@ const Navbar: React.FC = () => {
     setMobileMenuOpen(false);
   };
 
+  // Function to get dynamic label for Supply & Serve based on user role
+  const getSupplyServeLabel = () => {
+    switch (user?.role) {
+      case 'fahiz':
+        return 'Fahiz Stock';
+      case 'aphy':
+        return 'APHY Stock';
+      case 'supply_serve':
+      default:
+        return 'Supply & Serve';
+    }
+  };
+
   const allNavItems = [
     { to: "/", icon: <LayoutDashboard size={20} />, label: "Dashboard", roles: ['admin'] },
     { to: "/add", icon: <Plus size={20} />, label: "Add", roles: ['admin', 'staff'] },
@@ -48,7 +61,7 @@ const Navbar: React.FC = () => {
     { to: "/reports-analytics", icon: <BarChart size={20} />, label: "Reports", roles: ['admin'] },
     { to: "/warehouse-operations", icon: <Activity size={20} />, label: "Logs", roles: ['admin','staff'] },
     { to: "/settings", icon: <Settings size={20} />, label: "Settings", roles: ['admin', 'staff'] },
-    { to: "/supply-serve", icon: <PackagePlus size={20} />, label: "Supply & Serve", roles: ['supply_serve'] },
+    { to: "/supply-serve", icon: <PackagePlus size={20} />, label: getSupplyServeLabel(), roles: ['supply_serve', 'fahiz', 'aphy'] },
     
   ];
 
