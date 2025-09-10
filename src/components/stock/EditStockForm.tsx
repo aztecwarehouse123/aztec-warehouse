@@ -578,7 +578,7 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
           />
           
         </div>
-        {user?.role === 'admin' && (
+        {(user?.role === 'admin' || user?.role === 'staff') && (
           <div>
             <label className={`block text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'} mb-1`}>
               Store Name
@@ -626,7 +626,7 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
             />
           )}
       
-        {user?.role === 'admin' && showOtherStoreInput && !showOtherSupplierInput && (
+        {(user?.role === 'admin' || user?.role === 'staff') && showOtherStoreInput && !showOtherSupplierInput && (
           <div>
             <label className={`block text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'} mb-1`}>
               Other Store Name
@@ -640,7 +640,7 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
             />
           </div>
         )}
-        {user?.role === 'admin' && showOtherStoreInput && showOtherSupplierInput && (
+        {(user?.role === 'admin' || user?.role === 'staff') && showOtherStoreInput && showOtherSupplierInput && (
           <div>
             <label className={`block text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'} mb-1`}>
               Other Store Name

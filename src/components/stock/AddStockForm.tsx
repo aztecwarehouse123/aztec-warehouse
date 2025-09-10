@@ -1032,7 +1032,7 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
             
         </div>
 
-        {!isSupplyServe && user?.role === 'admin' && (
+        {!isSupplyServe && (user?.role === 'admin' || user?.role === 'staff') && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Select
@@ -1061,12 +1061,8 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
                 ]}
               />
             </div>
-          </div>
-        )}
-
-        {showOtherStoreInput && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
+                
+            {showOtherStoreInput && (<div>
               <label className={`block text-sm font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-700'} mb-1`}>
                 Other Store Name
               </label>
@@ -1077,10 +1073,17 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
                 placeholder="Enter store name"
                 required={showOtherStoreInput}
               />
-            </div>
+            </div>)}
+
           </div>
         )}
-        
+
+        {/* {showOtherStoreInput && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            
+          </div>
+        )}
+         */}
         <div className="flex items-center justify-end gap-4 pt-2">
           <div className="flex gap-2">
             
