@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { db } from '../../config/firebase';
 import { collection, query, where, getDocs, Timestamp, orderBy } from 'firebase/firestore';
-import { format, subDays } from 'date-fns';
+import { format, subDays, subHours } from 'date-fns';
 import { XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { Download, Package, TrendingDown, PoundSterling, AlertCircle, RefreshCw } from 'lucide-react';
 import Select from '../../components/ui/Select';
-import DateRangePicker from '../../components/ui/DateRangePicker';
+import CalendarDateRangePicker from '../../components/ui/CalendarDateRangePicker';
 import Button from '../../components/ui/Button';
 import StatsCard, { StatsCardSkeleton } from '../../components/dashboard/StatsCard';
 import { StockItem, ActivityLog } from '../../types';
@@ -30,7 +30,7 @@ interface DashboardStats {
 }
 
 const ReportsAnalytics: React.FC = () => {
-  const [timeRange, setTimeRange] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+  const [timeRange, setTimeRange] = useState<'hourly' | 'daily' | 'weekly' | 'monthly'>('daily');
   const [startDate, setStartDate] = useState<Date | null>(subDays(new Date(), 7));
   const [endDate, setEndDate] = useState<Date | null>(new Date());
 
@@ -377,8 +377,8 @@ const ReportsAnalytics: React.FC = () => {
     // No need to refetch data, just trigger re-render
   }, [timeRange]);
 
-  // Redirect non-admin users
-  if (!user || user.role !== 'admin') {
+  // Redirect non-admin and non-staff users
+  if (!user || (user.role !== 'admin' && user.role !== 'staff')) {
     return <Navigate to="/" replace />;
   }
 
@@ -393,6 +393,9 @@ const ReportsAnalytics: React.FC = () => {
     let statsStartDate: Date;
 
     switch (timeRange) {
+      case 'hourly':
+        statsStartDate = subHours(statsEndDate, 24);
+        break;
       case 'daily':
         statsStartDate = subDays(statsEndDate, 7);
         break;
@@ -472,6 +475,9 @@ const ReportsAnalytics: React.FC = () => {
         let dateKey: string;
 
         switch (timeRange) {
+          case 'hourly':
+            dateKey = format(logDate, 'HH:mm');
+            break;
           case 'daily':
             dateKey = format(logDate, 'MMM dd');
             break;
@@ -481,6 +487,8 @@ const ReportsAnalytics: React.FC = () => {
           case 'monthly':
             dateKey = format(logDate, 'MMM yyyy');
             break;
+          default:
+            dateKey = format(logDate, 'MMM dd');
         }
 
         const current = groupedProducts.get(dateKey) || { activities: 0, units: 0, uniqueProducts: new Set<string>() };
@@ -518,6 +526,9 @@ const ReportsAnalytics: React.FC = () => {
     let statsStartDate: Date;
 
     switch (timeRange) {
+      case 'hourly':
+        statsStartDate = subHours(statsEndDate, 24);
+        break;
       case 'daily':
         statsStartDate = subDays(statsEndDate, 7);
         break;
@@ -557,6 +568,9 @@ const ReportsAnalytics: React.FC = () => {
         let dateKey: string;
 
         switch (timeRange) {
+          case 'hourly':
+            dateKey = format(logDate, 'HH:mm');
+            break;
           case 'daily':
             dateKey = format(logDate, 'MMM dd');
             break;
@@ -566,6 +580,8 @@ const ReportsAnalytics: React.FC = () => {
           case 'monthly':
             dateKey = format(logDate, 'MMM yyyy');
             break;
+          default:
+            dateKey = format(logDate, 'MMM dd');
         }
 
         const currentCount = groupedProducts.get(dateKey) || 0;
@@ -645,6 +661,9 @@ const ReportsAnalytics: React.FC = () => {
         let dateKey: string;
 
         switch (timeRange) {
+          case 'hourly':
+            dateKey = format(logDate, 'HH:mm');
+            break;
           case 'daily':
             dateKey = format(logDate, 'MMM dd');
             break;
@@ -654,6 +673,8 @@ const ReportsAnalytics: React.FC = () => {
           case 'monthly':
             dateKey = format(logDate, 'MMM yyyy');
             break;
+          default:
+            dateKey = format(logDate, 'MMM dd');
         }
 
         // Try to extract the number of units damaged from the log detail
@@ -752,7 +773,8 @@ const ReportsAnalytics: React.FC = () => {
     try {
       // Create comprehensive CSV with multiple sheets
       const timestamp = format(new Date(), 'yyyy-MM-dd-HH-mm');
-      const periodLabel = timeRange === 'daily' ? 'Last 7 Days' : 
+      const periodLabel = timeRange === 'hourly' ? 'Last 24 Hours' :
+                         timeRange === 'daily' ? 'Last 7 Days' : 
                          timeRange === 'weekly' ? 'Last Month' : 
                          timeRange === 'monthly' ? 'Last 3 Months' : 'Last 6 Months';
       
@@ -788,7 +810,8 @@ const ReportsAnalytics: React.FC = () => {
       
       // Statistics summary row
       csvRows.push('SUMMARY STATISTICS');
-      csvRows.push(`Total Stock Added (${periodLabel}),${stats.todayStockAdditions},Total Units Deducted (${periodLabel}),${stats.totalDeductions},Total Damaged Products (${periodLabel}),${stats.totalDamagedProducts},Total Inventory Value,£${stats.totalInventoryValue.toLocaleString('en-GB')}`);
+      const csvSummaryRow = `Total Stock Added (${periodLabel}),${stats.todayStockAdditions},Total Units Deducted (${periodLabel}),${stats.totalDeductions},Total Damaged Products (${periodLabel}),${stats.totalDamagedProducts}${user?.role === 'admin' ? `,Total Inventory Value,£${stats.totalInventoryValue.toLocaleString('en-GB')}` : ''}`;
+      csvRows.push(csvSummaryRow);
       csvRows.push(''); // Empty row for separation
       
       // Main data table headers
@@ -866,7 +889,8 @@ const ReportsAnalytics: React.FC = () => {
   const exportToPDF = () => {
     try {
       // Create a simple HTML report that can be printed as PDF
-      const periodLabel = timeRange === 'daily' ? 'Last 7 Days' : 
+      const periodLabel = timeRange === 'hourly' ? 'Last 24 Hours' :
+                         timeRange === 'daily' ? 'Last 7 Days' : 
                          timeRange === 'weekly' ? 'Last Month' : 
                          timeRange === 'monthly' ? 'Last 3 Months' : 'Last 6 Months';
       
@@ -936,10 +960,12 @@ const ReportsAnalytics: React.FC = () => {
                 <div class="stat-value">${stats.totalDamagedProducts}</div>
                 <div class="stat-title">Total Damaged Products<br/>(${periodLabel})</div>
               </div>
+              ${user?.role === 'admin' ? `
               <div class="stat-card">
                 <div class="stat-value">£${stats.totalInventoryValue.toLocaleString('en-GB')}</div>
                 <div class="stat-title">Total Inventory Value</div>
               </div>
+              ` : ''}
             </div>
             
             <div class="section">
@@ -1176,8 +1202,9 @@ const ReportsAnalytics: React.FC = () => {
             <div className="w-full sm:w-auto">
               <Select
                 value={timeRange}
-                onChange={(e) => setTimeRange(e.target.value as 'daily' | 'weekly' | 'monthly')}
+                onChange={(e) => setTimeRange(e.target.value as 'hourly' | 'daily' | 'weekly' | 'monthly')}
                 options={[
+                  { value: 'hourly', label: 'Hourly' },
                   { value: 'daily', label: 'Daily' },
                   { value: 'weekly', label: 'Weekly' },
                   { value: 'monthly', label: 'Monthly' }
@@ -1187,9 +1214,9 @@ const ReportsAnalytics: React.FC = () => {
               />
             </div>
             
-            {/* Date Range Picker */}
+            {/* Calendar Date Range Picker */}
             <div className="w-full sm:w-auto">
-              <DateRangePicker
+              <CalendarDateRangePicker
                 startDate={startDate}
                 endDate={endDate}
                 onStartDateChange={setStartDate}
@@ -1239,11 +1266,13 @@ const ReportsAnalytics: React.FC = () => {
               value={stats.totalDamagedProducts}
               icon={<AlertCircle size={24} className="text-blue-600" />}
             />
-            <StatsCard 
-              title="Total Inventory Value" 
-              value={`£${stats.totalInventoryValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-              icon={<PoundSterling size={24} className="text-blue-600" />}
-            />
+            {user?.role === 'admin' && (
+              <StatsCard 
+                title="Total Inventory Value" 
+                value={`£${stats.totalInventoryValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                icon={<PoundSterling size={24} className="text-blue-600" />}
+              />
+            )}
             
           </>
         )}

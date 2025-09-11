@@ -21,11 +21,11 @@ import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy,
 import { format } from 'date-fns';
 
 const Stock: React.FC = () => {
-  const [nameSearchQuery, setNameSearchQuery] = useState(''); // New state for name search
-  const [debouncedNameSearchQuery, setDebouncedNameSearchQuery] = useState(''); // Debounced name search
-  const [barcodeAsinSearchQuery, setBarcodeAsinSearchQuery] = useState(''); // New state for barcode/ASIN search
-  const [debouncedBarcodeAsinSearchQuery, setDebouncedBarcodeAsinSearchQuery] = useState(''); // Debounced barcode/ASIN search
-  const [sortBy, setSortBy] = useState('name');
+  const [searchQuery, setSearchQuery] = useState(''); // Unified search query
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(''); // Debounced search query
+  const [searchType, setSearchType] = useState<'name' | 'barcode' | 'asin' | 'location'>('name'); // Search type selection
+  const [isSearchTypeOpen, setIsSearchTypeOpen] = useState(false);
+  const [sortBy, setSortBy] = useState('date');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -63,25 +63,15 @@ const Stock: React.FC = () => {
   } | null>(null);
 
 
-  // Debounce name search input
+  // Debounce search input
   useEffect(() => {
     const handler = setTimeout(() => {
-      setDebouncedNameSearchQuery(nameSearchQuery);
+      setDebouncedSearchQuery(searchQuery);
     }, 300);
     return () => {
       clearTimeout(handler);
     };
-  }, [nameSearchQuery]);
-
-  // Debounce barcode/ASIN search input
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedBarcodeAsinSearchQuery(barcodeAsinSearchQuery);
-    }, 300);
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [barcodeAsinSearchQuery]);
+  }, [searchQuery]);
 
   // Fetch stock items from Firestore
   const fetchStockItems = useCallback (async () => {
@@ -123,7 +113,7 @@ const Stock: React.FC = () => {
     fetchTotalCount();
   }, [fetchStockItems,fetchTotalCount]);
 
-  // Close store filter dropdown when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Element;
@@ -133,22 +123,26 @@ const Stock: React.FC = () => {
       if (!target.closest('.status-filter-dropdown')) {
         setIsStatusFilterOpen(false);
       }
+      if (!target.closest('.search-type-dropdown')) {
+        setIsSearchTypeOpen(false);
+      }
     };
 
-    if (isStoreFilterOpen || isStatusFilterOpen) {
+    if (isStoreFilterOpen || isStatusFilterOpen || isSearchTypeOpen) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isStoreFilterOpen, isStatusFilterOpen]);
+  }, [isStoreFilterOpen, isStatusFilterOpen, isSearchTypeOpen]);
 
   const sortOptions = useMemo(() => [
-    { value: 'name', label: 'Name (A-Z)' },
+    { value: 'date', label: 'Date Updated' },
     { value: 'quantity', label: 'Quantity (High-Low)' },
+    { value: 'name', label: 'Name (A-Z)' },
     { value: 'price', label: 'Price (High-Low)' },
-    { value: 'date', label: 'Date Updated' }
+    
   ], []);
 
   const predefinedStores = useMemo(() => ['supply & serve', 'APHY', 'AZTEC', 'ZK', 'Fahiz'], []);
@@ -169,36 +163,50 @@ const Stock: React.FC = () => {
 
   // Filter and sort items
   const filteredItems = useMemo(() => {
-    const nameSearchLower = debouncedNameSearchQuery.toLowerCase();
-    const barcodeAsinSearchLower = debouncedBarcodeAsinSearchQuery.toLowerCase();
+    const searchLower = debouncedSearchQuery.toLowerCase();
     
     return items.filter(item => {
       // Hide products with quantity 0
       if (item.quantity === 0) return false;
       
-      // Name search: check if name starts with the search query
-      const matchesName = debouncedNameSearchQuery === '' || 
-        item.name.toLowerCase().startsWith(nameSearchLower);
-      
-      // Barcode/ASIN search: check if barcode or ASIN contains the search query
-      const matchesBarcodeAsin = debouncedBarcodeAsinSearchQuery === '' || 
-        (item.barcode && item.barcode.toLowerCase().includes(barcodeAsinSearchLower)) ||
-        (item.asin && item.asin.split(',').some(asin => 
-          asin.trim().toLowerCase().includes(barcodeAsinSearchLower)
-        ));
+      // Search based on selected search type
+      let matchesSearch = true;
+      if (debouncedSearchQuery !== '') {
+        switch (searchType) {
+          case 'name':
+            matchesSearch = item.name.toLowerCase().includes(searchLower);
+            break;
+          case 'barcode':
+            matchesSearch = Boolean(item.barcode && item.barcode.toLowerCase().includes(searchLower));
+            break;
+          case 'asin':
+            matchesSearch = Boolean(item.asin && item.asin.split(',').some(asin => 
+              asin.trim().toLowerCase().includes(searchLower)
+            ));
+            break;
+          case 'location':
+            matchesSearch = `${item.locationCode}-${item.shelfNumber}`.toLowerCase().includes(searchLower);
+            break;
+          default:
+            matchesSearch = true;
+        }
+      }
       
       // Handle store and fulfillment type filter
       const matchesStoreFilter = storeFilter 
-        ? (storeFilter.storeName === 'other' 
-            ? !predefinedStores.includes(item.storeName) && item.fulfillmentType === storeFilter.fulfillmentType
-            : item.storeName === storeFilter.storeName && item.fulfillmentType === storeFilter.fulfillmentType)
+        ? (storeFilter.fulfillmentType === 'all'
+            ? (storeFilter.storeName === 'other' 
+                ? !predefinedStores.includes(item.storeName)
+                : item.storeName === storeFilter.storeName)
+            : (storeFilter.storeName === 'other' 
+                ? !predefinedStores.includes(item.storeName) && item.fulfillmentType === storeFilter.fulfillmentType
+                : item.storeName === storeFilter.storeName && item.fulfillmentType === storeFilter.fulfillmentType))
         : true;
       
       // Handle status filter
       const matchesStatusFilter = statusFilter === 'all' || item.status === statusFilter;
       
-      // Both name and barcode/ASIN searches must match (if both are provided)
-      return matchesName && matchesBarcodeAsin && matchesStoreFilter && matchesStatusFilter;
+      return matchesSearch && matchesStoreFilter && matchesStatusFilter;
     }).sort((a, b) => {
       if (sortBy === 'name') {
         return a.name.localeCompare(b.name);
@@ -211,7 +219,7 @@ const Stock: React.FC = () => {
       }
       return 0;
     });
-  }, [items, debouncedNameSearchQuery, debouncedBarcodeAsinSearchQuery, storeFilter, statusFilter, sortBy, predefinedStores]);
+  }, [items, debouncedSearchQuery, searchType, storeFilter, statusFilter, sortBy, predefinedStores]);
 
   const checkLocationForExistingProducts = useCallback((locationCode: string, shelfNumber: string): StockItem[] => {
     return items.filter(item => 
@@ -946,29 +954,64 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
 
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="flex-1">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Name Search */}
-            <div className="relative">
+          <div className="flex gap-2">
+            {/* Search Input */}
+            <div className="relative flex-1">
               <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 ${isDarkMode ? 'text-slate-400' : 'text-slate-400'}`} size={16} />
               <Input
                 type="text"
-                placeholder="Search by product name"
-                value={nameSearchQuery}
-                onChange={(e) => setNameSearchQuery(e.target.value)}
+                placeholder={`Search by ${searchType}...`}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10"
               />
             </div>
             
-            {/* Barcode/ASIN Search */}
-            <div className="relative">
-              <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 ${isDarkMode ? 'text-slate-400' : 'text-slate-400'}`} size={16} />
-              <Input
-                type="text"
-                placeholder="Search by barcode or ASIN"
-                value={barcodeAsinSearchQuery}
-                onChange={(e) => setBarcodeAsinSearchQuery(e.target.value)}
-                className="pl-10"
-              />
+            {/* Search Type Toggle */}
+            <div className="relative search-type-dropdown">
+              <Button
+                variant="secondary"
+                onClick={() => setIsSearchTypeOpen(!isSearchTypeOpen)}
+                className={`flex items-center gap-2 ${searchType !== 'name' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' : ''}`}
+              >
+                {searchType === 'name' ? 'Name' : 
+                 searchType === 'barcode' ? 'Barcode' :
+                 searchType === 'asin' ? 'ASIN' : 'Location'}
+                <ChevronDown size={16} />
+              </Button>
+              {isSearchTypeOpen && (
+                <div className={`absolute top-full left-0 mt-1 w-32 z-50 rounded-lg border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-lg`}>
+                  <div className="p-2">
+                    <div className={`text-sm font-medium mb-2 ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>Search by</div>
+                    {[
+                      { value: 'name', label: 'Name' },
+                      { value: 'barcode', label: 'Barcode' },
+                      { value: 'asin', label: 'ASIN' },
+                      { value: 'location', label: 'Location' }
+                    ].map((option) => (
+                      <div
+                        key={option.value}
+                        className={`px-3 py-2 text-sm cursor-pointer rounded transition-colors ${
+                          isDarkMode 
+                            ? 'text-slate-200 hover:bg-slate-700' 
+                            : 'text-slate-700 hover:bg-slate-100'
+                        } ${
+                          searchType === option.value 
+                            ? (isDarkMode ? 'bg-slate-700' : 'bg-slate-100') 
+                            : ''
+                        }`}
+                        onClick={() => {
+                          setSearchType(option.value as 'name' | 'barcode' | 'asin' | 'location');
+                          setSearchQuery(''); // Clear search when changing type
+                          setIsSearchTypeOpen(false);
+                        }}
+                      >
+                        {option.label}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1042,39 +1085,23 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
             onClick={() => setIsStoreFilterOpen(!isStoreFilterOpen)}
             className={`flex items-center gap-2 ${storeFilter ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' : ''}`}
           >
-            {storeFilter ? `${storeFilter.storeName === 'other' ? 'OTHER' : storeFilter.storeName?.toUpperCase()} - ${storeFilter.fulfillmentType.toUpperCase()}` : 'Store Filter'}
+            {storeFilter ? `${storeFilter.storeName === 'other' ? 'OTHER' : storeFilter.storeName?.toUpperCase()}${storeFilter.fulfillmentType !== 'all' ? ` - ${storeFilter.fulfillmentType.toUpperCase()}` : ''}` : 'Store Filter'}
             <ChevronDown size={16} />
           </Button>
           {isStoreFilterOpen && (
             <div className={`absolute top-full left-0 mt-1 w-64 z-50 rounded-lg border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-lg`}>
               <div className="p-2">
-                <div className={`text-sm font-medium mb-2 ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>Filter by Store & Type</div>
+                <div className={`text-sm font-medium mb-2 ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>Filter by Store</div>
                 {['supply & serve', 'APHY', 'AZTEC', 'ZK', 'Fahiz', 'other'].map((storeName) => (
-                  <div key={storeName} className="group relative">
-                    <div className={`px-3 py-2 text-sm cursor-pointer rounded transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-700' : 'text-slate-700 hover:bg-slate-100'} ${storeFilter?.storeName === storeName ? (isDarkMode ? 'bg-slate-700' : 'bg-slate-100') : ''}`}>
-                      {storeName}
-                    </div>
-                    <div className={`absolute right-full top-0 mr-1 hidden group-hover:block w-24 ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border rounded-lg shadow-lg`}>
-                      {storeName !== 'supply & serve' && (
-                        <div 
-                          className={`px-3 py-2 text-sm cursor-pointer transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-700' : 'text-slate-700 hover:bg-slate-100'} ${storeFilter?.storeName === storeName && storeFilter?.fulfillmentType === 'fba' ? (isDarkMode ? 'bg-slate-700' : 'bg-slate-100') : ''}`}
-                          onClick={() => {
-                            setStoreFilter({ storeName, fulfillmentType: 'fba' });
-                            setIsStoreFilterOpen(false);
-                          }}
-                        >
-                          FBA
-                        </div>
-                      )}
-                      <div 
-                        className={`px-3 py-2 text-sm cursor-pointer transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-700' : 'text-slate-700 hover:bg-slate-100'} ${storeFilter?.storeName === storeName && storeFilter?.fulfillmentType === 'mf' ? (isDarkMode ? 'bg-slate-700' : 'bg-slate-100') : ''}`}
-                        onClick={() => {
-                          setStoreFilter({ storeName, fulfillmentType: 'mf' });
-                          setIsStoreFilterOpen(false);
-                        }}
-                      >
-                        MF
-                      </div>
+                  <div key={storeName}>
+                    <div 
+                      className={`px-3 py-2 text-sm cursor-pointer rounded transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-700' : 'text-slate-700 hover:bg-slate-100'} ${storeFilter?.storeName === storeName ? (isDarkMode ? 'bg-slate-700' : 'bg-slate-100') : ''}`}
+                      onClick={() => {
+                        setStoreFilter({ storeName, fulfillmentType: 'all' });
+                        setIsStoreFilterOpen(false);
+                      }}
+                    >
+                      {storeName.toUpperCase()}
                     </div>
                   </div>
                 ))}

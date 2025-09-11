@@ -9,6 +9,7 @@ import Select from '../../components/ui/Select';
 import Modal from '../../components/modals/Modal';
 import BarcodeScanModal from '../../components/modals/BarcodeScanModal';
 import DeleteConfirmationModal from '../../components/modals/DeleteConfirmationModal';
+import StockDetailsModal from '../../components/modals/StockDetailsModal';
 import { useAuth } from '../../contexts/AuthContext';
 import { StockItem } from '../../types';
 import Button from '../../components/ui/Button';
@@ -42,6 +43,7 @@ const WarehouseLocations: React.FC = () => {
   const [moveShelfOptions, setMoveShelfOptions] = useState(generateShelfOptions('A1'));
   const [productToDelete, setProductToDelete] = useState<StockItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<StockItem | null>(null);
   const { user } = useAuth();
 
   // Update shelf options when move location changes
@@ -599,13 +601,31 @@ const WarehouseLocations: React.FC = () => {
                         return (
                           <div 
                             key={location.id} 
-                            className={`space-y-2 p-2 rounded-md transition-colors ${
+                            className={`space-y-2 p-2 rounded-md transition-colors cursor-pointer hover:bg-opacity-80 ${
                               isMatch 
                                 ? isDarkMode 
                                   ? 'bg-blue-900/30 border border-blue-500/50' 
                                   : 'bg-blue-50 border border-blue-200'
-                                : ''
+                                : isDarkMode
+                                  ? 'hover:bg-slate-700'
+                                  : 'hover:bg-slate-100'
                             }`}
+                            onClick={async () => {
+                              // Fetch full product from Firestore
+                              const fullDoc = await getDoc(doc(db, 'inventory', location.id));
+                              if (fullDoc.exists()) {
+                                const fullData = fullDoc.data() as any;
+                                // Convert Firestore Timestamp to Date if needed
+                                const processedData: StockItem = {
+                                  ...fullData,
+                                  id: location.id,
+                                  lastUpdated: fullData.lastUpdated?.toDate ? fullData.lastUpdated.toDate() : new Date(fullData.lastUpdated)
+                                };
+                                setSelectedItem(processedData);
+                              } else {
+                                showToast('Failed to fetch product details', 'error');
+                              }
+                            }}
                           >
                             <div className="flex justify-between items-start">
                               <div>
@@ -745,6 +765,15 @@ const WarehouseLocations: React.FC = () => {
         message={productToDelete ? `Are you sure you want to delete "${productToDelete.name}" (${productToDelete.quantity} units) from location ${productToDelete.locationCode}-${productToDelete.shelfNumber}? This action cannot be undone.` : ''}
         isLoading={isDeleting}
       />
+
+      {/* Stock Details Modal */}
+      {selectedItem && (
+        <StockDetailsModal
+          isOpen={!!selectedItem}
+          onClose={() => setSelectedItem(null)}
+          item={selectedItem}
+        />
+      )}
     </div>
   );
 };

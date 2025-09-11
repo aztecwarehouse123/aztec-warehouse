@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Plus, RefreshCw, CheckSquare, ClipboardList, Trash2, ChevronUp, ChevronDown, Search, ArrowLeft, Calculator } from 'lucide-react';
+import { Plus, RefreshCw, CheckSquare, ClipboardList, Trash2, ChevronUp, ChevronDown, Search, ArrowLeft, Calculator, Clock } from 'lucide-react';
 import { db } from '../../config/firebase';
 import { addDoc, collection, deleteDoc, doc, getDocs, orderBy, query, serverTimestamp, Timestamp, updateDoc, where, onSnapshot } from 'firebase/firestore';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -87,6 +87,9 @@ const Jobs: React.FC = () => {
   const [verifyingItems, setVerifyingItems] = useState<Set<string>>(new Set());
   // State to prevent duplicate job creation when button is clicked multiple times
   const [isJobCreationInProgress, setIsJobCreationInProgress] = useState(false);
+  // Timer alert states
+  const [showHurryUpAlert, setShowHurryUpAlert] = useState(false);
+  const [lastAlertTime, setLastAlertTime] = useState<number>(0);
   
   // State to track locally verified items (not yet saved to database)
   const [locallyVerifiedItems, setLocallyVerifiedItems] = useState<Set<string>>(new Set());
@@ -587,6 +590,18 @@ const Jobs: React.FC = () => {
         const now = new Date();
         const elapsed = Math.floor((now.getTime() - jobCreationStartTime.getTime()) / 1000);
         setElapsedTime(elapsed);
+        
+        // Show hurry up alert at 10 minutes (600 seconds)
+        if (elapsed >= 600 && !showHurryUpAlert) {
+          setShowHurryUpAlert(true);
+          setLastAlertTime(600);
+        }
+        
+        // Show recurring alerts every 5 minutes after 10 minutes (15, 20, 25, etc.)
+        if (elapsed >= 600 && elapsed % 300 === 0 && elapsed !== lastAlertTime) {
+          setShowHurryUpAlert(true);
+          setLastAlertTime(elapsed);
+        }
       }, 1000);
     }
     
@@ -595,7 +610,14 @@ const Jobs: React.FC = () => {
         clearInterval(interval);
       }
     };
-  }, [jobCreationStartTime]);
+  }, [jobCreationStartTime, showHurryUpAlert, lastAlertTime]);
+
+  // Format elapsed time for display
+  const formatTime = (seconds: number): string => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  };
 
   const openNewJobModal = () => {
     setManualBarcode(''); // Reset manual barcode input
@@ -603,6 +625,8 @@ const Jobs: React.FC = () => {
     setPendingStockUpdates([]); // Reset pending updates
     setJobCreationStartTime(new Date()); // Start timer
     setElapsedTime(0); // Reset elapsed time
+    setShowHurryUpAlert(false); // Reset alert state
+    setLastAlertTime(0); // Reset last alert time
     setIsNewJobModalOpen(true);
     
     // Create a live job session in Firebase
@@ -923,8 +947,10 @@ const Jobs: React.FC = () => {
       setNewJobItems([]);
       setPendingStockUpdates([]);
       setManualBarcode('');
-      setJobCreationStartTime(null); // Stop timer
+      setJobCreationStartTime(null); // Reset timer
       setElapsedTime(0); // Reset elapsed time
+      setShowHurryUpAlert(false); // Reset alert state
+      setLastAlertTime(0); // Reset last alert time
       
               // Delete the live job session from Firebase since job is now completed
         const sessionQuery = query(
@@ -1539,20 +1565,18 @@ const Jobs: React.FC = () => {
                 Live Jobs
               </Button>
             )}
-            {user?.role === 'admin' && (
-              <Button 
-                variant={showReports ? "primary" : "secondary"} 
-                onClick={() => {
-                  setShowCompleted(false);
-                  setShowArchived(false);
-                  setShowLiveJobs(false);
-                  setShowReports(true);
-                }}
-                size='sm'
-              >
-                Reports
-              </Button>
-            )}
+            <Button 
+              variant={showReports ? "primary" : "secondary"} 
+              onClick={() => {
+                setShowCompleted(false);
+                setShowArchived(false);
+                setShowLiveJobs(false);
+                setShowReports(true);
+              }}
+              size='sm'
+            >
+              Reports
+            </Button>
           </div>
         </div>
         
@@ -2280,6 +2304,8 @@ const Jobs: React.FC = () => {
           setIsNewJobModalOpen(false);
           setJobCreationStartTime(null); // Reset timer
           setElapsedTime(0); // Reset elapsed time
+          setShowHurryUpAlert(false); // Reset alert state
+          setLastAlertTime(0); // Reset last alert time
           setShowSearchSection(false); // Reset search section
           
           // Delete the live job session from Firebase if user closes without finishing
@@ -2303,58 +2329,114 @@ const Jobs: React.FC = () => {
       >
         <div className="space-y-4">
           
-          {/* Search Toggle Button and Calculator - Only show when search section is closed */}
+          {/* Search Toggle Button, Timer, and Calculator - Only show when search section is closed */}
           {!showSearchSection && (
-            <div className="flex justify-start gap-2">
-              <button
-                onClick={() => setShowSearchSection(true)}
-                className="flex items-center gap-2 px-3 py-2 rounded-md transition-colors bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600"
-                title="Show search section"
-              >
-                <Search size={16} />
-                <span className="text-sm font-medium">Search Product</span>
-              </button>
+            <div className="flex justify-between items-center gap-2">
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowSearchSection(true)}
+                  className="flex items-center gap-2 px-3 py-2 rounded-md transition-colors bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600"
+                  title="Show search section"
+                >
+                  <Search size={16} />
+                  <span className="text-sm font-medium">Search Product</span>
+                </button>
+                
+                {/* Calculator Button */}
+                <Button
+                  variant="secondary"
+                  onClick={() => setIsCalculatorModalOpen(true)}
+                  size="sm"
+                  className="px-3 py-2"
+                >
+                  <Calculator size={16} />
+                </Button>
+              </div>
               
-              {/* Calculator Button */}
-              <Button
-                variant="secondary"
-                onClick={() => setIsCalculatorModalOpen(true)}
-                size="sm"
-                className="px-3 py-2"
-              >
-                <Calculator size={16} />
-              </Button>
+              {/* Timer Display */}
+              <div className={`flex items-center gap-2 px-3 py-2 rounded-md ${
+                elapsedTime >= 600 
+                  ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' 
+                  : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+              }`}>
+                <Clock size={16} />
+                <span className="text-sm font-mono font-medium">
+                  {formatTime(elapsedTime)}
+                </span>
+              </div>
+            </div>
+          )}
+          
+          {/* Hurry Up Alert - Show in both search and non-search modes */}
+          {showHurryUpAlert && (
+            <div className={`p-3 rounded-md border-l-4 ${
+              isDarkMode 
+                ? 'bg-red-900/20 border-red-500 text-red-200' 
+                : 'bg-red-50 border-red-500 text-red-800'
+            }`}>
+              <div className="flex items-center gap-2">
+                <div className="animate-pulse">⚠️</div>
+                <span className="font-medium">
+                  {elapsedTime >= 600 && elapsedTime < 900 
+                    ? "Hurry up! You've been working on this job for 10+ minutes."
+                    : `Time Alert: ${Math.floor(elapsedTime / 60)} minutes elapsed. Please complete the job soon.`
+                  }
+                </span>
+                <button
+                  onClick={() => setShowHurryUpAlert(false)}
+                  className={`ml-auto px-2 py-1 rounded text-xs ${
+                    isDarkMode 
+                      ? 'bg-red-800 hover:bg-red-700 text-red-200' 
+                      : 'bg-red-200 hover:bg-red-300 text-red-800'
+                  }`}
+                >
+                  Dismiss
+                </button>
+              </div>
             </div>
           )}
           
           {/* Search Section - Full screen when active */}
           {showSearchSection && (
             <div className="space-y-4">
-                              {/* Search Header with Back Button and Calculator */}
-                <div className="flex items-center gap-2">
+                              {/* Search Header with Back Button, Timer, and Calculator */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setShowSearchSection(false)}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-md transition-colors ${
+                        isDarkMode 
+                          ? 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white' 
+                          : 'bg-slate-200 text-slate-700 hover:bg-slate-300 hover:text-slate-800'
+                      }`}
+                      title="Back to Add Barcode"
+                    >
+                      <ArrowLeft size={16} />
+                      <span className="text-sm font-medium">Back to Add Barcode</span>
+                    </button>
+                    
+                    {/* Calculator Button */}
+                    <Button
+                      variant="secondary"
+                      onClick={() => setIsCalculatorModalOpen(true)}
+                      size="sm"
+                      className="px-3 py-2"
+                    >
+                      <Calculator size={16} />
+                    </Button>
+                  </div>
                   
-                  <button
-                    onClick={() => setShowSearchSection(false)}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-md transition-colors ${
-                      isDarkMode 
-                        ? 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white' 
-                        : 'bg-slate-200 text-slate-700 hover:bg-slate-300 hover:text-slate-800'
-                    }`}
-                    title="Back to Add Barcode"
-                  >
-                    <ArrowLeft size={16} />
-                    <span className="text-sm font-medium">Back to Add Barcode</span>
-                  </button>
-                  
-                  {/* Calculator Button */}
-                  <Button
-                    variant="secondary"
-                    onClick={() => setIsCalculatorModalOpen(true)}
-                    size="sm"
-                    className="px-3 py-2"
-                  >
-                    <Calculator size={16} />
-                  </Button>
+                  {/* Timer Display */}
+                  <div className={`flex items-center gap-2 px-3 py-2 rounded-md ${
+                    elapsedTime >= 600 
+                      ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' 
+                      : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+                  }`}>
+                    <Clock size={16} />
+                    <span className="text-sm font-mono font-medium">
+                      {formatTime(elapsedTime)}
+                    </span>
+                  </div>
                 </div>
               
               {/* Search Type Selector */}

@@ -150,7 +150,10 @@ const StockDetailsModal: React.FC<StockDetailsModalProps> = ({
                 <div>
                 <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Last Updated</p>
                 <p className={`font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
-                  {format(item.lastUpdated, 'MMM d, yyyy')}
+                  {item.lastUpdated && !isNaN(new Date(item.lastUpdated).getTime()) 
+                    ? format(new Date(item.lastUpdated), 'MMM d, yyyy')
+                    : 'Unknown'
+                  }
                 </p>
               </div>
                 <div>
