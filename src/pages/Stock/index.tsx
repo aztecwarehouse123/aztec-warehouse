@@ -195,11 +195,11 @@ const Stock: React.FC = () => {
       // Handle store and fulfillment type filter
       const matchesStoreFilter = storeFilter 
         ? (storeFilter.fulfillmentType === 'all'
-            ? (storeFilter.storeName === 'other' 
+        ? (storeFilter.storeName === 'other' 
                 ? !predefinedStores.includes(item.storeName)
                 : item.storeName === storeFilter.storeName)
             : (storeFilter.storeName === 'other' 
-                ? !predefinedStores.includes(item.storeName) && item.fulfillmentType === storeFilter.fulfillmentType
+            ? !predefinedStores.includes(item.storeName) && item.fulfillmentType === storeFilter.fulfillmentType
                 : item.storeName === storeFilter.storeName && item.fulfillmentType === storeFilter.fulfillmentType))
         : true;
       
@@ -1096,11 +1096,11 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
                   <div key={storeName}>
                     <div 
                       className={`px-3 py-2 text-sm cursor-pointer rounded transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-700' : 'text-slate-700 hover:bg-slate-100'} ${storeFilter?.storeName === storeName ? (isDarkMode ? 'bg-slate-700' : 'bg-slate-100') : ''}`}
-                      onClick={() => {
+                          onClick={() => {
                         setStoreFilter({ storeName, fulfillmentType: 'all' });
-                        setIsStoreFilterOpen(false);
-                      }}
-                    >
+                            setIsStoreFilterOpen(false);
+                          }}
+                        >
                       {storeName.toUpperCase()}
                     </div>
                   </div>
