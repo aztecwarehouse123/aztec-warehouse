@@ -2,7 +2,7 @@ import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 
 const firebaseConfig = {
-    apiKey: "AIzaSyBrPAITwnh9vpsoS6W5hmuLLWPQzANOHfQ",
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
     authDomain: "aztec-warehouse.firebaseapp.com",
     projectId: "aztec-warehouse",
     storageBucket: "aztec-warehouse.firebasestorage.app",
