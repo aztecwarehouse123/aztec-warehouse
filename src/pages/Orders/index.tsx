@@ -107,7 +107,6 @@ const Orders: React.FC = () => {
   const handleAddOrder = async (order: Omit<Order, 'id'>) => {
     setIsLoading(true);
     try {
-      console.log('Adding new order with status:', order.status);
       await addDoc(collection(db, 'orders'), {
         ...order,
         createdAt: serverTimestamp(),
@@ -124,7 +123,6 @@ const Orders: React.FC = () => {
 
       // If order is shipped, update inventory quantities
       if (order.status === 'shipped') {
-        console.log('Order is shipped, updating inventory...');
         await updateInventoryQuantities(order.items, true);
       }
 
@@ -148,8 +146,6 @@ const Orders: React.FC = () => {
       const prevOrderDoc = await getDoc(orderRef);
       const prevOrder = prevOrderDoc.data() as Order | undefined;
       
-      console.log('Previous order status:', prevOrder?.status);
-      console.log('New order status:', order.status);
 
       const updateData: { 
         status: OrderStatus; 
@@ -203,7 +199,6 @@ const Orders: React.FC = () => {
       
       // If status changed to shipped, update inventory and potentially add shippedTime
       if (order.status === 'shipped' && prevOrder?.status !== 'shipped') {
-        console.log('Status changed to shipped, updating inventory...');
         await updateInventoryQuantities(order.items, true);
          // If changing to shipped, set shippedTime from the order object if available
         if (order.shippedTime) {
@@ -214,7 +209,6 @@ const Orders: React.FC = () => {
       }
       // If status changed from shipped to something else, restore inventory and remove shippedTime
       else if (prevOrder?.status === 'shipped' && order.status !== 'shipped') {
-        console.log('Status changed from shipped, restoring inventory...');
         await updateInventoryQuantities(order.items, false);
         updateData.shippedTime = deleteField(); // Remove the field
       }
@@ -222,7 +216,6 @@ const Orders: React.FC = () => {
       else if ((order.status === 'cancelled' || order.status === 'returned') && 
                prevOrder?.status !== 'cancelled' && 
                prevOrder?.status !== 'returned') {
-        console.log(`Status changed to ${order.status}, restoring inventory...`);
         await updateInventoryQuantities(order.items, false);
         updateData.shippedTime = deleteField(); // Remove the field
       }
@@ -507,7 +500,6 @@ const Orders: React.FC = () => {
 
 const updateInventoryQuantities = async (items: OrderItem[], decrease: boolean) => {
    // This is a placeholder function, replace with your actual inventory update logic
-   console.log('Updating inventory quantities...', items, decrease);
    // Example using batch write (requires implementation based on your inventory structure)
    const batch = writeBatch(db);
    const updatedItems: { productName: string; quantity: number; action: string }[] = [];

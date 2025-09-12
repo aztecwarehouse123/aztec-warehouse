@@ -155,9 +155,6 @@ const AdminDashboard: React.FC = () => {
         item.quantity <= 25
       );
 
-      console.log('All stock items:', stockItems);
-      console.log('Critical items:', critical);
-      console.log('Low stock items:', low);
 
       setCriticalStockItems(critical);
       setLowStockItems(low);

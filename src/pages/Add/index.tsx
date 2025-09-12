@@ -304,7 +304,6 @@ const Add: React.FC = () => {
         })).filter(p => p.name || p.unit || p.barcode);
         const skipped = allRows.length - products.length;
         if (skipped > 0) {
-          console.log(`${skipped} rows skipped (all columns empty).`);
           setToast({ type: 'error', message: `${skipped} rows skipped (all columns empty).` });
         }
       } else if (file.name.endsWith('.xlsx')) {
@@ -321,16 +320,13 @@ const Add: React.FC = () => {
         })).filter(p => p.name || p.unit || p.barcode);
         const skipped = allRows.length - products.length;
         if (skipped > 0) {
-          console.log(`${skipped} rows skipped (all columns empty).`);
           setToast({ type: 'error', message: `${skipped} rows skipped (all columns empty).` });
         }
       } else {
-        console.log('Unsupported file type. Please upload a .csv or .xlsx file.');
         setToast({ type: 'error', message: 'Unsupported file type. Please upload a .csv or .xlsx file.' });
         return;
       }
       if (products.length === 0) {
-        console.log('No valid products found in file.');
         setToast({ type: 'error', message: 'No valid products found in file.' });
         return;
       }
@@ -356,10 +352,8 @@ const Add: React.FC = () => {
       }
       
       setToast({ type: 'success', message: `Uploaded ${products.length} products successfully!` });
-      console.log(`Uploaded ${products.length} products successfully!`);
       fetchProducts();
     } catch {
-      console.log('Failed to upload products.');
       setToast({ type: 'error', message: 'Failed to upload products.' });
     }
   };

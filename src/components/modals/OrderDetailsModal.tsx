@@ -17,9 +17,6 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 }) => {
   if (!order) return null;
   
-  console.log('Order in OrderDetailsModal:', order);
-  console.log('Order status in modal:', order.status);
-  console.log('Shipped Time in modal (before conditional):', order.shippedTime, typeof order.shippedTime);
 
   return (
     <Modal

@@ -709,8 +709,6 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
         storeName: storeName === 'other' ? otherStoreName : storeName
       }));
       
-      console.log('AddStockForm submitting data:', stockData);
-      console.log('Location entries:', locationEntries);
       
       // Check for duplicate (same name, barcode, and location)
       const duplicate = stockData.find(newItem =>
@@ -722,7 +720,6 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
         )
       );
       if (duplicate) {
-        console.log('Duplicate found:', duplicate);
         setDuplicateInfo({
           name: duplicate.name,
           location: `${duplicate.locationCode}-${duplicate.shelfNumber}`
@@ -732,7 +729,6 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
         return;
       }
       try {
-        console.log('Calling onSubmit with stockData:', stockData);
         await onSubmit(stockData);
       } catch (error) {
         console.error('Error adding stock:', error);

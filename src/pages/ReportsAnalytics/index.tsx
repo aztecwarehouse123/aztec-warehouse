@@ -903,10 +903,6 @@ const ReportsAnalytics: React.FC = () => {
       const detailedIncidents = (damagedData as any).detailedIncidents || [];
       
       // Debug logging
-      console.log('Damaged Data:', damagedData);
-      console.log('Detailed Incidents:', detailedIncidents);
-      console.log('Activity Logs Count:', activityLogs.length);
-      console.log('Sample Activity Logs:', activityLogs.slice(0, 3));
       
       // If no detailed incidents, try to generate them on the fly
       if (!detailedIncidents || detailedIncidents.length === 0) {

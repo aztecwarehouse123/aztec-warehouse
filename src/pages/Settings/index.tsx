@@ -60,7 +60,6 @@ const Settings: React.FC = () => {
           ...doc.data()
         })) as UserType[];
         setUsers(usersData);
-        console.log('Fetched users:', usersData.map(u => ({ id: u.id, username: u.username, name: u.name })));
       } catch (error) {
         console.error('Error fetching users:', error);
         showToast('Error fetching users', 'error');
@@ -218,7 +217,6 @@ const Settings: React.FC = () => {
   };
 
   const handleEditUser = (user: UserType) => {
-    console.log('Editing user:', user);
     setEditingUser(user);
     setUserEditErrors({}); // Clear previous errors
     setUserEditForm({
@@ -277,17 +275,9 @@ const Settings: React.FC = () => {
         }
       }
 
-      console.log('Updating user:', editingUser.id);
-      console.log('Editing user object:', editingUser);
-      console.log('Update data:', {
-        username: userEditForm.username,
-        email: userEditForm.email,
-        name: userEditForm.name,
-        password: userEditForm.newPassword ? '***' : 'unchanged'
-      });
+      
 
       const userRef = doc(db, 'users', editingUser.id);
-      console.log('User reference:', userRef.path);
       
       const updateData: Partial<UserType> = {
         username: userEditForm.username,
@@ -313,7 +303,6 @@ const Settings: React.FC = () => {
         
         if (!userSnapshot.empty) {
           const actualUserDoc = userSnapshot.docs[0];
-          console.log('Found user by username, actual ID:', actualUserDoc.id);
           
           const actualUserRef = doc(db, 'users', actualUserDoc.id);
           await updateDoc(actualUserRef, updateData);
@@ -353,11 +342,7 @@ const Settings: React.FC = () => {
       setEditingUser(null);
     } catch (error) {
       console.error('Error updating user:', error);
-      console.error('Error details:', {
-        editingUser: editingUser,
-        userEditForm: userEditForm,
-        error: error
-      });
+      
       showToast('Failed to update user', 'error');
     } finally {
       setIsLoading(false);

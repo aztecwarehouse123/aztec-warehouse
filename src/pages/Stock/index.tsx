@@ -91,7 +91,6 @@ const Stock: React.FC = () => {
       }) as StockItem[];
       setItems(stockItems);
     } catch (error) {
-      console.error('Error fetching stock items:', error);
       showToast('Failed to fetch stock items', 'error');
     } finally {
       setIsLoading(false);
@@ -320,7 +319,6 @@ const Stock: React.FC = () => {
       setIsQuickAddModalOpen(false);
       showToast('Stock items added successfully', 'success');
     } catch (error) {
-      console.error('Error adding stock:', error);
       showToast('Failed to add stock items', 'error');
     } finally {
       setIsLoading(false);
@@ -328,15 +326,12 @@ const Stock: React.FC = () => {
   }, [user,showToast]);
 
   const handleAddStock = useCallback( async (data: Omit<StockItem, 'id'>[]) => {
-    console.log('handleAddStock called with data:', data);
     
     // Check if any of the locations have existing products
     const locationsWithProducts: { locationCode: string; shelfNumber: string; products: StockItem[] }[] = [];
     
     for (const item of data) {
-      console.log(`Checking location ${item.locationCode}-${item.shelfNumber} for existing products`);
       const existingProducts = checkLocationForExistingProducts(item.locationCode, item.shelfNumber);
-      console.log(`Found ${existingProducts.length} existing products at ${item.locationCode}-${item.shelfNumber}:`, existingProducts);
       
       if (existingProducts.length > 0) {
         locationsWithProducts.push({
@@ -347,11 +342,9 @@ const Stock: React.FC = () => {
       }
     }
 
-    console.log('Locations with products:', locationsWithProducts);
 
     // If there are locations with existing products, show confirmation modal
     if (locationsWithProducts.length > 0) {
-      console.log('Showing location confirmation modal');
       const firstLocation = locationsWithProducts[0];
       setLocationConfirmationData({
         locationCode: firstLocation.locationCode,
@@ -365,7 +358,6 @@ const Stock: React.FC = () => {
       return;
     }
 
-    console.log('No existing products found, proceeding with add stock');
     // If no existing products, proceed with adding
     await performAddStock(data);
   }, [checkLocationForExistingProducts, performAddStock]);
@@ -438,7 +430,6 @@ const Stock: React.FC = () => {
           showToast('Products merged successfully', 'success');
         }
       } catch (error) {
-        console.error('Error merging products:', error);
         showToast('Failed to merge products', 'error');
       } finally {
         setIsLoading(false);
@@ -565,7 +556,6 @@ const Stock: React.FC = () => {
         }
 
     } catch (error) {
-      console.error('Error updating stock:', error);
       showToast('Failed to update stock item', 'error');
     } finally {
       setIsLoading(false);
@@ -600,7 +590,6 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
         showToast('Stock quantity updated successfully', 'success');
         setSelectedItem(null);
     } catch (error) {
-        console.error('Error updating quantity:', error);
         showToast('Failed to update quantity', 'error');
     } finally {
         setIsLoading(false);
@@ -636,7 +625,6 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
       setSelectedItem(null);
       showToast('Stock item deleted successfully', 'success');
     } catch (error) {
-      console.error('Error deleting stock:', error);
       showToast('Failed to delete stock item', 'error');
     } finally {
       setIsLoading(false);
@@ -712,7 +700,6 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
       setIsBulkDeleteModalOpen(false);
       showToast(`Successfully deleted ${selectedItems.size} items`, 'success');
     } catch (error) {
-      console.error('Error deleting items:', error);
       showToast('Failed to delete selected items', 'error');
     } finally {
       setIsLoading(false);
@@ -765,7 +752,6 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
       setIsSelectionMode(false);
       showToast(`Successfully activated ${itemsToActivate.length} items`, 'success');
     } catch (error) {
-      console.error('Error activating items:', error);
       showToast('Failed to activate selected items', 'error');
     } finally {
       setIsLoading(false);

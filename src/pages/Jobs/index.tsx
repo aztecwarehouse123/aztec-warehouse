@@ -258,17 +258,15 @@ const Jobs: React.FC = () => {
       
       // Delete the old sessions with no items
       if (sessionsToDelete.length > 0) {
-        console.log(`Cleaning up ${sessionsToDelete.length} old live job sessions with no items`);
         
         const deletePromises = sessionsToDelete.map(sessionId => 
           deleteDoc(doc(db, 'liveJobSessions', sessionId))
         );
         
         await Promise.all(deletePromises);
-        console.log(`Successfully cleaned up ${sessionsToDelete.length} old live job sessions`);
       }
     } catch (error) {
-      console.error('Error cleaning up old live job sessions:', error);
+      console.log('error', error);
     }
   }, []);
 
@@ -352,7 +350,7 @@ const Jobs: React.FC = () => {
 
               setReportData({ dailyStats, userStats });
     } catch (error) {
-      console.error('Error generating reports:', error);
+      console.log('error', error);
       showToast('Failed to generate reports', 'error');
     } finally {
       setIsLoadingReports(false);
@@ -370,7 +368,7 @@ const Jobs: React.FC = () => {
         time: new Date().toISOString()
       });
     } catch (e) {
-      console.error('Failed to log activity:', e);
+      console.log('error', e);
     }
   };
 
@@ -445,7 +443,8 @@ const Jobs: React.FC = () => {
               return { ...item, name: stockData.name || null };
             }
           } catch (error) {
-            console.error('Error fetching product name for barcode:', item.barcode, error);
+            console.log('error', error);
+            console.log('')
           }
           return item;
         }));
@@ -455,7 +454,7 @@ const Jobs: React.FC = () => {
       
       setJobs(enhancedList);
     } catch (e) {
-      console.error(e);
+      console.log('error', e);
       showToast('Failed to fetch jobs', 'error');
     } finally {
       setIsLoading(false);
@@ -527,7 +526,7 @@ const Jobs: React.FC = () => {
         setActiveJobSessions(sessions);
       },
       (error) => {
-        console.error('Error listening to live job sessions:', error);
+        console.log('error', error);
       }
     );
 
@@ -537,7 +536,6 @@ const Jobs: React.FC = () => {
   // Generate reports when Reports view is shown
   useEffect(() => {
     if (showReports) {
-      console.log('Generating reports for date:', reportDate.toISOString(), reportDate.toLocaleDateString('en-GB'));
       generateReports(reportDate);
     }
   }, [showReports, reportDate, generateReports]);
@@ -545,7 +543,6 @@ const Jobs: React.FC = () => {
   // Regenerate reports when date range changes
   useEffect(() => {
     if (showReports) {
-      console.log('Date range changed:', dateRange.start.toLocaleDateString('en-GB'), 'to', dateRange.end.toLocaleDateString('en-GB'));
       // Update reportDate to match the end of the date range for the main reports
       setReportDate(new Date(dateRange.end));
     }
@@ -564,7 +561,7 @@ const Jobs: React.FC = () => {
   // Debug: Log when reportDate changes
   useEffect(() => {
     if (showReports) {
-      console.log('Report date changed:', reportDate.toISOString(), reportDate.toLocaleDateString('en-GB'));
+      console.log('reportDate', reportDate);
     }
   }, [reportDate, showReports]);
 
@@ -639,7 +636,7 @@ const Jobs: React.FC = () => {
       isActive: true,
       createdAt: serverTimestamp()
     }).catch(error => {
-      console.error('Error creating live job session:', error);
+      console.log('error', error);
     });
   };
 
@@ -650,7 +647,7 @@ const Jobs: React.FC = () => {
       const snapshot = await getDocs(q);
       return !snapshot.empty;
     } catch (error) {
-      console.error('Error checking barcode:', error);
+      console.log('error', error);
       return false;
     }
   };
@@ -683,7 +680,7 @@ const Jobs: React.FC = () => {
         setIsNewJobModalOpen(false);
       }
     } catch (error) {
-      console.error('Error fetching stock item:', error);
+      console.log('error', error);
       showToast('Error fetching stock item details', 'error');
     }
   };
@@ -965,7 +962,7 @@ const Jobs: React.FC = () => {
       
       fetchJobs();
     } catch (e) {
-      console.error(e);
+      console.log('error', e);
       showToast('Failed to create job', 'error');
     } finally {
       setIsLoading(false);
@@ -1014,7 +1011,7 @@ const Jobs: React.FC = () => {
       // showToast(`Item ${verified ? 'verified' : 'unverified'} locally`, 'success');
       
     } catch (error) { 
-      console.error('Error verifying item:', error);
+      console.log('error', error);
       showToast('Failed to verify item', 'error');
     } finally {
       // Clear loading state
@@ -1067,7 +1064,7 @@ const Jobs: React.FC = () => {
       showToast(`Job ${job.jobId} completed successfully with ${totalVerifiedCount}/${job.items.length} items verified`, 'success');
       fetchJobs();
     } catch (error) { 
-      console.error('Error completing job:', error);
+      console.log('error', error);
       showToast('Failed to complete job', 'error'); 
     }
   };
@@ -1194,7 +1191,7 @@ const Jobs: React.FC = () => {
       
       setSearchResults(results);
     } catch (error) {
-      console.error('Search error:', error);
+      console.log('error', error);
       showToast('Failed to search inventory', 'error');
       setSearchResults([]);
     } finally {
@@ -2320,7 +2317,7 @@ const Jobs: React.FC = () => {
               deleteDoc(doc(db, 'liveJobSessions', sessionSnapshot.docs[0].id));
             }
           }).catch(error => {
-            console.error('Error deleting session:', error);
+            console.log('error', error);
           });
         }} 
         title={showSearchSection ? "Search Product from Inventory" : "Add Barcode to Job"}
@@ -2632,7 +2629,7 @@ const Jobs: React.FC = () => {
                                   });
                                 }
                               }).catch(error => {
-                                console.error('Error updating session items:', error);
+                                console.log('error', error);
                               });
                               
                               setEditingItem(null);
@@ -2725,7 +2722,7 @@ const Jobs: React.FC = () => {
                                   });
                                 }
                               }).catch(error => {
-                                console.error('Error updating session items:', error);
+                                console.log('error', error);
                               });
                             }}
                             className={`h-6 w-6 rounded flex items-center justify-center text-white bg-red-500 hover:bg-red-600 transition-colors ${isDarkMode ? 'hover:bg-red-600' : 'hover:bg-red-600'}`}
