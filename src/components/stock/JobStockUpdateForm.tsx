@@ -65,10 +65,11 @@ const JobStockUpdateForm: React.FC<JobStockUpdateFormProps> = ({ item, onSubmit,
           
           if (data.locationCode && data.shelfNumber && (data.quantity || 0) > 0) {
             locations.push({
-              locationCode: data.locationCode,
-              shelfNumber: data.shelfNumber,
-              quantity: data.quantity || 0,
-              storeName: data.storeName || 'Unknown'
+              // Normalize to strings to avoid strict equality mismatches (number vs string)
+              locationCode: String(data.locationCode).trim(),
+              shelfNumber: String(data.shelfNumber).trim(),
+              quantity: Number(data.quantity) || 0,
+              storeName: (data.storeName ? String(data.storeName) : 'Unknown').trim()
             });
           }
         });
@@ -105,7 +106,7 @@ const JobStockUpdateForm: React.FC<JobStockUpdateFormProps> = ({ item, onSubmit,
     if (locationValue) {
       const [locationCode, shelfNumber] = locationValue.split('-');
       const selectedLocationData = availableLocations.find(loc => 
-        loc.locationCode === locationCode && loc.shelfNumber === shelfNumber
+        String(loc.locationCode) === String(locationCode) && String(loc.shelfNumber) === String(shelfNumber)
       );
       
       if (selectedLocationData) {
@@ -144,7 +145,7 @@ const JobStockUpdateForm: React.FC<JobStockUpdateFormProps> = ({ item, onSubmit,
     if (!selectedLocation) return item.quantity;
     const [locationCode, shelfNumber] = selectedLocation.split('-');
     const location = availableLocations.find(loc => 
-      loc.locationCode === locationCode && loc.shelfNumber === shelfNumber
+      String(loc.locationCode) === String(locationCode) && String(loc.shelfNumber) === String(shelfNumber)
     );
     return location ? location.quantity : item.quantity;
   };

@@ -692,44 +692,69 @@ const Jobs: React.FC = () => {
     const deductedQuantity = selectedStockItem.quantity - data.quantity;
     
     // Find the specific stock item for this location (not just by barcode)
-    const stockQuery = query(collection(db, 'inventory'), 
-      where('barcode', '==', selectedStockItem.barcode),
-      where('locationCode', '==', data.locationCode),
-      where('shelfNumber', '==', data.shelfNumber)
-    );
-    const stockSnapshot = await getDocs(stockQuery);
-    
-    if (stockSnapshot.empty) {
-      showToast('Stock item not found for this location', 'error');
+    // Use a resilient matching to account for mixed data types and duplicates
+    try {
+      const baseQuery = query(
+        collection(db, 'inventory'),
+        where('barcode', '==', selectedStockItem.barcode),
+        where('locationCode', '==', String(data.locationCode).trim())
+      );
+      const baseSnapshot = await getDocs(baseQuery);
+
+      if (baseSnapshot.empty) {
+        showToast('Stock item not found for this location', 'error');
+        return;
+      }
+
+      const targetShelfStr = String(data.shelfNumber).trim();
+      const targetShelfNum = Number(targetShelfStr);
+
+      // Filter by shelf match across string or numeric representations
+      const matchingDocs = baseSnapshot.docs.filter(d => {
+        const docShelf = d.data().shelfNumber;
+        return String(docShelf).trim() === targetShelfStr || (!Number.isNaN(targetShelfNum) && Number(docShelf) === targetShelfNum);
+      });
+
+      if (matchingDocs.length === 0) {
+        showToast('Stock item not found for this shelf', 'error');
+        return;
+      }
+
+      // Prefer the document with the highest positive quantity
+      const bestDoc = matchingDocs
+        .slice()
+        .sort((a, b) => (Number(b.data().quantity) || 0) - (Number(a.data().quantity) || 0))[0];
+
+      const locationSpecificStockItem = {
+        ...selectedStockItem,
+        id: bestDoc.id,
+        quantity: Number(bestDoc.data().quantity) || 0
+      };
+
+      // Validate that we don't deduct more than available
+      if (deductedQuantity > locationSpecificStockItem.quantity) {
+        showToast(`Cannot deduct ${deductedQuantity} units - only ${locationSpecificStockItem.quantity} units available at this location`, 'error');
+        return;
+      }
+
+      if (deductedQuantity < 0) {
+        showToast('Cannot deduct negative quantity', 'error');
+        return;
+      }
+
+      // Add to pending stock updates with the location-specific stock item
+      setPendingStockUpdates(prev => [...prev, {
+        stockItem: locationSpecificStockItem,
+        deductedQuantity,
+        reason: data.reason,
+        storeName: data.storeName,
+        locationCode: data.locationCode,
+        shelfNumber: data.shelfNumber
+      }]);
+    } catch {
+      showToast('Error locating stock for this location', 'error');
       return;
     }
-    
-    const locationSpecificStockItem = {
-      ...selectedStockItem,
-      id: stockSnapshot.docs[0].id,
-      quantity: stockSnapshot.docs[0].data().quantity || 0
-    };
-    
-    // Validate that we don't deduct more than available
-    if (deductedQuantity > locationSpecificStockItem.quantity) {
-      showToast(`Cannot deduct ${deductedQuantity} units - only ${locationSpecificStockItem.quantity} units available at this location`, 'error');
-      return;
-    }
-    
-    if (deductedQuantity < 0) {
-      showToast('Cannot deduct negative quantity', 'error');
-      return;
-    }
-    
-    // Add to pending stock updates with the location-specific stock item
-    setPendingStockUpdates(prev => [...prev, {
-      stockItem: locationSpecificStockItem,
-      deductedQuantity,
-      reason: data.reason,
-      storeName: data.storeName,
-      locationCode: data.locationCode,
-      shelfNumber: data.shelfNumber
-    }]);
     
     // Add the barcode to the job items - treat barcode+location as unique identifier
     if (selectedStockItem.barcode) {
