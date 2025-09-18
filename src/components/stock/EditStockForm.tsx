@@ -241,7 +241,9 @@ const locationOptions = [
   { value: 'Z6', label: 'Z6' },
   { value: 'Z7', label: 'Z7' },
   { value: 'Z8', label: 'Z8' },
-  { value: 'Awaiting Location', label: 'Awaiting Location' }
+  { value: 'Awaiting Location', label: 'Awaiting Location' },
+  { value: 'Awaiting Locations Sparklin', label: 'Awaiting Locations Sparklin' },
+  { value: 'Awaiting Locations Aztec', label: 'Awaiting Locations Aztec' }
 ];
 
 // Shelf options will be generated dynamically based on selected location

@@ -139,7 +139,9 @@ const WarehouseLocations: React.FC = () => {
     'X1', 'X2', 'X3', 'X4', 'X5', 'X6', 'X7', 'X8',
     'Y1', 'Y2', 'Y3', 'Y4', 'Y5', 'Y6', 'Y7', 'Y8',
     'Z1', 'Z2', 'Z3', 'Z4', 'Z5', 'Z6', 'Z7', 'Z8',
-    'Awaiting Location'
+    'Awaiting Location',
+    'Awaiting Locations Sparklin',
+    'Awaiting Locations Aztec'
   ];
 
   const locationSummaries = allLocationCodes.reduce((acc, code) => {
@@ -202,17 +204,25 @@ const WarehouseLocations: React.FC = () => {
       if (sortBy === 'totalStock') {
         return b.totalStock - a.totalStock;
       } else if (sortBy === 'locationCode') {
-        // Special handling for 'Awaiting Location' - always show first
+        // Special handling for 'Awaiting Location' types - always show first
         if (a.locationCode === 'Awaiting Location') return -1;
         if (b.locationCode === 'Awaiting Location') return 1;
+        if (a.locationCode === 'Awaiting Locations Sparklin') return -1;
+        if (b.locationCode === 'Awaiting Locations Sparklin') return 1;
+        if (a.locationCode === 'Awaiting Locations Aztec') return -1;
+        if (b.locationCode === 'Awaiting Locations Aztec') return 1;
         return a.locationCode.localeCompare(b.locationCode);
       } else if (sortBy === 'availability') {
         const availA = availability[a.locationCode] !== false;
         const availB = availability[b.locationCode] !== false;
         if (availA === availB) {
-          // Special handling for 'Awaiting Location' - always show first
+          // Special handling for 'Awaiting Location' types - always show first
           if (a.locationCode === 'Awaiting Location') return -1;
           if (b.locationCode === 'Awaiting Location') return 1;
+          if (a.locationCode === 'Awaiting Locations Sparklin') return -1;
+          if (b.locationCode === 'Awaiting Locations Sparklin') return 1;
+          if (a.locationCode === 'Awaiting Locations Aztec') return -1;
+          if (b.locationCode === 'Awaiting Locations Aztec') return 1;
           return a.locationCode.localeCompare(b.locationCode);
         }
         return availA ? -1 : 1;
@@ -227,9 +237,12 @@ const WarehouseLocations: React.FC = () => {
       const searchResults = filteredAndSortedSummaries.filter(summary => {
         const searchLower = productSearchQuery.toLowerCase();
         return summary.products.some(product => 
-          product.name.toLowerCase().includes(searchLower) ||
-          (product.asin && product.asin.split(',').some(asin => asin.trim().toLowerCase().includes(searchLower))) ||
-          (product.barcode && product.barcode.toLowerCase().includes(searchLower))
+          // Always exclude products with quantity 0
+          product.quantity > 0 && (
+            product.name.toLowerCase().includes(searchLower) ||
+            (product.asin && product.asin.split(',').some(asin => asin.trim().toLowerCase().includes(searchLower))) ||
+            (product.barcode && product.barcode.toLowerCase().includes(searchLower))
+          )
         );
       });
       
@@ -237,6 +250,9 @@ const WarehouseLocations: React.FC = () => {
       if (searchResults.length > 0) {
         const foundProducts = searchResults.flatMap(summary => 
           summary.products.filter(product => {
+            // Always exclude products with quantity 0
+            if (product.quantity === 0) return false;
+            
             const searchLower = productSearchQuery.toLowerCase();
             return product.name.toLowerCase().includes(searchLower) ||
               (product.asin && product.asin.split(',').some(asin => asin.trim().toLowerCase().includes(searchLower))) ||
@@ -497,7 +513,10 @@ const WarehouseLocations: React.FC = () => {
                         <Package className={`w-5 h-5 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`} />
                       </div>
                       <h3 className={`text-lg font-medium ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
-                        {summary.locationCode === 'Awaiting Location' ? 'Awaiting Location' : `Location ${summary.locationCode}`}
+                        {summary.locationCode === 'Awaiting Location' ? 'Awaiting Location' : 
+                         summary.locationCode === 'Awaiting Locations Sparklin' ? 'Awaiting Locations Sparklin' :
+                         summary.locationCode === 'Awaiting Locations Aztec' ? 'Awaiting Locations Aztec' :
+                         `Location ${summary.locationCode}`}
                       </h3>
                     </div>
                     <div className="flex items-center gap-2 ml-2">
@@ -543,20 +562,26 @@ const WarehouseLocations: React.FC = () => {
                     <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
                       {productSearchQuery.trim() 
                         ? summary.products.filter(product => {
+                            // Always exclude products with quantity 0
+                            if (product.quantity === 0) return false;
+                            
                             const searchLower = productSearchQuery.toLowerCase();
                             return product.name.toLowerCase().includes(searchLower) ||
                               (product.asin && product.asin.split(',').some(asin => asin.trim().toLowerCase().includes(searchLower))) ||
                               (product.barcode && product.barcode.toLowerCase().includes(searchLower));
                           }).length
-                        : summary.products.length
+                        : summary.products.filter(product => product.quantity > 0).length
                       } product{(productSearchQuery.trim() 
                         ? summary.products.filter(product => {
+                            // Always exclude products with quantity 0
+                            if (product.quantity === 0) return false;
+                            
                             const searchLower = productSearchQuery.toLowerCase();
                             return product.name.toLowerCase().includes(searchLower) ||
                               (product.asin && product.asin.split(',').some(asin => asin.trim().toLowerCase().includes(searchLower))) ||
                               (product.barcode && product.barcode.toLowerCase().includes(searchLower));
                           }).length
-                        : summary.products.length) !== 1 ? 's' : ''}
+                        : summary.products.filter(product => product.quantity > 0).length) !== 1 ? 's' : ''}
                     </span>
                   </div>
                 </div>
@@ -566,12 +591,15 @@ const WarehouseLocations: React.FC = () => {
                     <h4 className={`font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
                       {productSearchQuery.trim() 
                         ? summary.products.filter(product => {
+                            // Always exclude products with quantity 0
+                            if (product.quantity === 0) return false;
+                            
                             const searchLower = productSearchQuery.toLowerCase();
                             return product.name.toLowerCase().includes(searchLower) ||
                               (product.asin && product.asin.split(',').some(asin => asin.trim().toLowerCase().includes(searchLower))) ||
                               (product.barcode && product.barcode.toLowerCase().includes(searchLower));
                           }).length === 0
-                        : summary.products.length === 0
+                        : summary.products.filter(product => product.quantity > 0).length === 0
                         ? 'No products in this location'
                         : productSearchQuery.trim()
                         ? 'Matching products in this location:'
@@ -580,6 +608,11 @@ const WarehouseLocations: React.FC = () => {
                     <div className="space-y-4">
                       {summary.products
                         .filter(location => {
+                          // Always exclude products with quantity 0
+                          if (location.quantity === 0) {
+                            return false;
+                          }
+                          
                           // If there's a product search query, only show products that match
                           if (productSearchQuery.trim()) {
                             const searchLower = productSearchQuery.toLowerCase();
@@ -587,7 +620,7 @@ const WarehouseLocations: React.FC = () => {
                               (location.asin && location.asin.split(',').some(asin => asin.trim().toLowerCase().includes(searchLower))) ||
                               (location.barcode && location.barcode.toLowerCase().includes(searchLower));
                           }
-                          // If no product search query, show all products
+                          // If no product search query, show all products (except quantity 0)
                           return true;
                         })
                         .map(location => {

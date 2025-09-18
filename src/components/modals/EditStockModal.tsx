@@ -324,6 +324,8 @@ const EditStockModal: React.FC<EditStockModalProps> = ({ isOpen, onClose, onSave
                 <option value="Z7">Z7</option>
                 <option value="Z8">Z8</option>
                 <option value="Awaiting Location">Awaiting Location</option>
+                <option value="Awaiting Locations Sparklin">Awaiting Locations Sparklin</option>
+                <option value="Awaiting Locations Aztec">Awaiting Locations Aztec</option>
               </select>
             </div>
             <div>

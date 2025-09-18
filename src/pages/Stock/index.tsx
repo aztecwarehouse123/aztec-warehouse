@@ -1283,7 +1283,7 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
                     </span>
                     {item.storeName && item.storeName !== 'not set' ? (
                       <span className={`px-2 py-1 text-xs font-medium rounded-full whitespace-nowrap ${getStoreBadgeColor(item.storeName)}`}>
-                        {item.storeName}
+                        {item.storeName?.toUpperCase()}
                       </span>
                     ) : (
                       <span className="text-slate-400">-</span>

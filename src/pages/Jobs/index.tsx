@@ -710,6 +710,17 @@ const Jobs: React.FC = () => {
       quantity: stockSnapshot.docs[0].data().quantity || 0
     };
     
+    // Validate that we don't deduct more than available
+    if (deductedQuantity > locationSpecificStockItem.quantity) {
+      showToast(`Cannot deduct ${deductedQuantity} units - only ${locationSpecificStockItem.quantity} units available at this location`, 'error');
+      return;
+    }
+    
+    if (deductedQuantity < 0) {
+      showToast('Cannot deduct negative quantity', 'error');
+      return;
+    }
+    
     // Add to pending stock updates with the location-specific stock item
     setPendingStockUpdates(prev => [...prev, {
       stockItem: locationSpecificStockItem,
@@ -862,11 +873,19 @@ const Jobs: React.FC = () => {
     setIsJobCreationInProgress(true);
     setIsLoading(true);
     try {
-      // Apply all pending stock updates
+      // Apply all pending stock updates with validation
       for (const update of pendingStockUpdates) {
         const stockRef = doc(db, 'inventory', update.stockItem.id);
+        const newQuantity = update.stockItem.quantity - update.deductedQuantity;
+        
+        // Validate that we don't go negative
+        if (newQuantity < 0) {
+          showToast(`Error: Cannot deduct ${update.deductedQuantity} units from "${update.stockItem.name}" - only ${update.stockItem.quantity} units available`, 'error');
+          throw new Error(`Insufficient stock: trying to deduct ${update.deductedQuantity} from ${update.stockItem.quantity} units`);
+        }
+        
         await updateDoc(stockRef, {
-          quantity: update.stockItem.quantity - update.deductedQuantity,
+          quantity: newQuantity,
           lastUpdated: serverTimestamp()
         });
         
@@ -879,46 +898,8 @@ const Jobs: React.FC = () => {
         });
       }
       
-      // Also ensure all job items have corresponding stock updates
-      // This handles cases where items might have been edited but pending updates weren't properly synced
-      for (const jobItem of newJobItems) {
-        // Check if this job item already has a pending update
-        const hasPendingUpdate = pendingStockUpdates.some(update => 
-          update.stockItem.barcode === jobItem.barcode &&
-          update.locationCode === jobItem.locationCode &&
-          update.shelfNumber === jobItem.shelfNumber
-        );
-        
-        if (!hasPendingUpdate) {
-          // Find the stock item in inventory to update - use the specific location
-          const stockQuery = query(collection(db, 'inventory'), 
-            where('barcode', '==', jobItem.barcode),
-            where('locationCode', '==', jobItem.locationCode),
-            where('shelfNumber', '==', jobItem.shelfNumber)
-          );
-          const stockSnapshot = await getDocs(stockQuery);
-          
-          if (!stockSnapshot.empty) {
-            const stockDoc = stockSnapshot.docs[0];
-            const stockData = stockDoc.data();
-            const currentQuantity = stockData.quantity || 0;
-            
-            // Update stock quantity for this specific location
-            await updateDoc(doc(db, 'inventory', stockDoc.id), {
-              quantity: currentQuantity - jobItem.quantity,
-              lastUpdated: serverTimestamp()
-            });
-            
-            // Add activity log for this stock update
-            // await addDoc(collection(db, 'activityLogs'), {
-            //   detail: `${jobItem.quantity} units deducted from stock "${stockData.name || 'Unknown Product'}" at location ${jobItem.locationCode} shelf ${jobItem.shelfNumber} (Reason: job creation, Store: 'job') by ${user?.role}`,
-            //   time: new Date().toISOString(),
-            //   user: user?.name,
-            //   role: user?.role
-            // });
-          }
-        }
-      }
+      // Note: Stock updates are already handled by pendingStockUpdates above
+      // This section was causing double deduction and has been removed
       
       const numericId = Date.now().toString(); 
 
@@ -1438,7 +1419,7 @@ const Jobs: React.FC = () => {
                           <div>Reason: {it.reason}</div>
                         )}
                         {it.storeName && (
-                          <div>Store: {it.storeName}</div>
+                          <div>Store: {it.storeName?.toUpperCase()}</div>
                         )}
                       </div>
                     </div>
@@ -2497,7 +2478,7 @@ const Jobs: React.FC = () => {
                           <span className="mr-3">Location: {item.locationCode}-{item.shelfNumber}</span>
                         )}
                         <span className="mr-3">Qty: {item.quantity}</span>
-                        <span>Store: {item.storeName}</span>
+                        <span>Store: {item.storeName?.toUpperCase()}</span>
                       </div>
                     </div>
                   ))}

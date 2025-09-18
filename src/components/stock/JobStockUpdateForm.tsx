@@ -63,7 +63,7 @@ const JobStockUpdateForm: React.FC<JobStockUpdateFormProps> = ({ item, onSubmit,
         snapshot.docs.forEach((doc) => {
           const data = doc.data();
           
-          if (data.locationCode && data.shelfNumber) {
+          if (data.locationCode && data.shelfNumber && (data.quantity || 0) > 0) {
             locations.push({
               locationCode: data.locationCode,
               shelfNumber: data.shelfNumber,
@@ -220,21 +220,16 @@ const JobStockUpdateForm: React.FC<JobStockUpdateFormProps> = ({ item, onSubmit,
                 { value: '', label: 'Select a location' },
                 ...availableLocations.map(loc => ({
                   value: `${loc.locationCode}-${loc.shelfNumber}`,
-                  label: `${loc.locationCode} - Shelf ${loc.shelfNumber} (${loc.quantity} units) - ${loc.storeName?.toUpperCase()}${loc.quantity === 0 ? ' - Out of Stock' : ''}`
+                  label: `${loc.locationCode} - Shelf ${loc.shelfNumber} (${loc.quantity} units) - ${loc.storeName?.toUpperCase()}`
                 }))
               ]}
               className={`${isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-300 text-gray-900'} ${validationMessage ? 'border-red-500 focus:border-red-500' : ''}`}
             />
           ) : (
             <div className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-              No locations found for this product
+              No locations with available stock found for this product
             </div>
           )}
-          {/* {availableLocations.some(loc => loc.quantity === 0) && (
-            <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-              Note: Locations with 0 units can still be selected for marking as moved/damaged
-            </p>
-          )} */}
 
         </div>
 
