@@ -302,6 +302,7 @@ const Jobs: React.FC = () => {
 
   // Generate productivity data
   const generateProductivityData = useCallback(async () => {
+    console.log('Starting productivity data generation...');
     setIsLoadingProductivity(true);
     try {
       const { start, end } = productivityDateRange;
@@ -417,6 +418,11 @@ const Jobs: React.FC = () => {
         workerStats,
         dailyProductivity
       });
+      
+      // Add a small delay to make loading more visible
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      console.log('Productivity data generation completed');
     } catch (error) {
       console.error('Error generating productivity data:', error);
       showToast('Failed to generate productivity data', 'error');
@@ -427,6 +433,7 @@ const Jobs: React.FC = () => {
 
   // Generate reports data
   const generateReports = useCallback(async (date: Date) => {
+    console.log('Starting reports generation...');
     setIsLoadingReports(true);
     try {
       const startOfDay = new Date(date);
@@ -504,6 +511,11 @@ const Jobs: React.FC = () => {
       userStats.sort((a, b) => b.itemsPicked - a.itemsPicked);
 
               setReportData({ dailyStats, userStats });
+      
+      // Add a small delay to make loading more visible
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      console.log('Reports generation completed');
     } catch (error) {
       console.log('error', error);
       showToast('Failed to generate reports', 'error');
@@ -691,6 +703,7 @@ const Jobs: React.FC = () => {
   // Generate reports when Reports view is shown
   useEffect(() => {
     if (showReports) {
+      console.log('Reports view shown, generating reports for date:', reportDate);
       generateReports(reportDate);
     }
   }, [showReports, reportDate, generateReports]);
@@ -698,6 +711,7 @@ const Jobs: React.FC = () => {
   // Generate productivity data when Productivity view is shown
   useEffect(() => {
     if (showProductivity) {
+      console.log('Productivity view shown, generating productivity data');
       generateProductivityData();
     }
   }, [showProductivity, generateProductivityData]);
@@ -1654,11 +1668,11 @@ const Jobs: React.FC = () => {
                 Showing jobs currently being created (in progress)
               </p>
             )}
-            {showReports && (
+            {/* {showReports && (
               <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                 Analytics and performance reports for warehouse operations
               </p>
-            )}
+            )} */}
           </div>
           
           <div className="flex items-center gap-2 flex-wrap">
@@ -2008,9 +2022,14 @@ const Jobs: React.FC = () => {
             </div>
 
             {isLoadingReports ? (
-              <div className={`text-center py-8 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                <RefreshCw size={24} className="animate-spin mx-auto mb-2" />
-                <p>Generating reports...</p>
+              <div className={`text-center py-12 ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+                <div className="flex flex-col items-center space-y-4">
+                  <RefreshCw size={32} className="animate-spin text-blue-500" />
+                  <div className="space-y-2">
+                    <p className="text-lg font-medium">Generating Reports...</p>
+                    <p className="text-sm opacity-75">Please wait while we analyze the data</p>
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="space-y-6">
@@ -2531,9 +2550,14 @@ const Jobs: React.FC = () => {
             </div>
 
             {isLoadingProductivity ? (
-              <div className={`text-center py-8 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                <RefreshCw size={24} className="animate-spin mx-auto mb-2" />
-                <p>Analyzing worker productivity...</p>
+              <div className={`text-center py-12 ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+                <div className="flex flex-col items-center space-y-4">
+                  <RefreshCw size={32} className="animate-spin text-green-500" />
+                  <div className="space-y-2">
+                    <p className="text-lg font-medium">Analyzing Worker Productivity...</p>
+                    <p className="text-sm opacity-75">Please wait while we calculate performance metrics</p>
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="space-y-6">

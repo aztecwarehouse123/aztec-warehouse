@@ -94,6 +94,7 @@ const Stock: React.FC = () => {
       setItems(stockItems);
     } catch (error) {
       showToast('Failed to fetch stock items', 'error');
+      console.log(error);
     } finally {
       setIsLoading(false);
     }
@@ -329,6 +330,7 @@ const Stock: React.FC = () => {
       setIsQuickAddModalOpen(false);
       showToast('Stock items added successfully', 'success');
     } catch (error) {
+      console.log(error);
       showToast('Failed to add stock items', 'error');
     } finally {
       setIsLoading(false);
@@ -441,6 +443,7 @@ const Stock: React.FC = () => {
         }
       } catch (error) {
         showToast('Failed to merge products', 'error');
+        console.log(error);
       } finally {
         setIsLoading(false);
         setIsLocationConfirmModalOpen(false);
@@ -567,6 +570,7 @@ const Stock: React.FC = () => {
 
     } catch (error) {
       showToast('Failed to update stock item', 'error');
+      console.log(error);
     } finally {
       setIsLoading(false);
     }
@@ -601,6 +605,7 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
         setSelectedItem(null);
     } catch (error) {
         showToast('Failed to update quantity', 'error');
+        console.log(error);
     } finally {
         setIsLoading(false);
         setIsQuantityConfirmModalOpen(false);
@@ -636,6 +641,7 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
       showToast('Stock item deleted successfully', 'success');
     } catch (error) {
       showToast('Failed to delete stock item', 'error');
+      console.log(error);
     } finally {
       setIsLoading(false);
     }
@@ -711,6 +717,7 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
       showToast(`Successfully deleted ${selectedItems.size} items`, 'success');
     } catch (error) {
       showToast('Failed to delete selected items', 'error');
+      console.log(error);
     } finally {
       setIsLoading(false);
     }
@@ -763,6 +770,7 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
       showToast(`Successfully activated ${itemsToActivate.length} items`, 'success');
     } catch (error) {
       showToast('Failed to activate selected items', 'error');
+      console.log(error);
     } finally {
       setIsLoading(false);
     }
