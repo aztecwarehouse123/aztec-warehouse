@@ -79,6 +79,7 @@ const Jobs: React.FC = () => {
   const [showArchived, setShowArchived] = useState(false);
   const [showLiveJobs, setShowLiveJobs] = useState(false);
   const [showReports, setShowReports] = useState(false);
+  const [showProductivity, setShowProductivity] = useState(false);
   const [manualBarcode, setManualBarcode] = useState(''); // State for manual barcode input
   const [isStockUpdateModalOpen, setIsStockUpdateModalOpen] = useState(false);
   const [selectedStockItem, setSelectedStockItem] = useState<StockItem | null>(null);
@@ -154,6 +155,35 @@ const Jobs: React.FC = () => {
     }>;
   }>({ dailyStats: [], userStats: [] });
   const [isLoadingReports, setIsLoadingReports] = useState(false);
+
+  // Productivity data state
+  const [productivityData, setProductivityData] = useState<{
+    workerStats: Array<{
+      name: string;
+      totalJobs: number;
+      completedJobs: number;
+      avgPickingTime: number;
+      totalPickingTime: number;
+      itemsPicked: number;
+      efficiency: number; // items per minute
+      performance: 'excellent' | 'good' | 'average' | 'needs_improvement';
+    }>;
+    dailyProductivity: Array<{
+      date: string;
+      totalJobs: number;
+      avgPickingTime: number;
+      totalItems: number;
+    }>;
+  }>({ workerStats: [], dailyProductivity: [] });
+  const [isLoadingProductivity, setIsLoadingProductivity] = useState(false);
+  const [productivityDateRange, setProductivityDateRange] = useState<{ start: Date; end: Date }>(() => {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(start.getDate() - 30); // Default to last 30 days
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
+    return { start, end };
+  });
 
   // Helper function to check if a job should be archived (older than current day at 12 AM)
   const isJobArchived = (job: Job): boolean => {
@@ -269,6 +299,131 @@ const Jobs: React.FC = () => {
       console.log('error', error);
     }
   }, []);
+
+  // Generate productivity data
+  const generateProductivityData = useCallback(async () => {
+    setIsLoadingProductivity(true);
+    try {
+      const { start, end } = productivityDateRange;
+      
+      // Filter jobs within date range
+      const jobsInRange = jobs.filter(job => {
+        const jobDate = job.createdAt;
+        return jobDate >= start && jobDate <= end && job.status === 'completed';
+      });
+
+      // Calculate worker statistics
+      const workerMap = new Map<string, {
+        totalJobs: number;
+        completedJobs: number;
+        totalPickingTime: number;
+        totalItems: number;
+        pickingTimes: number[];
+      }>();
+
+      jobsInRange.forEach(job => {
+        if (!job.picker) return;
+        
+        const worker = job.picker;
+        const current = workerMap.get(worker) || {
+          totalJobs: 0,
+          completedJobs: 0,
+          totalPickingTime: 0,
+          totalItems: 0,
+          pickingTimes: []
+        };
+
+        current.totalJobs++;
+        if (job.status === 'completed') {
+          current.completedJobs++;
+        }
+        
+        if (job.pickingTime && job.pickingTime > 0) {
+          current.totalPickingTime += job.pickingTime;
+          current.pickingTimes.push(job.pickingTime);
+        }
+        
+        current.totalItems += job.items.reduce((sum, item) => sum + item.quantity, 0);
+        
+        workerMap.set(worker, current);
+      });
+
+      // Convert to array and calculate metrics
+      const workerStats = Array.from(workerMap.entries()).map(([name, data]) => {
+        const avgPickingTime = data.pickingTimes.length > 0 
+          ? data.pickingTimes.reduce((sum, time) => sum + time, 0) / data.pickingTimes.length 
+          : 0;
+        
+        const efficiency = data.totalPickingTime > 0 
+          ? (data.totalItems / (data.totalPickingTime / 60)) // items per minute
+          : 0;
+
+        // Determine performance level
+        let performance: 'excellent' | 'good' | 'average' | 'needs_improvement';
+        if (efficiency >= 10) performance = 'excellent';
+        else if (efficiency >= 7) performance = 'good';
+        else if (efficiency >= 4) performance = 'average';
+        else performance = 'needs_improvement';
+
+        return {
+          name,
+          totalJobs: data.totalJobs,
+          completedJobs: data.completedJobs,
+          avgPickingTime: Math.round(avgPickingTime),
+          totalPickingTime: data.totalPickingTime,
+          itemsPicked: data.totalItems,
+          efficiency: Math.round(efficiency * 100) / 100,
+          performance
+        };
+      }).sort((a, b) => b.efficiency - a.efficiency);
+
+      // Calculate daily productivity
+      const dailyProductivity = [];
+      const currentDate = new Date(start);
+      while (currentDate <= end) {
+        const dayStart = new Date(currentDate);
+        dayStart.setHours(0, 0, 0, 0);
+        const dayEnd = new Date(currentDate);
+        dayEnd.setHours(23, 59, 59, 999);
+
+        const dayJobs = jobsInRange.filter(job => {
+          const jobDate = job.createdAt;
+          return jobDate >= dayStart && jobDate <= dayEnd;
+        });
+
+        const totalItems = dayJobs.reduce((sum, job) => 
+          sum + job.items.reduce((itemSum, item) => itemSum + item.quantity, 0), 0
+        );
+
+        const pickingTimes = dayJobs
+          .filter(job => job.pickingTime && job.pickingTime > 0)
+          .map(job => job.pickingTime!);
+
+        const avgPickingTime = pickingTimes.length > 0 
+          ? pickingTimes.reduce((sum, time) => sum + time, 0) / pickingTimes.length 
+          : 0;
+
+        dailyProductivity.push({
+          date: currentDate.toISOString().split('T')[0],
+          totalJobs: dayJobs.length,
+          avgPickingTime: Math.round(avgPickingTime),
+          totalItems
+        });
+
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+
+      setProductivityData({
+        workerStats,
+        dailyProductivity
+      });
+    } catch (error) {
+      console.error('Error generating productivity data:', error);
+      showToast('Failed to generate productivity data', 'error');
+    } finally {
+      setIsLoadingProductivity(false);
+    }
+  }, [jobs, productivityDateRange, showToast]);
 
   // Generate reports data
   const generateReports = useCallback(async (date: Date) => {
@@ -539,6 +694,13 @@ const Jobs: React.FC = () => {
       generateReports(reportDate);
     }
   }, [showReports, reportDate, generateReports]);
+
+  // Generate productivity data when Productivity view is shown
+  useEffect(() => {
+    if (showProductivity) {
+      generateProductivityData();
+    }
+  }, [showProductivity, generateProductivityData]);
 
   // Regenerate reports when date range changes
   useEffect(() => {
@@ -1485,7 +1647,7 @@ const Jobs: React.FC = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="flex flex-col gap-2">
             <h1 className={`text-xl sm:text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-              {showArchived ? 'Archived' : showCompleted ? 'Completed' : showLiveJobs ? 'Live' : showReports ? 'Reports' : 'Active'} Jobs
+              {showArchived ? 'Archived' : showCompleted ? 'Completed' : showLiveJobs ? 'Live' : showReports ? 'Reports' : showProductivity ? 'Worker Productivity' : 'Active'} Jobs
             </h1>
             {showLiveJobs && (
               <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
@@ -1517,12 +1679,13 @@ const Jobs: React.FC = () => {
                 <Plus size={16} /> <span className="sm:inline hidden">New Job</span>
             </Button>
             <Button 
-              variant={!showCompleted && !showArchived && !showLiveJobs && !showReports ? "primary" : "secondary"} 
+              variant={!showCompleted && !showArchived && !showLiveJobs && !showReports && !showProductivity ? "primary" : "secondary"} 
               onClick={() => {
                 setShowCompleted(false);
                 setShowArchived(false);
                 setShowLiveJobs(false);
                 setShowReports(false);
+                setShowProductivity(false);
               }}
               size='sm'
             >
@@ -1535,6 +1698,7 @@ const Jobs: React.FC = () => {
                 setShowArchived(false);
                 setShowLiveJobs(false);
                 setShowReports(false);
+                setShowProductivity(false);
               }}
               size='sm'
             >
@@ -1548,6 +1712,7 @@ const Jobs: React.FC = () => {
                 setShowArchived(true);
                 setShowLiveJobs(false);
                 setShowReports(false);
+                setShowProductivity(false);
                 setDateRangeToYesterdayToToday(); // Automatically set date range from yesterday to today for archived jobs
               }}
               size='sm'
@@ -1562,6 +1727,7 @@ const Jobs: React.FC = () => {
                   setShowArchived(false);
                   setShowLiveJobs(true);
                   setShowReports(false);
+                  setShowProductivity(false);
                 }}
                 size='sm'
               >
@@ -1574,12 +1740,28 @@ const Jobs: React.FC = () => {
                 setShowCompleted(false);
                 setShowArchived(false);
                 setShowLiveJobs(false);
+                setShowProductivity(false);
                 setShowReports(true);
               }}
               size='sm'
             >
               Reports
             </Button>
+            {user?.role === 'admin' && (
+              <Button 
+                variant={showProductivity ? "primary" : "secondary"} 
+                onClick={() => {
+                  setShowCompleted(false);
+                  setShowArchived(false);
+                  setShowLiveJobs(false);
+                  setShowReports(false);
+                  setShowProductivity(true);
+                }}
+                size='sm'
+              >
+                Productivity
+              </Button>
+            )}
           </div>
         </div>
         
@@ -1707,7 +1889,7 @@ const Jobs: React.FC = () => {
           </div>
         )}
         
-        {!showReports && filteredJobs.map(job => (
+        {!showReports && !showProductivity && filteredJobs.map(job => (
           <JobRow key={job.id} job={job} />
         ))}
         
@@ -2284,7 +2466,218 @@ const Jobs: React.FC = () => {
           </>
         )}
         
-        {!showReports && filteredJobs.length === 0 && getLiveJobs().uiSessions.length === 0 && (
+        {/* Productivity Section */}
+        {showProductivity && (
+          <>
+            {/* Productivity Header with Date Range Picker */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+              <div className="flex items-center gap-3">
+                <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
+                  Productivity Analytics
+                </h2>
+                <span className={`px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300`}>
+                  {productivityDateRange.start.toLocaleDateString()} - {productivityDateRange.end.toLocaleDateString()}
+                </span>
+              </div>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <label className={`text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                    From:
+                  </label>
+                  <input
+                    type="date"
+                    value={productivityDateRange.start.toISOString().split('T')[0]}
+                    onChange={(e) => {
+                      const newStart = new Date(e.target.value);
+                      setProductivityDateRange(prev => ({ ...prev, start: newStart }));
+                      generateProductivityData();
+                    }}
+                    className={`px-3 py-2 border rounded-md text-sm ${
+                      isDarkMode 
+                        ? 'bg-slate-700 border-slate-600 text-white' 
+                        : 'bg-white border-slate-300 text-slate-900'
+                    }`}
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className={`text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                    To:
+                  </label>
+                  <input
+                    type="date"
+                    value={productivityDateRange.end.toISOString().split('T')[0]}
+                    onChange={(e) => {
+                      const newEnd = new Date(e.target.value);
+                      setProductivityDateRange(prev => ({ ...prev, end: newEnd }));
+                      generateProductivityData();
+                    }}
+                    className={`px-3 py-2 border rounded-md text-sm ${
+                      isDarkMode 
+                        ? 'bg-slate-700 border-slate-600 text-white' 
+                        : 'bg-white border-slate-300 text-slate-900'
+                    }`}
+                  />
+                </div>
+                <Button 
+                  variant="secondary" 
+                  onClick={generateProductivityData} 
+                  className="flex items-center gap-2"
+                  size='sm'
+                  disabled={isLoadingProductivity}
+                >
+                  <RefreshCw size={16} className={isLoadingProductivity ? 'animate-spin' : ''} />
+                </Button>
+              </div>
+            </div>
+
+            {isLoadingProductivity ? (
+              <div className={`text-center py-8 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                <RefreshCw size={24} className="animate-spin mx-auto mb-2" />
+                <p>Analyzing worker productivity...</p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Productivity Summary Stats */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                  <div className={`p-3 sm:p-4 rounded-lg border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                    <div className={`text-xs sm:text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} mb-1`}>Total Workers</div>
+                    <div className={`text-xl sm:text-2xl font-bold ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
+                      {productivityData.workerStats.length}
+                    </div>
+                  </div>
+                  <div className={`p-3 sm:p-4 rounded-lg border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                    <div className={`text-xs sm:text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} mb-1`}>Total Jobs Completed</div>
+                    <div className={`text-xl sm:text-2xl font-bold ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>
+                      {productivityData.workerStats.reduce((sum, worker) => sum + worker.completedJobs, 0)}
+                    </div>
+                  </div>
+                  <div className={`p-3 sm:p-4 rounded-lg border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                    <div className={`text-xs sm:text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} mb-1`}>Total Items Picked</div>
+                    <div className={`text-xl sm:text-2xl font-bold ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}>
+                      {productivityData.workerStats.reduce((sum, worker) => sum + worker.itemsPicked, 0)}
+                    </div>
+                  </div>
+                  <div className={`p-3 sm:p-4 rounded-lg border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                    <div className={`text-xs sm:text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} mb-1`}>Avg Efficiency</div>
+                    <div className={`text-xl sm:text-2xl font-bold ${isDarkMode ? 'text-orange-400' : 'text-orange-600'}`}>
+                      {productivityData.workerStats.length > 0 
+                        ? (productivityData.workerStats.reduce((sum, worker) => sum + worker.efficiency, 0) / productivityData.workerStats.length).toFixed(1)
+                        : '0'} items/min
+                    </div>
+                  </div>
+                </div>
+
+                {/* Worker Performance Table */}
+                <div className={`p-4 sm:p-6 rounded-lg border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                  <h3 className={`text-base sm:text-lg font-semibold mb-3 sm:mb-4 ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
+                    Worker Performance Ranking
+                  </h3>
+                  {productivityData.workerStats.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[700px]">
+                        <thead>
+                          <tr className={`border-b ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+                            <th className={`text-left py-2 px-2 sm:px-3 text-xs sm:text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>Rank</th>
+                            <th className={`text-left py-2 px-2 sm:px-3 text-xs sm:text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>Worker</th>
+                            <th className={`text-center py-2 px-2 sm:px-3 text-xs sm:text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>Jobs</th>
+                            <th className={`text-center py-2 px-2 sm:px-3 text-xs sm:text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>Items</th>
+                            <th className={`text-center py-2 px-2 sm:px-3 text-xs sm:text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>Efficiency</th>
+                            <th className={`text-center py-2 px-2 sm:px-3 text-xs sm:text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>Avg Time</th>
+                            <th className={`text-center py-2 px-2 sm:px-3 text-xs sm:text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>Performance</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {productivityData.workerStats.map((worker, index) => (
+                            <tr key={worker.name} className={`border-b ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+                              <td className={`py-2 sm:py-3 px-2 sm:px-3 text-xs sm:text-sm font-medium ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
+                                #{index + 1}
+                              </td>
+                              <td className={`py-2 sm:py-3 px-2 sm:px-3 text-xs sm:text-sm font-medium ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
+                                {worker.name}
+                              </td>
+                              <td className={`text-center py-2 sm:py-3 px-2 sm:px-3 text-xs sm:text-sm ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+                                {worker.completedJobs}
+                              </td>
+                              <td className={`text-center py-2 sm:py-3 px-2 sm:px-3 text-xs sm:text-sm ${isDarkMode ? 'text-blue-400' : 'text-blue-600'} font-semibold`}>
+                                {worker.itemsPicked}
+                              </td>
+                              <td className={`text-center py-2 sm:py-3 px-2 sm:px-3 text-xs sm:text-sm ${isDarkMode ? 'text-green-400' : 'text-green-600'} font-semibold`}>
+                                {worker.efficiency} items/min
+                              </td>
+                              <td className={`text-center py-2 sm:py-3 px-2 sm:px-3 text-xs sm:text-sm ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+                                {Math.round(worker.avgPickingTime / 60)}m {worker.avgPickingTime % 60}s
+                              </td>
+                              <td className={`text-center py-2 sm:py-3 px-2 sm:px-3 text-xs sm:text-sm`}>
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                  worker.performance === 'excellent' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' :
+                                  worker.performance === 'good' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300' :
+                                  worker.performance === 'average' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300' :
+                                  'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
+                                }`}>
+                                  {worker.performance === 'needs_improvement' ? 'Needs Improvement' : 
+                                   worker.performance.charAt(0).toUpperCase() + worker.performance.slice(1)}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className={`text-center py-6 sm:py-8 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                      No productivity data available for the selected date range
+                    </div>
+                  )}
+                </div>
+
+                {/* Daily Productivity Chart */}
+                <div className={`p-4 sm:p-6 rounded-lg border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                  <h3 className={`text-base sm:text-lg font-semibold mb-3 sm:mb-4 ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
+                    Daily Productivity Trends
+                  </h3>
+                  <div className="h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={productivityData.dailyProductivity}>
+                        <CartesianGrid strokeDasharray="3 3" stroke={isDarkMode ? '#334155' : '#e2e8f0'} />
+                        <XAxis 
+                          dataKey="date" 
+                          stroke={isDarkMode ? '#94a3b8' : '#64748b'} 
+                          fontSize={12}
+                          tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        />
+                        <YAxis stroke={isDarkMode ? '#94a3b8' : '#64748b'} fontSize={12} />
+                        <Tooltip 
+                          contentStyle={{ 
+                            backgroundColor: isDarkMode ? '#1e293b' : '#ffffff',
+                            border: isDarkMode ? '1px solid #334155' : '1px solid #e2e8f0',
+                            color: isDarkMode ? '#e2e8f0' : '#1e293b'
+                          }}
+                          formatter={(value: number, name: string) => {
+                            if (name === 'Total Items') {
+                              return [`${value} items`, name];
+                            } else if (name === 'Total Jobs') {
+                              return [`${value} jobs`, name];
+                            } else if (name === 'Avg Picking Time') {
+                              return [`${Math.round(value / 60)}m ${value % 60}s`, name];
+                            }
+                            return [value, name];
+                          }}
+                          labelFormatter={(label) => `Date: ${new Date(label).toLocaleDateString()}`}
+                        />
+                        <Legend />
+                        <Line type="monotone" dataKey="totalJobs" stroke="#10b981" name="Total Jobs" strokeWidth={2} />
+                        <Line type="monotone" dataKey="totalItems" stroke="#3b82f6" name="Total Items" strokeWidth={2} />
+                        <Line type="monotone" dataKey="avgPickingTime" stroke="#f59e0b" name="Avg Picking Time" strokeWidth={2} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+        
+        {!showReports && !showProductivity && filteredJobs.length === 0 && getLiveJobs().uiSessions.length === 0 && (
           <div className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-center py-8`}>
             {showArchived ? (
               <div className="space-y-2">

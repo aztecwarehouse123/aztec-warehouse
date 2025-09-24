@@ -30,6 +30,7 @@ const WarehouseOperations: React.FC = () => {
   const [endDate, setEndDate] = useState<Date | null>(new Date());
   const [userFilter, setUserFilter] = useState('all');
   const [activityFilter, setActivityFilter] = useState('all');
+  const [actionTypeFilter, setActionTypeFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [users, setUsers] = useState<User[]>([]);
   const { showToast } = useToast();
@@ -115,6 +116,42 @@ const WarehouseOperations: React.FC = () => {
         });
       }
 
+      // Apply action type filter
+      if (actionTypeFilter !== 'all') {
+        logs = logs.filter(log => {
+          const detail = log.detail.toLowerCase();
+          switch (actionTypeFilter) {
+            case 'add_product':
+              return detail.includes('added new product') || detail.includes('added product');
+            case 'edit_product':
+              return detail.includes('edited product') || detail.includes('updated product');
+            case 'delete_product':
+              return detail.includes('deleted product') || detail.includes('removed product');
+            case 'stock_increase':
+              return detail.includes('quantity from') && detail.includes('quantity to') && 
+                     detail.includes('increased') || detail.includes('added to stock');
+            case 'stock_decrease':
+              return detail.includes('units deducted from stock') || 
+                     detail.includes('deducted from stock') || detail.includes('decreased');
+            case 'move_product':
+              return detail.includes('moved') || detail.includes('relocated');
+            case 'user_management':
+              return detail.includes('added new user') || detail.includes('updated user') || 
+                     detail.includes('deleted user') || detail.includes('changed username') ||
+                     detail.includes('changed email') || detail.includes('changed password');
+            case 'profile_update':
+              return detail.includes('changed username') || detail.includes('changed email') ||
+                     detail.includes('changed full name') || detail.includes('changed their password');
+            case 'job_operations':
+              return detail.includes('job') || detail.includes('task') || detail.includes('work');
+            case 'location_operations':
+              return detail.includes('location') || detail.includes('shelf') || detail.includes('moved to');
+            default:
+              return true;
+          }
+        });
+      }
+
       // Apply search filter
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase();
@@ -149,7 +186,7 @@ const WarehouseOperations: React.FC = () => {
 
   useEffect(() => {
     fetchActivityLogs();
-  }, [startDate, endDate, userFilter, activityFilter, searchQuery, user]);
+  }, [startDate, endDate, userFilter, activityFilter, actionTypeFilter, searchQuery, user]);
 
   const getUserFilterOptions = () => {
     let filteredUsers  = users;
@@ -181,6 +218,20 @@ const WarehouseOperations: React.FC = () => {
     { value: 'all', label: 'All Activities' },
     { value: 'inbound', label: 'Inbound' },
     { value: 'outbound', label: 'Outbound' }
+  ];
+
+  const actionTypeFilterOptions = [
+    { value: 'all', label: 'All Actions' },
+    { value: 'add_product', label: 'Add Product' },
+    { value: 'edit_product', label: 'Edit Product' },
+    { value: 'delete_product', label: 'Delete Product' },
+    { value: 'stock_increase', label: 'Stock Increase' },
+    { value: 'stock_decrease', label: 'Stock Decrease' },
+    { value: 'move_product', label: 'Move Product' },
+    { value: 'user_management', label: 'User Management' },
+    { value: 'profile_update', label: 'Profile Update' },
+    { value: 'job_operations', label: 'Job Operations' },
+    { value: 'location_operations', label: 'Location Operations' }
   ];
 
   const clearDateRange = () => {
@@ -239,10 +290,11 @@ const WarehouseOperations: React.FC = () => {
       // doc.text(`User Filter: ${userFilterOptions.find(opt => opt.value === userFilter)?.label}`, 14, 30);
       doc.text(`User Filter: ${getUserFilterOptions().find(opt => opt.value === userFilter)?.label}`, 14, 30);
       doc.text(`Activity Filter: ${activityFilterOptions.find(opt => opt.value === activityFilter)?.label}`, 14, 35);
+      doc.text(`Action Type Filter: ${actionTypeFilterOptions.find(opt => opt.value === actionTypeFilter)?.label}`, 14, 40);
       
       // Add table
       autoTable(doc, {
-        startY: 40,
+        startY: 45,
         head: [['User', 'Role', 'Activity', 'Time']],
         body: activityLogs.map(log => [
           log.user,
@@ -267,74 +319,101 @@ const WarehouseOperations: React.FC = () => {
       {/* Activity Logs Section */}
       <div className={`rounded-lg shadow-sm border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
         {/* Header with Title and Export Buttons */}
-        <div className={`flex flex-col sm:flex-row sm:justify-between sm:items-center p-6 border-b gap-4 ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
-          <h2 className={`text-xl font-semibold ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>Activity Logs</h2>
-          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-            <button
-              onClick={exportToCSV}
-              className={`inline-flex items-center px-3 py-2 border shadow-sm text-sm leading-4 font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 w-full sm:w-auto ${
-                isDarkMode 
-                  ? 'border-slate-600 text-slate-200 bg-slate-700 hover:bg-slate-600' 
-                  : 'border-slate-300 text-slate-700 bg-white hover:bg-slate-50'
-              }`}
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Export CSV
-            </button>
-            <button
-              onClick={exportToPDF}
-              className={`inline-flex items-center px-3 py-2 border shadow-sm text-sm leading-4 font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 w-full sm:w-auto ${
-                isDarkMode 
-                  ? 'border-slate-600 text-slate-200 bg-slate-700 hover:bg-slate-600' 
-                  : 'border-slate-300 text-slate-700 bg-white hover:bg-slate-50'
-              }`}
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Export PDF
-            </button>
+        <div className={`p-4 sm:p-6 border-b ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+          <div className="flex flex-col xs:flex-row xs:justify-between xs:items-center gap-4">
+            <h2 className={`text-xl font-semibold ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>Activity Logs</h2>
+            <div className="flex flex-col xs:flex-row gap-2 w-full xs:w-auto">
+              <button
+                onClick={exportToCSV}
+                className={`inline-flex items-center justify-center px-4 py-2 border shadow-sm text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 w-full xs:w-auto ${
+                  isDarkMode 
+                    ? 'border-slate-600 text-slate-200 bg-slate-700 hover:bg-slate-600' 
+                    : 'border-slate-300 text-slate-700 bg-white hover:bg-slate-50'
+                }`}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Export CSV
+              </button>
+              <button
+                onClick={exportToPDF}
+                className={`inline-flex items-center justify-center px-4 py-2 border shadow-sm text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 w-full xs:w-auto ${
+                  isDarkMode 
+                    ? 'border-slate-600 text-slate-200 bg-slate-700 hover:bg-slate-600' 
+                    : 'border-slate-300 text-slate-700 bg-white hover:bg-slate-50'
+                }`}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Export PDF
+              </button>
+            </div>
           </div>
         </div>
 
         {/* Filters Bar */}
-        <div className={`flex flex-col sm:flex-row sm:justify-between sm:items-center p-6 border-b gap-2 ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
-          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto items-stretch sm:items-center">
+        <div className={`p-4 sm:p-6 border-b ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+          {/* Search Bar */}
+          <div className="mb-4">
             <Input
               type="text"
               placeholder="Search activities, product names, users..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full sm:w-96"
+              className="w-full"
               icon={<Search size={16} />}
             />
           </div>
-          <div className="flex flex-col sm:flex-row gap-1 w-full sm:w-auto items-stretch sm:items-center">
-            <Select
-              value={userFilter}
-              onChange={(e) => setUserFilter(e.target.value)}
-              options={getUserFilterOptions()}
-              className="w-full sm:w-40"
-            />
-            <Select
-              value={activityFilter}
-              onChange={(e) => setActivityFilter(e.target.value)}
-              options={activityFilterOptions}
-              className="w-full sm:w-40"
-            />
-            <DateRangePicker
-              startDate={startDate}
-              endDate={endDate}
-              onStartDateChange={setStartDate}
-              onEndDateChange={setEndDate}
-              onClear={clearDateRange}
-              className="w-full sm:w-80"
-            />
-            <Button
-              variant="secondary"
-              onClick={fetchActivityLogs}
-              className="flex items-center gap-2 w-full sm:w-auto"
-            >
-              <RefreshCw size={16} />
-            </Button>
+          
+          {/* Filter Controls */}
+          <div className="space-y-3">
+            {/* Filter Row 1 */}
+            <div className="flex flex-col xs:flex-row gap-2">
+              <div className="flex-1 min-w-0">
+                <Select
+                  value={userFilter}
+                  onChange={(e) => setUserFilter(e.target.value)}
+                  options={getUserFilterOptions()}
+                  className="w-full"
+                />
+              </div>
+              <div className="flex-1 min-w-0">
+                <Select
+                  value={activityFilter}
+                  onChange={(e) => setActivityFilter(e.target.value)}
+                  options={activityFilterOptions}
+                  className="w-full"
+                />
+              </div>
+              <div className="flex-1 min-w-0">
+                <Select
+                  value={actionTypeFilter}
+                  onChange={(e) => setActionTypeFilter(e.target.value)}
+                  options={actionTypeFilterOptions}
+                  className="w-full"
+                />
+              </div>
+            </div>
+            
+            {/* Filter Row 2 */}
+            <div className="flex flex-col xs:flex-row gap-2 items-stretch xs:items-center">
+              <div className="flex-1 min-w-0">
+                <DateRangePicker
+                  startDate={startDate}
+                  endDate={endDate}
+                  onStartDateChange={setStartDate}
+                  onEndDateChange={setEndDate}
+                  onClear={clearDateRange}
+                  className="w-full"
+                />
+              </div>
+              <Button
+                variant="secondary"
+                onClick={fetchActivityLogs}
+                className="flex items-center justify-center gap-2 px-4 py-2 min-w-[44px]"
+              >
+                <RefreshCw size={16} />
+                <span className="hidden xs:inline">Refresh</span>
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -345,7 +424,7 @@ const WarehouseOperations: React.FC = () => {
         ) : activityLogs.length > 0 ? (
           <>
             {/* Desktop Table */}
-            <div className="hidden md:block overflow-x-auto">
+            <div className="hidden lg:block overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className={`${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} border-b`}>
@@ -376,26 +455,81 @@ const WarehouseOperations: React.FC = () => {
                 </tbody>
               </table>
             </div>
+            
+            {/* Tablet Table */}
+            <div className="hidden md:block lg:hidden overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className={`${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} border-b`}>
+                    <th className={`px-3 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} uppercase tracking-wider`}>User</th>
+                    <th className={`px-2 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} uppercase tracking-wider`}>Activity</th>
+                    <th className={`px-2 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} uppercase tracking-wider`}>Time</th>
+                  </tr>
+                </thead>
+                <tbody className={`divide-y ${isDarkMode ? 'divide-slate-700' : 'divide-slate-200'}`}>
+                  <AnimatePresence>
+                    {activityLogs.map((log) => (
+                      <motion.tr
+                        key={log.id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        transition={{ duration: 0.3 }}
+                        className={`${isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-slate-50'}`}
+                      >
+                        <td className={`px-3 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                          <div className="flex flex-col">
+                            <span className="font-medium">{log.user}</span>
+                            <span className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{log.role}</span>
+                          </div>
+                        </td>
+                        <td className={`px-2 py-4 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                          <div className="max-w-xs truncate" title={log.detail}>
+                            {log.detail}
+                          </div>
+                        </td>
+                        <td className={`px-2 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                          {format(new Date(log.time), 'MMM d, h:mm a')}
+                        </td>
+                      </motion.tr>
+                    ))}
+                  </AnimatePresence>
+                </tbody>
+              </table>
+            </div>
+            
             {/* Mobile Card List */}
-            <div className="block md:hidden space-y-4 p-4">
-              {activityLogs.map((log) => (
-                <div
-                  key={log.id}
-                  className={`rounded-lg border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} p-4 shadow-sm flex flex-col gap-2`}
-                >
-                  <div className="flex justify-between items-center">
-                    <span className={`font-semibold ${isDarkMode ? 'text-blue-400' : 'text-blue-700'}`}>{log.user}</span>
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${isDarkMode ? 'bg-slate-700 text-slate-200' : 'bg-slate-100 text-slate-700'}`}>{log.role}</span>
-                  </div>
-                  <div className={isDarkMode ? 'text-slate-200' : 'text-slate-800'}>
-                    <span className="block text-xs font-medium mb-1">Activity:</span>
-                    <span className="text-sm">{log.detail}</span>
-                  </div>
-                  <div className="text-xs mt-1">
-                    <span className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>Time: <span className="font-medium">{format(new Date(log.time), 'MMM d, yyyy h:mm:ss a')}</span></span>
-                  </div>
-                </div>
-              ))}
+            <div className="block md:hidden space-y-3 p-4">
+              <AnimatePresence>
+                {activityLogs.map((log) => (
+                  <motion.div
+                    key={log.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.3 }}
+                    className={`rounded-lg border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} p-4 shadow-sm`}
+                  >
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="flex flex-col">
+                        <span className={`font-semibold text-sm ${isDarkMode ? 'text-blue-400' : 'text-blue-700'}`}>{log.user}</span>
+                        <span className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{log.role}</span>
+                      </div>
+                      <span className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                        {format(new Date(log.time), 'h:mm a')}
+                      </span>
+                    </div>
+                    <div className={`text-sm leading-relaxed ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                      {log.detail}
+                    </div>
+                    <div className="mt-2 text-xs">
+                      <span className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>
+                        {format(new Date(log.time), 'MMM d, yyyy')}
+                      </span>
+                    </div>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
             </div>
           </>
         ) : (

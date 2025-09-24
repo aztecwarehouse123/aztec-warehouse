@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Package, ChevronUp, ChevronDown, Search, Barcode, RefreshCw, Trash2 } from 'lucide-react';
+import { Package, ChevronUp, ChevronDown, Search, Barcode, RefreshCw, Trash2, Map } from 'lucide-react';
 import { collection, query, getDocs, orderBy, Timestamp, doc, setDoc, addDoc, getDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { useToast } from '../../contexts/ToastContext';
@@ -44,6 +44,7 @@ const WarehouseLocations: React.FC = () => {
   const [productToDelete, setProductToDelete] = useState<StockItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedItem, setSelectedItem] = useState<StockItem | null>(null);
+  const [isVisualMapOpen, setIsVisualMapOpen] = useState(false);
   const { user } = useAuth();
 
   // Update shelf options when move location changes
@@ -417,9 +418,19 @@ const WarehouseLocations: React.FC = () => {
 
   return (
     <div className={`space-y-6 ${isDarkMode ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-800'}`}>
-      <div>
-        <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>Warehouse Locations</h1>
-        <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} mt-1`}>View and manage your warehouse storage locations</p>
+      <div className="flex justify-between items-start">
+        <div>
+          <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>Warehouse Locations</h1>
+          <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} mt-1`}>View and manage your warehouse storage locations</p>
+        </div>
+        <Button
+          variant="primary"
+          onClick={() => setIsVisualMapOpen(true)}
+          className="flex items-center gap-2"
+        >
+          <Map size={16} />
+          Visual Map
+        </Button>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-4 mb-6">
@@ -498,6 +509,7 @@ const WarehouseLocations: React.FC = () => {
             return (
               <div 
                 key={summary.locationCode} 
+                data-location={summary.locationCode}
                 className={`${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} 
                   rounded-lg shadow-sm border transition-all duration-200 ease-in-out
                   hover:shadow-md ${isExpanded ? 'ring-2 ring-blue-500' : ''}`}
@@ -806,6 +818,153 @@ const WarehouseLocations: React.FC = () => {
           onClose={() => setSelectedItem(null)}
           item={selectedItem}
         />
+      )}
+
+      {/* Visual Map Modal - Full Screen */}
+      {isVisualMapOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-black bg-opacity-50"
+            onClick={() => setIsVisualMapOpen(false)}
+          ></div>
+          
+          {/* Modal Content */}
+          <div className={`relative w-full h-full max-w-none max-h-none m-0 rounded-none ${isDarkMode ? 'bg-slate-900' : 'bg-white'} flex flex-col`}>
+            {/* Header */}
+            <div className={`flex items-center justify-between p-6 border-b ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+              <div>
+                <h2 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
+                  Warehouse Visual Map
+                </h2>
+               
+              </div>
+              <button
+                onClick={() => setIsVisualMapOpen(false)}
+                className={`p-2 rounded-lg ${isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-slate-100'} transition-colors`}
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            {/* Content */}
+            <div className="flex-1 overflow-hidden p-6">
+              <div className={`space-y-6 h-full flex flex-col ${isDarkMode ? 'border-slate-800' : 'bg-white'}`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 bg-green-500 rounded"></div>
+                      <span className={`text-sm ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>High Stock (50+)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 bg-yellow-500 rounded"></div>
+                      <span className={`text-sm ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>Medium Stock (10-49)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 bg-red-500 rounded"></div>
+                      <span className={`text-sm ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>Low Stock (1-9)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 bg-gray-300 rounded"></div>
+                      <span className={`text-sm ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>Empty</span>
+                    </div>
+                  </div>
+                  <div>
+                    
+                    
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-auto">
+                  <div className="grid grid-cols-12 gap-2 min-w-max h-full">
+                    {allLocationCodes.map((locationCode) => {
+                      const summary = locationSummaries[locationCode];
+                      const totalStock = summary?.totalStock || 0;
+                      const productCount = summary?.products.filter(p => p.quantity > 0).length || 0;
+                      const isAvailable = availability[locationCode] !== false;
+                      
+                      // Determine color based on stock level
+                      let bgColor = 'bg-gray-300';
+                      let textColor = 'text-gray-600';
+                      
+                      if (totalStock >= 50) {
+                        bgColor = 'bg-green-500';
+                        textColor = 'text-white';
+                      } else if (totalStock >= 10) {
+                        bgColor = 'bg-yellow-500';
+                        textColor = 'text-white';
+                      } else if (totalStock >= 1) {
+                        bgColor = 'bg-red-500';
+                        textColor = 'text-white';
+                      }
+                      
+                      // Add border for unavailable locations
+                      const borderClass = !isAvailable ? 'border-2 border-red-400' : '';
+                      
+                      return (
+                        <div
+                          key={locationCode}
+                          className={`
+                            ${bgColor} ${textColor} ${borderClass}
+                            p-4 rounded-lg text-center text-sm font-medium
+                            hover:opacity-80 transition-all duration-200 cursor-pointer
+                            hover:scale-105 hover:shadow-lg
+                            min-w-[70px] min-h-[50px] flex flex-col justify-center items-center
+                          `}
+                          title={`${locationCode}: ${totalStock} units, ${productCount} products${!isAvailable ? ' (Unavailable)' : ''}`}
+                          onClick={() => {
+                            // Scroll to the location in the main view
+                            const element = document.querySelector(`[data-location="${locationCode}"]`);
+                            if (element) {
+                              element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                              setIsVisualMapOpen(false);
+                            }
+                          }}
+                        >
+                          <div className="font-bold">{locationCode}</div>
+                          <div className="text-xs opacity-90">{totalStock} - {productCount}p</div>
+                          {/* <div className="text-xs opacity-75">{productCount}p</div> */}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className={`p-4 rounded-lg ${isDarkMode ? 'bg-slate-700' : 'bg-slate-100'}`}>
+                  <h4 className={`font-semibold mb-2 ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>Summary</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div>
+                      <span className={`${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>Total Locations:</span>
+                      <span className={`ml-2 font-semibold ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
+                        {allLocationCodes.length}
+                      </span>
+                    </div>
+                    <div>
+                      <span className={`${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>Occupied:</span>
+                      <span className={`ml-2 font-semibold ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
+                        {Object.values(locationSummaries).filter(s => s.totalStock > 0).length}
+                      </span>
+                    </div>
+                    <div>
+                      <span className={`${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>Total Stock:</span>
+                      <span className={`ml-2 font-semibold ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
+                        {Object.values(locationSummaries).reduce((sum, s) => sum + s.totalStock, 0)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className={`${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>Unavailable:</span>
+                      <span className={`ml-2 font-semibold ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
+                        {Object.keys(availability).filter(loc => availability[loc] === false).length}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
