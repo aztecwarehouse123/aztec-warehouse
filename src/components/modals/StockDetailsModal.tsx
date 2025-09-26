@@ -4,6 +4,7 @@ import Modal from './Modal';
 import { format } from 'date-fns';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { canSeePrices } from '../../utils/roleUtils';
 
 interface StockDetailsModalProps {
   isOpen: boolean;
@@ -55,7 +56,7 @@ const StockDetailsModal: React.FC<StockDetailsModalProps> = ({
                 <p className={`font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{item.quantity}</p>
               </div>
               
-              {user?.role === 'admin' && (
+              {canSeePrices(user) && (
                 <div>
                   <h3 className={`text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'}`}>Price</h3>
                   <p className={`mt-1 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { User, Moon, Sun, Edit2, Trash2, RefreshCw } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { canManageUsers, hasAdminAccess } from '../../utils/roleUtils';
 import { useToast } from '../../contexts/ToastContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import Input from '../../components/ui/Input';
@@ -51,7 +52,7 @@ const Settings: React.FC = () => {
 
   // Fetch all users when component mounts
   const fetchUsers = useCallback(async () => {
-    if (user?.role === 'admin') {
+    if (canManageUsers(user)) {
       setIsLoading(true);
       try {
         const usersSnapshot = await getDocs(collection(db, 'users'));
@@ -522,7 +523,7 @@ const Settings: React.FC = () => {
           <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} mt-1`}>Update your profile information</p>
         </div>
         <div className="flex items-center gap-2">
-          {user?.role === 'admin' && (
+          {canManageUsers(user) && (
             <Button
               variant="secondary"
               onClick={fetchUsers}
@@ -759,7 +760,7 @@ const Settings: React.FC = () => {
       </form>
 
       {/* User Management Section */}
-      {user?.role === 'admin' && (
+      {canManageUsers(user) && (
         <div className={`mt-8 p-6 rounded-lg ${isDarkMode ? 'bg-slate-1000' : 'bg-white'}`}>
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-4">
             <h2 className={`text-xl font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'} text-center md:text-left`}>
@@ -798,6 +799,7 @@ const Settings: React.FC = () => {
                       <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>{userItem.name}</td>
                       <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>
                         {userItem.role === 'admin' ? 'Admin' : 
+                         userItem.role === 'manager' ? 'Manager' :
                          userItem.role === 'staff' ? 'Staff' : 
                          userItem.role === 'supply_serve' ? 'Supply & Serve' :
                          userItem.role === 'fahiz' ? 'Fahiz' :
@@ -863,6 +865,7 @@ const Settings: React.FC = () => {
                   <div className={`text-sm ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>{userItem.email || '-'}</div>
                   <div className={`text-xs font-medium ${isDarkMode ? 'text-blue-300' : 'text-blue-700'}`}>
                     {userItem.role === 'admin' ? 'Admin' : 
+                     userItem.role === 'manager' ? 'Manager' :
                      userItem.role === 'staff' ? 'Staff' : 
                      userItem.role === 'supply_serve' ? 'Supply & Serve' :
                      userItem.role === 'fahiz' ? 'Fahiz' :
@@ -922,6 +925,7 @@ const Settings: React.FC = () => {
                   onChange={handleAddUserChange}
                   options={[
                     { value: 'admin', label: 'Admin' },
+                    { value: 'manager', label: 'Manager' },
                     { value: 'staff', label: 'Staff' },
                     { value: 'supply_serve', label: 'Supply & Serve' },
                     { value: 'fahiz', label: 'Fahiz' },

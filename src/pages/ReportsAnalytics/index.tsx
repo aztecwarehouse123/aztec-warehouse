@@ -12,6 +12,7 @@ import { StockItem, ActivityLog } from '../../types';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
+import { canSeePrices } from '../../utils/roleUtils';
 
 
 
@@ -378,7 +379,7 @@ const ReportsAnalytics: React.FC = () => {
   }, [timeRange]);
 
   // Redirect non-admin and non-staff users
-  if (!user || (user.role !== 'admin' && user.role !== 'staff')) {
+  if (!user || (user.role !== 'admin' && user.role !== 'staff' && user.role !== 'manager')) {
     return <Navigate to="/" replace />;
   }
 
@@ -810,7 +811,7 @@ const ReportsAnalytics: React.FC = () => {
       
       // Statistics summary row
       csvRows.push('SUMMARY STATISTICS');
-      const csvSummaryRow = `Total Stock Added (${periodLabel}),${stats.todayStockAdditions},Total Units Deducted (${periodLabel}),${stats.totalDeductions},Total Damaged Products (${periodLabel}),${stats.totalDamagedProducts}${user?.role === 'admin' ? `,Total Inventory Value,£${stats.totalInventoryValue.toLocaleString('en-GB')}` : ''}`;
+      const csvSummaryRow = `Total Stock Added (${periodLabel}),${stats.todayStockAdditions},Total Units Deducted (${periodLabel}),${stats.totalDeductions},Total Damaged Products (${periodLabel}),${stats.totalDamagedProducts}${canSeePrices(user) ? `,Total Inventory Value,£${stats.totalInventoryValue.toLocaleString('en-GB')}` : `,Total Products,${inventory.length}`}`;
       csvRows.push(csvSummaryRow);
       csvRows.push(''); // Empty row for separation
       
@@ -956,12 +957,17 @@ const ReportsAnalytics: React.FC = () => {
                 <div class="stat-value">${stats.totalDamagedProducts}</div>
                 <div class="stat-title">Total Damaged Products<br/>(${periodLabel})</div>
               </div>
-              ${user?.role === 'admin' ? `
+              ${canSeePrices(user) ? `
               <div class="stat-card">
                 <div class="stat-value">£${stats.totalInventoryValue.toLocaleString('en-GB')}</div>
                 <div class="stat-title">Total Inventory Value</div>
               </div>
-              ` : ''}
+              ` : `
+              <div class="stat-card">
+                <div class="stat-value">${inventory.length}</div>
+                <div class="stat-title">Total Products</div>
+              </div>
+              `}
             </div>
             
             <div class="section">
@@ -1262,11 +1268,17 @@ const ReportsAnalytics: React.FC = () => {
               value={stats.totalDamagedProducts}
               icon={<AlertCircle size={24} className="text-blue-600" />}
             />
-            {user?.role === 'admin' && (
+            {canSeePrices(user) ? (
               <StatsCard 
                 title="Total Inventory Value" 
                 value={`£${stats.totalInventoryValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                 icon={<PoundSterling size={24} className="text-blue-600" />}
+              />
+            ) : (
+              <StatsCard 
+                title="Total Products" 
+                value={inventory.length}
+                icon={<Package size={24} className="text-purple-600" />}
               />
             )}
             

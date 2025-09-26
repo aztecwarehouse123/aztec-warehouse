@@ -1733,7 +1733,7 @@ const Jobs: React.FC = () => {
             >
               Archived Jobs
             </Button>
-            {user?.role === 'admin' && (
+            {(user?.role === 'admin' || user?.role === 'manager') && (
               <Button 
                 variant={showLiveJobs ? "primary" : "secondary"} 
                 onClick={() => {
@@ -1761,7 +1761,7 @@ const Jobs: React.FC = () => {
             >
               Reports
             </Button>
-            {user?.role === 'admin' && (
+            {(user?.role === 'admin' || user?.role === 'manager') && (
               <Button 
                 variant={showProductivity ? "primary" : "secondary"} 
                 onClick={() => {

@@ -19,6 +19,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../config/firebase';
 import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, Timestamp, getCountFromServer, where } from 'firebase/firestore';
 import { format } from 'date-fns';
+import { canSeePrices } from '../../utils/roleUtils';
 
 const Stock: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState(''); // Unified search query
@@ -142,13 +143,19 @@ const Stock: React.FC = () => {
     };
   }, [isStoreFilterOpen, isStatusFilterOpen, isSearchTypeOpen, isQuantityFilterOpen]);
 
-  const sortOptions = useMemo(() => [
-    { value: 'date', label: 'Date Updated' },
-    { value: 'quantity', label: 'Quantity (High-Low)' },
-    { value: 'name', label: 'Name (A-Z)' },
-    { value: 'price', label: 'Price (High-Low)' },
+  const sortOptions = useMemo(() => {
+    const options = [
+      { value: 'date', label: 'Date Updated' },
+      { value: 'quantity', label: 'Quantity (High-Low)' },
+      { value: 'name', label: 'Name (A-Z)' },
+    ];
     
-  ], []);
+    if (canSeePrices(user)) {
+      options.push({ value: 'price', label: 'Price (High-Low)' });
+    }
+    
+    return options;
+  }, [user]);
 
   const predefinedStores = useMemo(() => ['supply & serve', 'APHY', 'AZTEC', 'ZK', 'Fahiz'], []);
 
@@ -1447,7 +1454,7 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
                   <span className={isDarkMode ? 'text-slate-300' : 'text-slate-600'}>Location: <span className="font-medium">{item.locationCode} - {item.shelfNumber}</span></span>
                   <span className={isDarkMode ? 'text-slate-300' : 'text-slate-600'}>Qty: <span className="font-medium">{item.quantity}</span></span>
                   {item.asin && <span className={isDarkMode ? 'text-slate-300' : 'text-slate-600'}>ASIN: <span className="font-medium">{item.asin}</span></span>}
-                  {user?.role === 'admin' && (
+                  {canSeePrices(user) && (
                     <>
                       <span className={isDarkMode ? 'text-slate-300' : 'text-slate-600'}>Price: <span className="font-medium">{Number(item.price) > 0 ? `£${Number(item.price).toFixed(2)}` : '(Not set)'}</span></span>
                       <span className={isDarkMode ? 'text-slate-300' : 'text-slate-600'}>Total: <span className="font-medium">{Number(item.quantity * item.price) > 0 ? `£${Number(item.quantity * item.price).toFixed(2)}` : '(Not set)'}</span></span>

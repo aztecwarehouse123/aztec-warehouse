@@ -39,23 +39,23 @@ function App() {
       
       <Route path="/" element={<AppLayout />}>
         <Route index element={
-          <ProtectedRoute allowedRoles={['admin', 'staff']}>
+          <ProtectedRoute allowedRoles={['admin', 'manager', 'staff']}>
             <Dashboard />
           </ProtectedRoute>
         } />
 
         <Route path="stock" element={
-          <ProtectedRoute allowedRoles={['admin','staff']}>
+          <ProtectedRoute allowedRoles={['admin', 'manager', 'staff']}>
             <Stock />
           </ProtectedRoute>
         } />
         <Route path="jobs" element={
-          <ProtectedRoute allowedRoles={['admin','staff']}>
+          <ProtectedRoute allowedRoles={['admin', 'manager', 'staff']}>
             <Jobs />
           </ProtectedRoute>
         } />
         <Route path="inventory" element={
-          <ProtectedRoute allowedRoles={['admin']}>
+          <ProtectedRoute allowedRoles={['admin', 'manager']}>
             <Inventory />
           </ProtectedRoute>
         } />
@@ -65,33 +65,33 @@ function App() {
           </ProtectedRoute>
         } />
         <Route path="outbound-stock" element={
-          <ProtectedRoute allowedRoles={['admin','staff']}>
+          <ProtectedRoute allowedRoles={['admin', 'manager', 'staff']}>
             <OutboundStock />
           </ProtectedRoute>
         } />
         
         <Route path="warehouse-locations" element={
-          <ProtectedRoute allowedRoles={['admin','staff']}>
+          <ProtectedRoute allowedRoles={['admin', 'manager', 'staff']}>
             <WarehouseLocations />
           </ProtectedRoute>
         } />
         <Route path="warehouse-operations" element={
-          <ProtectedRoute allowedRoles={['admin','staff']}>
+          <ProtectedRoute allowedRoles={['admin', 'manager', 'staff']}>
             <WarehouseOperations />
           </ProtectedRoute>
         } />
         <Route path="reports-analytics" element={
-          <ProtectedRoute allowedRoles={['admin', 'staff']}>
+          <ProtectedRoute allowedRoles={['admin', 'manager', 'staff']}>
             <ReportsAnalytics />
           </ProtectedRoute>
         } />
         <Route path="settings" element={
-          <ProtectedRoute allowedRoles={['admin', 'staff']}>
+          <ProtectedRoute allowedRoles={['admin', 'manager', 'staff']}>
             <Settings />
           </ProtectedRoute>
         } />
         <Route path="add" element={
-          <ProtectedRoute allowedRoles={['admin','staff']}>
+          <ProtectedRoute allowedRoles={['admin', 'manager', 'staff']}>
             <Add />
           </ProtectedRoute>
         } />

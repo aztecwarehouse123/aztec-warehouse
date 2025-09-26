@@ -50,17 +50,17 @@ const Navbar: React.FC = () => {
   };
 
   const allNavItems = [
-    { to: "/", icon: <LayoutDashboard size={20} />, label: "Dashboard", roles: ['admin'] },
-    { to: "/add", icon: <Plus size={20} />, label: "Add", roles: ['admin', 'staff'] },
-    { to: "/stock", icon: <PackagePlus size={20} />, label: "Inbound", roles: ['admin', 'staff'] },
-    { to: "/outbound-stock", icon: <PackageMinus size={20} />, label: "Outbound", roles: ['admin', 'staff'] },
-    { to: "/inventory", icon: <Boxes size={20} />, label: "Inventory", roles: ['admin'] },
-    { to: "/jobs", icon: <Briefcase size={20} />, label: "Jobs", roles: ['admin','staff'] },
-    { to: "/warehouse-locations", icon: <MapPin size={20} />, label: "Locations", roles: ['admin', 'staff'] },
+    { to: "/", icon: <LayoutDashboard size={20} />, label: "Dashboard", roles: ['admin', 'manager'] },
+    { to: "/add", icon: <Plus size={20} />, label: "Add", roles: ['admin', 'manager', 'staff'] },
+    { to: "/stock", icon: <PackagePlus size={20} />, label: "Inbound", roles: ['admin', 'manager', 'staff'] },
+    { to: "/outbound-stock", icon: <PackageMinus size={20} />, label: "Outbound", roles: ['admin', 'manager', 'staff'] },
+    { to: "/inventory", icon: <Boxes size={20} />, label: "Inventory", roles: ['admin', 'manager'] },
+    { to: "/jobs", icon: <Briefcase size={20} />, label: "Jobs", roles: ['admin', 'manager', 'staff'] },
+    { to: "/warehouse-locations", icon: <MapPin size={20} />, label: "Locations", roles: ['admin', 'manager', 'staff'] },
     { to: "/orders", icon: <ShoppingCart size={20} />, label: "Orders", roles: [''] },
-    { to: "/reports-analytics", icon: <BarChart size={20} />, label: "Reports", roles: ['admin', 'staff'] },
-    { to: "/warehouse-operations", icon: <Activity size={20} />, label: "Logs", roles: ['admin','staff'] },
-    { to: "/settings", icon: <Settings size={20} />, label: "Settings", roles: ['admin', 'staff'] },
+    { to: "/reports-analytics", icon: <BarChart size={20} />, label: "Reports", roles: ['admin', 'manager', 'staff'] },
+    { to: "/warehouse-operations", icon: <Activity size={20} />, label: "Logs", roles: ['admin', 'manager', 'staff'] },
+    { to: "/settings", icon: <Settings size={20} />, label: "Settings", roles: ['admin', 'manager', 'staff'] },
     { to: "/supply-serve", icon: <PackagePlus size={20} />, label: getSupplyServeLabel(), roles: ['supply_serve', 'fahiz', 'aphy'] },
     
   ];

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Search, Edit2, Loader2, RefreshCw, Barcode, AlertTriangle, ChevronDown } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
@@ -14,6 +14,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../config/firebase';
 import { collection, addDoc, getDocs, doc, updateDoc, query, orderBy, Timestamp, getDoc, where } from 'firebase/firestore';
 import { format, subDays } from 'date-fns';
+import { canSeePrices } from '../../utils/roleUtils';
 
 const OutboundStock: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -31,6 +32,20 @@ const OutboundStock: React.FC = () => {
   const { showToast } = useToast();
   const { isDarkMode } = useTheme();
   const { user } = useAuth();
+
+  const sortOptions = useMemo(() => {
+    const options = [
+      { value: 'name', label: 'Sort by Name' },
+      { value: 'quantity', label: 'Sort by Quantity' },
+      { value: 'date', label: 'Sort by Date' }
+    ];
+    
+    if (canSeePrices(user)) {
+      options.splice(2, 0, { value: 'price', label: 'Sort by Price' });
+    }
+    
+    return options;
+  }, [user]);
 
   // Predefined stores for filtering
   const predefinedStores = ['supply & serve', 'APHY', 'AZTEC', 'ZK', 'Fahiz'];
@@ -331,12 +346,7 @@ const OutboundStock: React.FC = () => {
           <Select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
-            options={[
-              { value: 'name', label: 'Sort by Name' },
-              { value: 'quantity', label: 'Sort by Quantity' },
-              { value: 'price', label: 'Sort by Price' },
-              { value: 'date', label: 'Sort by Date' }
-            ]}
+            options={sortOptions}
           />
         </div>
         

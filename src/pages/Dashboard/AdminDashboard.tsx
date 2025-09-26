@@ -8,7 +8,9 @@ import { collection, query, orderBy, limit, getDocs, Timestamp, where } from 'fi
 import { subDays, formatDistanceToNow, startOfDay, endOfDay } from 'date-fns';
 // import { Order } from '../../types';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { canSeePrices } from '../../utils/roleUtils';
 
 interface DashboardStats {
   totalOrders: number;
@@ -74,6 +76,7 @@ const AdminDashboard: React.FC = () => {
   });
   
   const { isDarkMode } = useTheme();
+  const { user } = useAuth();
   const navigate = useNavigate();
 
 
@@ -572,26 +575,104 @@ const AdminDashboard: React.FC = () => {
               }}
             />
         
-        <StatsCard 
-              title="Total Inventory Value" 
-              value={stats.totalInventoryValue}
-              icon={<PoundSterling size={24} className="text-blue-600" />}
-              animateValue={true}
-              formatValue={(value) => `£${value.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-              change={{ 
-                value: stats.todayInventoryValueAdditions,
-                isPositive: true,
-                customIcon: <Plus size={16} className="text-green-500 mr-1" />,
-                label: stats.todayInventoryValueAdditions === 0 ? 'no value added today' : 
-                       `£ added today`
-              }}
-        />
+        {canSeePrices(user) ? (
+          <StatsCard 
+                title="Total Inventory Value" 
+                value={stats.totalInventoryValue}
+                icon={<PoundSterling size={24} className="text-blue-600" />}
+                formatValue={(value: number) => `£${value.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                change={{ 
+                  value: stats.todayInventoryValueAdditions,
+                  isPositive: true,
+                  customIcon: <Plus size={16} className="text-green-500 mr-1" />,
+                  label: stats.todayInventoryValueAdditions === 0 ? 'no value added today' : 
+                         `£ added today`
+                }}
+          />
+        ) : (
+          <StatsCard 
+                title="Total Products" 
+                value={inventoryData.stockByLocation.length}
+                icon={<Package size={24} className="text-purple-600" />}
+                change={{ 
+                  value: stats.todayStockAdditions,
+                  isPositive: true,
+                  customIcon: <Plus size={16} className="text-green-500 mr-1" />,
+                  label: stats.todayStockAdditions === 0 ? 'no additions today' : 
+                         stats.todayStockAdditions === 1 ? 'addition today' : 'additions today'
+                }}
+          />
+        )}
         
             
           </>
         )}
       </div>
       
+      
+      
+      {/* Stock Value by Store - Horizontal Bar Chart */}
+      <Card title="Stock Value by Store" className={`${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+        {isLoading ? (
+          <div className="animate-pulse space-y-4">
+            <div className={`h-4 ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'} rounded w-3/4`}></div>
+            <div className={`h-32 ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'} rounded`}></div>
+          </div>
+        ) : inventoryData.stockByStore.length > 0 ? (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 mb-4">
+              <BarChart3 size={20} className="text-blue-500" />
+              <span className={`text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                {canSeePrices(user) ? (
+                  <>Total Value: £{inventoryData.stockByStore.reduce((sum, store) => sum + store.value, 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} across {inventoryData.stockByStore.length} stores</>
+                ) : (
+                  <>Total Quantity: {inventoryData.stockByStore.reduce((sum, store) => sum + store.quantity, 0)} units across {inventoryData.stockByStore.length} stores</>
+                )}
+              </span>
+            </div>
+            
+            <div className="space-y-3">
+              {inventoryData.stockByStore.slice(0, 5).map((store, index) => {
+                const maxValue = Math.max(...inventoryData.stockByStore.slice(0, 5).map(s => s.value));
+                const percentage = maxValue > 0 ? (store.value / maxValue) * 100 : 0;
+                const colors = ['bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-orange-500', 'bg-pink-500'];
+                
+                return (
+                  <div key={index} className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className={`text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                        {store.store.toUpperCase()}
+                      </span>
+                      <div className="text-right">
+                        <span className={`text-sm font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                          {store.quantity.toLocaleString()} units
+                        </span>
+                        {canSeePrices(user) && (
+                          <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                            £{store.value.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className={`w-full ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'} rounded-full h-3`}>
+                      <div
+                        className={`h-3 rounded-full transition-all duration-700 ease-out ${colors[index % colors.length]}`}
+                        style={{ width: `${percentage}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <div className={`text-center py-8 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+            <Package size={48} className="mx-auto mb-4 opacity-50" />
+            <p>No store data available</p>
+          </div>
+        )}
+      </Card>
+
       {/* Stock Distribution by Location - Full Width Bar Chart */}
       <Card title="Stock Distribution by Location" className={`${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
         {isLoading ? (
@@ -624,9 +705,11 @@ const AdminDashboard: React.FC = () => {
                         <span className={`text-sm font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                           {location.quantity} units
                         </span>
-                        <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                          £{location.value.toFixed(2)}
-                        </p>
+                        {canSeePrices(user) && (
+                          <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                            £{location.value.toFixed(2)}
+                          </p>
+                        )}
                       </div>
                     </div>
                     <div className={`w-full ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'} rounded-full h-3`}>
@@ -648,204 +731,142 @@ const AdminDashboard: React.FC = () => {
         )}
       </Card>
       
-      {/* Stock Value by Store - Horizontal Bar Chart */}
-      <Card title="Stock Value by Store" className={`${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+      
+      {/* Recent Activity */}
+      <Card title="Recent Activity" className={`${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
         {isLoading ? (
-          <div className="animate-pulse space-y-4">
-            <div className={`h-4 ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'} rounded w-3/4`}></div>
-            <div className={`h-32 ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'} rounded`}></div>
-          </div>
-        ) : inventoryData.stockByStore.length > 0 ? (
-          <div className="space-y-4">
-            <div className="flex items-center gap-2 mb-4">
-              <BarChart3 size={20} className="text-blue-500" />
-              <span className={`text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                Total Value: £{inventoryData.stockByStore.reduce((sum, store) => sum + store.value, 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} across {inventoryData.stockByStore.length} stores
-              </span>
-            </div>
-            
-            <div className="space-y-3">
-              {inventoryData.stockByStore.slice(0, 5).map((store, index) => {
-                const maxValue = Math.max(...inventoryData.stockByStore.slice(0, 5).map(s => s.value));
-                const percentage = maxValue > 0 ? (store.value / maxValue) * 100 : 0;
-                const colors = ['bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-orange-500', 'bg-pink-500'];
-                
-                return (
-                  <div key={index} className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className={`text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                        {store.store.toUpperCase()}
-                      </span>
-                      <div className="text-right">
-                        <span className={`text-sm font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                          {store.quantity.toLocaleString()} units
-                        </span>
-                        <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                          £{store.value.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </p>
+          <TableSkeleton />
+        ) : recentActivities.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className={`${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} border-b`}>
+                  <th className={`px-6 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} uppercase tracking-wider`}>User</th>
+                  <th className={`px-6 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} uppercase tracking-wider`}>Role</th>
+                  <th className={`px-6 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} uppercase tracking-wider`}>Activity</th>
+                  <th className={`px-6 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} uppercase tracking-wider`}>Time</th>
+                </tr>
+              </thead>
+              <tbody className={`divide-y ${isDarkMode ? 'divide-slate-700' : 'divide-slate-200'}`}>
+                {recentActivities.slice(0, 5).map((activity) => (
+                  <tr key={activity.id} className={`${isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-slate-50'}`}>
+                    <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                      {activity.user}
+                    </td>
+                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                      {activity.role}
+                    </td>
+                    <td className={`px-6 py-4 text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                      <div className="max-w-xs truncate" title={activity.detail}>
+                        {activity.detail}
                       </div>
-                    </div>
-                    <div className={`w-full ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'} rounded-full h-3`}>
-                      <div
-                        className={`h-3 rounded-full transition-all duration-700 ease-out ${colors[index % colors.length]}`}
-                        style={{ width: `${percentage}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                    </td>
+                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                      {formatDistanceToNow(new Date(activity.time), { addSuffix: true })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         ) : (
           <div className={`text-center py-8 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-            <Package size={48} className="mx-auto mb-4 opacity-50" />
-            <p>No store data available</p>
+            No recent activities found
           </div>
         )}
       </Card>
-      
-      
-      {/* Top Products and Recent Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Activity */}
-        <Card title="Recent Activity" className={`${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-          {isLoading ? (
-            <TableSkeleton />
-          ) : recentActivities.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className={`${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} border-b`}>
-                    <th className={`px-6 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} uppercase tracking-wider`}>User</th>
-                    <th className={`px-6 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} uppercase tracking-wider`}>Role</th>
-                    <th className={`px-6 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} uppercase tracking-wider`}>Activity</th>
-                    <th className={`px-6 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} uppercase tracking-wider`}>Time</th>
-                  </tr>
-                </thead>
-                <tbody className={`divide-y ${isDarkMode ? 'divide-slate-700' : 'divide-slate-200'}`}>
-                  {recentActivities.slice(0, 5).map((activity) => (
-                    <tr key={activity.id} className={`${isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-slate-50'}`}>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                        {activity.user}
-                      </td>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                        {activity.role}
-                      </td>
-                      <td className={`px-6 py-4 text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                        <div className="max-w-xs truncate" title={activity.detail}>
-                          {activity.detail}
-                        </div>
-                      </td>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                        {formatDistanceToNow(new Date(activity.time), { addSuffix: true })}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className={`text-center py-8 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-              No recent activities found
-            </div>
-          )}
-        </Card>
-        
-        <Card title="Low Stock Items" className={`${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-          {isLoading ? (
-            <TableSkeleton />
-          ) : lowStockItems.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className={`${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} border-b`}>
-                    <th className={`px-6 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} uppercase tracking-wider`}>Product</th>
-                    <th className={`px-6 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} uppercase tracking-wider`}>Location</th>
-                    <th className={`px-6 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} uppercase tracking-wider`}>Current Stock</th>
-                    <th className={`px-6 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} uppercase tracking-wider`}>Status</th>
-                  </tr>
-                </thead>
-                <tbody className={`divide-y ${isDarkMode ? 'divide-slate-700' : 'divide-slate-200'}`}>
-                  {lowStockItems.slice(0, 5).map((item) => (
-                    <tr key={item.id} className={`${isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-slate-50'}`}>
-                      <td className={`px-6 py-4 text-sm font-medium ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                        <div className="max-w-xs truncate" title={item.name}>
-                          {item.name}
-                        </div>
-                      </td>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                        {item.locationCode}-{item.shelfNumber}
-                      </td>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                        {item.quantity}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-amber-100 text-amber-800">
-                          Low
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className={`text-center py-8 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-              No low stock items found
-            </div>
-          )}
-        </Card>
-      </div>
 
-      {/* Stock Alerts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Critical Stock Items */}
-        <Card title="Critical Stock Items" className={`${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-          {isLoading ? (
-            <TableSkeleton />
-          ) : criticalStockItems.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className={`${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} border-b`}>
-                    <th className={`px-6 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} uppercase tracking-wider`}>Product</th>
-                    <th className={`px-6 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} uppercase tracking-wider`}>Location</th>
-                    <th className={`px-6 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} uppercase tracking-wider`}>Current Stock</th>
-                    <th className={`px-6 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} uppercase tracking-wider`}>Status</th>
+      {/* Low Stock Items */}
+      <Card title="Low Stock Items" className={`${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+        {isLoading ? (
+          <TableSkeleton />
+        ) : lowStockItems.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className={`${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} border-b`}>
+                  <th className={`px-6 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} uppercase tracking-wider`}>Product</th>
+                  <th className={`px-6 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} uppercase tracking-wider`}>Location</th>
+                  <th className={`px-6 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} uppercase tracking-wider`}>Current Stock</th>
+                  <th className={`px-6 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} uppercase tracking-wider`}>Status</th>
+                </tr>
+              </thead>
+              <tbody className={`divide-y ${isDarkMode ? 'divide-slate-700' : 'divide-slate-200'}`}>
+                {lowStockItems.slice(0, 5).map((item) => (
+                  <tr key={item.id} className={`${isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-slate-50'}`}>
+                    <td className={`px-6 py-4 text-sm font-medium ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                      <div className="max-w-xs truncate" title={item.name}>
+                        {item.name}
+                      </div>
+                    </td>
+                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                      {item.locationCode}-{item.shelfNumber}
+                    </td>
+                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                      {item.quantity}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-amber-100 text-amber-800">
+                        Low
+                      </span>
+                    </td>
                   </tr>
-                </thead>
-                <tbody className={`divide-y ${isDarkMode ? 'divide-slate-700' : 'divide-slate-200'}`}>
-                  {criticalStockItems.slice(0, 5).map((item) => (
-                    <tr key={item.id} className={`${isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-slate-50'}`}>
-                      <td className={`px-6 py-4 text-sm font-medium ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                        <div className="max-w-xs truncate" title={item.name}>
-                          {item.name}
-                        </div>
-                      </td>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                        {item.locationCode}-{item.shelfNumber}
-                      </td>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                        {item.quantity}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
-                          Critical
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className={`text-center py-8 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-              No critical stock items found
-            </div>
-          )}
-        </Card>
-        
-      </div>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className={`text-center py-8 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+            No low stock items found
+          </div>
+        )}
+      </Card>
+
+      {/* Critical Stock Items */}
+      <Card title="Critical Stock Items" className={`${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+        {isLoading ? (
+          <TableSkeleton />
+        ) : criticalStockItems.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className={`${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} border-b`}>
+                  <th className={`px-6 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} uppercase tracking-wider`}>Product</th>
+                  <th className={`px-6 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} uppercase tracking-wider`}>Location</th>
+                  <th className={`px-6 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} uppercase tracking-wider`}>Current Stock</th>
+                  <th className={`px-6 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} uppercase tracking-wider`}>Status</th>
+                </tr>
+              </thead>
+              <tbody className={`divide-y ${isDarkMode ? 'divide-slate-700' : 'divide-slate-200'}`}>
+                {criticalStockItems.slice(0, 5).map((item) => (
+                  <tr key={item.id} className={`${isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-slate-50'}`}>
+                    <td className={`px-6 py-4 text-sm font-medium ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                      <div className="max-w-xs truncate" title={item.name}>
+                        {item.name}
+                      </div>
+                    </td>
+                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                      {item.locationCode}-{item.shelfNumber}
+                    </td>
+                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                      {item.quantity}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                        Critical
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className={`text-center py-8 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+            No critical stock items found
+          </div>
+        )}
+      </Card>
 
       
     </div>

@@ -11,6 +11,7 @@ import { collection, doc, getDocs, getCountFromServer, orderBy, query, Timestamp
 import { StockItem } from '../../types';
 import StockDetailsModal from '../../components/modals/StockDetailsModal';
 import StatsCard from '../../components/dashboard/StatsCard';
+import { canSeePrices } from '../../utils/roleUtils';
 
 const Inventory: React.FC = () => {
   const { isDarkMode } = useTheme();
@@ -364,7 +365,9 @@ const Inventory: React.FC = () => {
                 <tr>
                   <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Name</th>
                   <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>ASIN</th>
-                  <th className={`px-4 py-3 text-right text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Price</th>
+                  {canSeePrices(user) && (
+                    <th className={`px-4 py-3 text-right text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Price</th>
+                  )}
                   <th className={`px-4 py-3 text-center text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Quantity</th>
                   <th className={`px-4 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>Barcode</th>
                   <th className={`px-4 py-3 text-right text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-500'} uppercase tracking-wider`}>View</th>
@@ -387,32 +390,34 @@ const Inventory: React.FC = () => {
                         '-'
                       )}
                     </td>
-                    <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-900'} text-right`}>
-                      {editRowId === item.id ? (
-                        <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            value={editPrice}
-                            onChange={(e) => setEditPrice(e.target.value)}
-                            className="w-28 text-right"
-                          />
-                          <Button size="sm" onClick={() => savePrice(item)} isLoading={isLoading}>
-                            <Check size={14} />
-                          </Button>
-                          <Button size="sm" variant="secondary" onClick={cancelEdit} disabled={isLoading}>
-                            <X size={14} />
-                          </Button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); startEdit(item); }}
-                          className={`${isDarkMode ? 'text-slate-200 hover:text-blue-300' : 'text-slate-900 hover:text-blue-700'} transition-colors`}
-                        >
-                          {Number(item.price) > 0 ? `£${Number(item.price).toFixed(2)}` : '(Not set)'}
-                        </button>
-                      )}
-                    </td>
+                    {canSeePrices(user) && (
+                      <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-900'} text-right`}>
+                        {editRowId === item.id ? (
+                          <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              value={editPrice}
+                              onChange={(e) => setEditPrice(e.target.value)}
+                              className="w-28 text-right"
+                            />
+                            <Button size="sm" onClick={() => savePrice(item)} isLoading={isLoading}>
+                              <Check size={14} />
+                            </Button>
+                            <Button size="sm" variant="secondary" onClick={cancelEdit} disabled={isLoading}>
+                              <X size={14} />
+                            </Button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); startEdit(item); }}
+                            className={`${isDarkMode ? 'text-slate-200 hover:text-blue-300' : 'text-slate-900 hover:text-blue-700'} transition-colors`}
+                          >
+                            {Number(item.price) > 0 ? `£${Number(item.price).toFixed(2)}` : '(Not set)'}
+                          </button>
+                        )}
+                      </td>
+                    )}
                     <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'} text-center`}>{item.quantity}</td>
                     <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{item.barcode || '-'}</td>
                     <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'} text-right`}>
@@ -444,9 +449,11 @@ const Inventory: React.FC = () => {
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1">
-                    <span className={`text-sm font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
-                      {Number(item.price) > 0 ? `£${Number(item.price).toFixed(2)}` : 'No price'}
-                    </span>
+                    {canSeePrices(user) && (
+                      <span className={`text-sm font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                        {Number(item.price) > 0 ? `£${Number(item.price).toFixed(2)}` : 'No price'}
+                      </span>
+                    )}
                     <div className="flex gap-1">
                       {editRowId === item.id ? (
                         <>

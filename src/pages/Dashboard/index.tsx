@@ -11,6 +11,8 @@ const Dashboard: React.FC = () => {
   switch (user.role) {
     case 'admin':
       return <AdminDashboard />;
+    case 'manager':
+      return <AdminDashboard />;
     case 'staff':
       return <Add/>
     default:
