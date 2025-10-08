@@ -7,6 +7,7 @@ import { useToast } from '../../contexts/ToastContext';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/modals/Modal';
 import DeleteConfirmationModal from '../../components/modals/DeleteConfirmationModal';
+import ConfirmationModal from '../../components/modals/ConfirmationModal';
 import DateRangePicker from '../../components/ui/DateRangePicker';
 import { useAuth } from '../../contexts/AuthContext';
 import Input from '../../components/ui/Input';
@@ -90,6 +91,8 @@ const Jobs: React.FC = () => {
   const [isJobCreationInProgress, setIsJobCreationInProgress] = useState(false);
   // Timer alert states
   const [showHurryUpAlert, setShowHurryUpAlert] = useState(false);
+  // Confirm closing Add Barcode modal (lose progress)
+  const [isCloseBarcodeConfirmOpen, setIsCloseBarcodeConfirmOpen] = useState(false);
   const [lastAlertTime, setLastAlertTime] = useState<number>(0);
   
   // State to track locally verified items (not yet saved to database)
@@ -2720,29 +2723,7 @@ const Jobs: React.FC = () => {
       {/* New Job Picking Modal */}
       <Modal 
         isOpen={isNewJobModalOpen} 
-        onClose={() => {
-          setIsNewJobModalOpen(false);
-          setJobCreationStartTime(null); // Reset timer
-          setElapsedTime(0); // Reset elapsed time
-          setShowHurryUpAlert(false); // Reset alert state
-          setLastAlertTime(0); // Reset last alert time
-          setShowSearchSection(false); // Reset search section
-          
-          // Delete the live job session from Firebase if user closes without finishing
-          const sessionQuery = query(
-            collection(db, 'liveJobSessions'),
-            where('createdBy', '==', user?.name),
-            where('isActive', '==', true)
-          );
-          getDocs(sessionQuery).then(sessionSnapshot => {
-            if (!sessionSnapshot.empty) {
-              // Delete the document entirely since the job wasn't completed
-              deleteDoc(doc(db, 'liveJobSessions', sessionSnapshot.docs[0].id));
-            }
-          }).catch(error => {
-            console.log('error', error);
-          });
-        }} 
+        onClose={() => setIsCloseBarcodeConfirmOpen(true)} 
         title={showSearchSection ? "Search Product from Inventory" : "Add Barcode to Job"}
         size='md'
         closeOnOutsideClick={false}
@@ -3189,6 +3170,40 @@ const Jobs: React.FC = () => {
         message={jobToDelete ? `Are you sure you want to delete Job ${jobToDelete.jobId}? This action cannot be undone.` : ''}
         isLoading={false}
       />
+
+  {/* Confirm close Add Barcode modal */}
+  <ConfirmationModal
+    isOpen={isCloseBarcodeConfirmOpen}
+    onClose={() => setIsCloseBarcodeConfirmOpen(false)}
+    onConfirm={() => {
+      setIsCloseBarcodeConfirmOpen(false);
+      setIsNewJobModalOpen(false);
+      setJobCreationStartTime(null); // Reset timer
+      setElapsedTime(0); // Reset elapsed time
+      setShowHurryUpAlert(false); // Reset alert state
+      setLastAlertTime(0); // Reset last alert time
+      setShowSearchSection(false); // Reset search section
+
+      // Delete the live job session from Firebase if user closes without finishing
+      const sessionQuery = query(
+        collection(db, 'liveJobSessions'),
+        where('createdBy', '==', user?.name),
+        where('isActive', '==', true)
+      );
+      getDocs(sessionQuery).then(sessionSnapshot => {
+        if (!sessionSnapshot.empty) {
+          // Delete the document entirely since the job wasn't completed
+          deleteDoc(doc(db, 'liveJobSessions', sessionSnapshot.docs[0].id));
+        }
+      }).catch(error => {
+        console.log('error', error);
+      });
+    }}
+    title="Close without finishing?"
+    message="Are you sure you want to close? All jobs will be lost."
+    confirmLabel="Yes"
+    cancelLabel="No"
+  />
 
       {/* Stock Update Modal */}
       <Modal
