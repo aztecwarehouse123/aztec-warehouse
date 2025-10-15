@@ -171,21 +171,21 @@ const Jobs: React.FC = () => {
       efficiency: number; // items per minute
       performance: 'excellent' | 'good' | 'average' | 'needs_improvement';
     }>;
-    dailyProductivity: Array<{
-      date: string;
+    hourlyProductivity: Array<{
+      hour: string;
       totalJobs: number;
       avgPickingTime: number;
       totalItems: number;
     }>;
-  }>({ workerStats: [], dailyProductivity: [] });
+  }>({ workerStats: [], hourlyProductivity: [] });
   const [isLoadingProductivity, setIsLoadingProductivity] = useState(false);
-  const [productivityDateRange, setProductivityDateRange] = useState<{ start: Date; end: Date }>(() => {
-    const end = new Date();
-    const start = new Date();
-    start.setDate(start.getDate() - 30); // Default to last 30 days
-    start.setHours(0, 0, 0, 0);
-    end.setHours(23, 59, 59, 999);
-    return { start, end };
+  const [productivityDate, setProductivityDate] = useState<Date>(() => {
+    const today = new Date();
+    // Ensure we get the local date without timezone issues
+    const year = today.getFullYear();
+    const month = today.getMonth();
+    const date = today.getDate();
+    return new Date(year, month, date);
   });
 
   // Helper function to check if a job should be archived (older than current day at 12 AM)
@@ -306,15 +306,26 @@ const Jobs: React.FC = () => {
   // Generate productivity data
   const generateProductivityData = useCallback(async () => {
     console.log('Starting productivity data generation...');
+    console.log('Selected productivity date:', productivityDate);
     setIsLoadingProductivity(true);
     try {
-      const { start, end } = productivityDateRange;
+      // Set date range to selected date (start of day to end of day)
+      const year = productivityDate.getFullYear();
+      const month = productivityDate.getMonth();
+      const date = productivityDate.getDate();
+      
+      const start = new Date(year, month, date, 0, 0, 0, 0);
+      const end = new Date(year, month, date, 23, 59, 59, 999);
+      
+      console.log('Date range:', { start: start.toISOString(), end: end.toISOString() });
       
       // Filter jobs within date range
       const jobsInRange = jobs.filter(job => {
         const jobDate = job.createdAt;
         return jobDate >= start && jobDate <= end && job.status === 'completed';
       });
+      
+      console.log('Jobs in range:', jobsInRange.length);
 
       // Calculate worker statistics
       const workerMap = new Map<string, {
@@ -381,25 +392,24 @@ const Jobs: React.FC = () => {
         };
       }).sort((a, b) => b.efficiency - a.efficiency);
 
-      // Calculate daily productivity
-      const dailyProductivity = [];
-      const currentDate = new Date(start);
-      while (currentDate <= end) {
-        const dayStart = new Date(currentDate);
-        dayStart.setHours(0, 0, 0, 0);
-        const dayEnd = new Date(currentDate);
-        dayEnd.setHours(23, 59, 59, 999);
+      // Calculate hourly productivity for the selected date
+      const hourlyProductivity = [];
+      for (let hour = 0; hour < 24; hour++) {
+        const hourStart = new Date(productivityDate);
+        hourStart.setHours(hour, 0, 0, 0);
+        const hourEnd = new Date(productivityDate);
+        hourEnd.setHours(hour, 59, 59, 999);
 
-        const dayJobs = jobsInRange.filter(job => {
+        const hourJobs = jobsInRange.filter(job => {
           const jobDate = job.createdAt;
-          return jobDate >= dayStart && jobDate <= dayEnd;
+          return jobDate >= hourStart && jobDate <= hourEnd;
         });
 
-        const totalItems = dayJobs.reduce((sum, job) => 
+        const totalItems = hourJobs.reduce((sum, job) => 
           sum + job.items.reduce((itemSum, item) => itemSum + item.quantity, 0), 0
         );
 
-        const pickingTimes = dayJobs
+        const pickingTimes = hourJobs
           .filter(job => job.pickingTime && job.pickingTime > 0)
           .map(job => job.pickingTime!);
 
@@ -407,19 +417,17 @@ const Jobs: React.FC = () => {
           ? pickingTimes.reduce((sum, time) => sum + time, 0) / pickingTimes.length 
           : 0;
 
-        dailyProductivity.push({
-          date: currentDate.toISOString().split('T')[0],
-          totalJobs: dayJobs.length,
+        hourlyProductivity.push({
+          hour: `${hour.toString().padStart(2, '0')}:00`,
+          totalJobs: hourJobs.length,
           avgPickingTime: Math.round(avgPickingTime),
           totalItems
         });
-
-        currentDate.setDate(currentDate.getDate() + 1);
       }
 
       setProductivityData({
         workerStats,
-        dailyProductivity
+        hourlyProductivity
       });
       
       // Add a small delay to make loading more visible
@@ -432,7 +440,7 @@ const Jobs: React.FC = () => {
     } finally {
       setIsLoadingProductivity(false);
     }
-  }, [jobs, productivityDateRange, showToast]);
+  }, [jobs, productivityDate, showToast]);
 
   // Generate reports data
   const generateReports = useCallback(async (date: Date) => {
@@ -2491,46 +2499,29 @@ const Jobs: React.FC = () => {
         {/* Productivity Section */}
         {showProductivity && (
           <>
-            {/* Productivity Header with Date Range Picker */}
+            {/* Productivity Header with Date Picker */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
               <div className="flex items-center gap-3">
                 <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
                   Productivity Analytics
                 </h2>
                 <span className={`px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300`}>
-                  {productivityDateRange.start.toLocaleDateString()} - {productivityDateRange.end.toLocaleDateString()}
+                  {productivityDate.toLocaleDateString()}
                 </span>
               </div>
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                 <div className="flex items-center gap-2">
                   <label className={`text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                    From:
+                    Date:
                   </label>
                   <input
                     type="date"
-                    value={productivityDateRange.start.toISOString().split('T')[0]}
+                    value={`${productivityDate.getFullYear()}-${String(productivityDate.getMonth() + 1).padStart(2, '0')}-${String(productivityDate.getDate()).padStart(2, '0')}`}
                     onChange={(e) => {
-                      const newStart = new Date(e.target.value);
-                      setProductivityDateRange(prev => ({ ...prev, start: newStart }));
-                      generateProductivityData();
-                    }}
-                    className={`px-3 py-2 border rounded-md text-sm ${
-                      isDarkMode 
-                        ? 'bg-slate-700 border-slate-600 text-white' 
-                        : 'bg-white border-slate-300 text-slate-900'
-                    }`}
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <label className={`text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                    To:
-                  </label>
-                  <input
-                    type="date"
-                    value={productivityDateRange.end.toISOString().split('T')[0]}
-                    onChange={(e) => {
-                      const newEnd = new Date(e.target.value);
-                      setProductivityDateRange(prev => ({ ...prev, end: newEnd }));
+                      const dateString = e.target.value;
+                      const [year, month, day] = dateString.split('-').map(Number);
+                      const newDate = new Date(year, month - 1, day); // month is 0-indexed
+                      setProductivityDate(newDate);
                       generateProductivityData();
                     }}
                     className={`px-3 py-2 border rounded-md text-sm ${
@@ -2657,20 +2648,23 @@ const Jobs: React.FC = () => {
                   )}
                 </div>
 
-                {/* Daily Productivity Chart */}
+                {/* Hourly Productivity Chart */}
                 <div className={`p-4 sm:p-6 rounded-lg border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
                   <h3 className={`text-base sm:text-lg font-semibold mb-3 sm:mb-4 ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
-                    Daily Productivity Trends
+                    Hourly Productivity Trends
                   </h3>
-                  <div className="h-80">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={productivityData.dailyProductivity}>
+                  <div className="h-80 w-full overflow-x-auto">
+                    <ResponsiveContainer width="100%" height="100%" minWidth={800}>
+                      <LineChart data={productivityData.hourlyProductivity} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke={isDarkMode ? '#334155' : '#e2e8f0'} />
                         <XAxis 
-                          dataKey="date" 
+                          dataKey="hour" 
                           stroke={isDarkMode ? '#94a3b8' : '#64748b'} 
-                          fontSize={12}
-                          tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          fontSize={10}
+                          interval={1}
+                          angle={-45}
+                          textAnchor="end"
+                          height={60}
                         />
                         <YAxis stroke={isDarkMode ? '#94a3b8' : '#64748b'} fontSize={12} />
                         <Tooltip 
@@ -2689,7 +2683,7 @@ const Jobs: React.FC = () => {
                             }
                             return [value, name];
                           }}
-                          labelFormatter={(label) => `Date: ${new Date(label).toLocaleDateString()}`}
+                          labelFormatter={(label) => `Hour: ${label}`}
                         />
                         <Legend />
                         <Line type="monotone" dataKey="totalJobs" stroke="#10b981" name="Total Jobs" strokeWidth={2} />
