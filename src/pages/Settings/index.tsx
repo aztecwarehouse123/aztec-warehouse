@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { User, Moon, Sun, Edit2, Trash2, RefreshCw } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { canManageUsers, hasAdminAccess } from '../../utils/roleUtils';
+import { canManageUsers } from '../../utils/roleUtils';
 import { useToast } from '../../contexts/ToastContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import Input from '../../components/ui/Input';

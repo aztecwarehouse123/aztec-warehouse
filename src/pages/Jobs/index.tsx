@@ -3197,7 +3197,7 @@ const Jobs: React.FC = () => {
     message="Are you sure you want to close? All jobs will be lost."
     confirmLabel="Yes"
     cancelLabel="No"
-  />
+      />
 
       {/* Stock Update Modal */}
       <Modal

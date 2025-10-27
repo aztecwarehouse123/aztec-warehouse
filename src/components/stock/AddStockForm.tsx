@@ -1030,7 +1030,7 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
             
         </div>
 
-        {!isSupplyServe && (user?.role === 'admin' || user?.role === 'staff') && (
+        {!isSupplyServe && (user?.role === 'admin' || user?.role === 'staff' || user?.role === 'manager') && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Select

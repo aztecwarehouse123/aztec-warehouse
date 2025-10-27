@@ -1,0 +1,1123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Marketplace API Setup Guide</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f5f5f5;
+            padding: 0;
+            margin: 0;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 20px;
+        }
+
+        .intro-box {
+            background: #f0f7ff;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+
+        .intro-box h3 {
+            color: #1976D2;
+            margin-bottom: 10px;
+        }
+
+        .section {
+            margin: 30px 0;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid #eee;
+        }
+
+        .platform-icon {
+            font-size: 40px;
+            margin-right: 15px;
+        }
+
+        .section-header h2 {
+            font-size: 24px;
+            color: #333;
+        }
+
+        .section-header .time-badge {
+            margin-left: auto;
+            background: #4CAF50;
+            color: white;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .step {
+            margin: 25px 0;
+            padding-left: 15px;
+            border-left: 3px solid #e0e0e0;
+        }
+
+        .step-number {
+            background: #667eea;
+            color: white;
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 30px;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        .step h3 {
+            display: inline-block;
+            font-size: 18px;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .step ol, .step ul {
+            margin-left: 40px;
+            margin-top: 10px;
+        }
+
+        .step li {
+            margin: 8px 0;
+        }
+
+        .code-box {
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 12px;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            overflow-x: auto;
+        }
+
+        .warning-box {
+            background: #fff3cd;
+            border-left: 4px solid #ff9800;
+            padding: 12px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+
+        .warning-box strong {
+            color: #f57c00;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .success-box {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 12px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+
+        .info-box {
+            background: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 12px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+
+        .checklist {
+            list-style: none;
+            margin: 15px 0;
+        }
+
+        .checklist li {
+            padding: 10px;
+            margin: 5px 0;
+            background: #f9f9f9;
+            border-radius: 4px;
+            position: relative;
+            padding-left: 35px;
+        }
+
+        .checklist li:before {
+            content: "☐";
+            position: absolute;
+            left: 10px;
+            font-size: 18px;
+            color: #999;
+        }
+
+        .table-container {
+            overflow-x: auto;
+            margin: 20px 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background: #f5f5f5;
+            font-weight: bold;
+            color: #333;
+        }
+
+        tr:hover {
+            background: #f9f9f9;
+        }
+
+        .support-card {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+
+        .support-card h4 {
+            color: #667eea;
+            margin-bottom: 8px;
+        }
+
+        .button {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 4px;
+            margin: 10px 5px 10px 0;
+            font-weight: bold;
+        }
+
+        .button:hover {
+            background: #5568d3;
+        }
+
+        .footer {
+            background: #333;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            margin-top: 40px;
+        }
+
+        .progress-bar {
+            background: #e0e0e0;
+            height: 8px;
+            border-radius: 4px;
+            margin: 20px 0;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            height: 100%;
+            transition: width 0.3s;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 24px;
+            }
+            
+            .content {
+                padding: 15px;
+            }
+            
+            .section {
+                padding: 15px;
+            }
+            
+            .section-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            
+            .section-header .time-badge {
+                margin-left: 0;
+                margin-top: 10px;
+            }
+        }
+
+        .toc {
+            background: #f9f9f9;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .toc h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .toc ul {
+            list-style: none;
+        }
+
+        .toc li {
+            padding: 8px 0;
+        }
+
+        .toc a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .toc a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🛍️ Marketplace API Setup Guide</h1>
+            <p>Step-by-Step Instructions for Amazon, eBay & Shopify</p>
+        </div>
+
+        <div class="content">
+            <!-- Introduction -->
+            <div class="intro-box">
+                <h3>📌 Welcome!</h3>
+                <p>This guide will help you set up API access for your Amazon Seller Central, eBay, and Shopify accounts. This is required to connect these marketplaces to your warehouse management system.</p>
+                <p style="margin-top: 10px;"><strong>What is API access?</strong><br>
+                API allows different software systems to talk to each other. Once set up, your warehouse app will automatically import orders, update inventory, and sync tracking numbers.</p>
+            </div>
+
+            <div class="info-box">
+                <strong>⏱️ Time Required:</strong> 1-2 hours total (spread across a few days for approvals)<br>
+                <strong>👤 Who Should Do This:</strong> Person with admin access to your marketplace accounts<br>
+                <strong>📝 What You'll Need:</strong> Access to seller accounts, notepad for credentials, business information
+            </div>
+
+            <!-- Table of Contents -->
+            <div class="toc">
+                <h3>📋 Quick Navigation</h3>
+                <ul>
+                    <li><a href="#amazon">🟠 Part 1: Amazon Seller Central Setup</a></li>
+                    <li><a href="#ebay">🔴 Part 2: eBay Developer Program Setup</a></li>
+                    <li><a href="#shopify">🟢 Part 3: Shopify Setup</a></li>
+                    <li><a href="#checklist">✅ Final Checklist</a></li>
+                    <li><a href="#security">🔐 Security Best Practices</a></li>
+                    <li><a href="#help">🆘 Common Issues & Getting Help</a></li>
+                </ul>
+            </div>
+
+            <!-- Amazon Section -->
+            <div id="amazon" class="section">
+                <div class="section-header">
+                    <span class="platform-icon">🟠</span>
+                    <div>
+                        <h2>Part 1: Amazon Seller Central</h2>
+                        <p style="color: #666; font-size: 14px;">Setting up Amazon SP-API access</p>
+                    </div>
+                    <span class="time-badge">⏱️ 45 min + 2-3 days</span>
+                </div>
+
+                <div class="step">
+                    <h3><span class="step-number">1</span> Access Amazon Developer Central</h3>
+                    <ol>
+                        <li>Open your web browser and go to: <strong>https://developer.amazonservices.com</strong></li>
+                        <li>Click the <strong>"Sign in"</strong> button in the top right corner</li>
+                        <li>Sign in using the <strong>same email and password</strong> you use for Amazon Seller Central</li>
+                        <li>Verify your identity if prompted (may require 2-step verification)</li>
+                    </ol>
+                </div>
+
+                <div class="step">
+                    <h3><span class="step-number">2</span> Register as a Developer</h3>
+                    <ol>
+                        <li>After signing in, you'll see a registration page</li>
+                        <li>Fill in the following information:
+                            <ul>
+                                <li><strong>Developer Name:</strong> Your business name or your name</li>
+                                <li><strong>Email Address:</strong> Your business email (receives important notifications)</li>
+                                <li><strong>Phone Number:</strong> Your business phone number</li>
+                                <li><strong>Company Name:</strong> Your registered business name</li>
+                                <li><strong>Website:</strong> Your business website or Amazon storefront URL</li>
+                            </ul>
+                        </li>
+                        <li>Read and accept the <strong>Amazon Services Terms of Use</strong></li>
+                        <li>Click <strong>"Submit"</strong> or <strong>"Register"</strong></li>
+                    </ol>
+                    <div class="success-box">
+                        ✅ You're now registered as an Amazon developer!
+                    </div>
+                </div>
+
+                <div class="step">
+                    <h3><span class="step-number">3</span> Create a Developer Application</h3>
+                    <ol>
+                        <li>Go to the <strong>"Apps & Services"</strong> menu at the top</li>
+                        <li>Click on <strong>"Manage Your Apps"</strong></li>
+                        <li>Click the orange <strong>"Add New App"</strong> button</li>
+                        <li>Fill in the application details:</li>
+                    </ol>
+                    
+                    <div class="code-box">
+<strong>Application Name:</strong>
+Warehouse Management Integration
+
+<strong>Application Description:</strong>
+Integration for warehouse management system to sync orders and inventory
+
+<strong>OAuth Login URI:</strong>
+https://localhost
+
+<strong>OAuth Redirect URI:</strong>
+https://localhost/callback
+                    </div>
+                    
+                    <div class="info-box">
+                        <strong>ℹ️ Note:</strong> The URLs are temporary and will be updated later by your developer
+                    </div>
+                    
+                    <ol start="5">
+                        <li>Click <strong>"Save"</strong> or <strong>"Create App"</strong></li>
+                    </ol>
+                </div>
+
+                <div class="step">
+                    <h3><span class="step-number">4</span> Get Your API Credentials</h3>
+                    <ol>
+                        <li>After creating the app, click on <strong>"Edit App"</strong> or your app name</li>
+                        <li>Look for the <strong>"LWA Credentials"</strong> section (LWA = Login with Amazon)</li>
+                        <li>You'll see two important credentials:
+                            <ul>
+                                <li><strong>Client ID:</strong> A long string of letters and numbers</li>
+                                <li><strong>Client Secret:</strong> Click <strong>"View"</strong> to see it</li>
+                            </ul>
+                        </li>
+                    </ol>
+                    
+                    <div class="warning-box">
+                        <strong>⚠️ IMPORTANT - Save These Immediately!</strong>
+                        Copy and paste these credentials somewhere safe (use a password manager or secure note app):
+                    </div>
+                    
+                    <div class="code-box">
+Amazon Client ID: [paste your Client ID here]
+Amazon Client Secret: [paste your Client Secret here]
+                    </div>
+                </div>
+
+                <div class="step">
+                    <h3><span class="step-number">5</span> Enable Required API Scopes</h3>
+                    <ol>
+                        <li>On the same page, look for <strong>"Roles"</strong> or <strong>"API Permissions"</strong></li>
+                        <li>Make sure these are checked/enabled:
+                            <ul>
+                                <li>✅ <strong>Orders API</strong> (to fetch orders)</li>
+                                <li>✅ <strong>Feeds API</strong> (to update inventory)</li>
+                                <li>✅ <strong>Notifications API</strong> (for real-time updates)</li>
+                                <li>✅ <strong>Merchant Fulfillment API</strong> (to mark orders as shipped)</li>
+                            </ul>
+                        </li>
+                        <li>Click <strong>"Save"</strong> or <strong>"Update"</strong></li>
+                    </ol>
+                </div>
+
+                <div class="step">
+                    <h3><span class="step-number">6</span> Get Your Refresh Token</h3>
+                    <p>This is the trickiest part. Choose one of these options:</p>
+                    
+                    <div class="info-box">
+                        <strong>📞 Option A: Request from Amazon Support (Easier)</strong>
+                        <ol>
+                            <li>Go to Amazon Seller Central</li>
+                            <li>Click <strong>"Help"</strong> at the top</li>
+                            <li>Search for "SP-API refresh token"</li>
+                            <li>Contact support and say: <em>"I need a refresh token for my SP-API application to integrate with my warehouse system"</em></li>
+                            <li>They will guide you through the authorization process</li>
+                            <li>Save the refresh token they provide</li>
+                        </ol>
+                    </div>
+                    
+                    <div class="info-box" style="margin-top: 10px;">
+                        <strong>💻 Option B: Use OAuth Flow (For Developers)</strong>
+                        <ol>
+                            <li>Share your Client ID with your developer</li>
+                            <li>They will create an authorization URL for you</li>
+                            <li>Visit that URL, log in to Amazon, and authorize the app</li>
+                            <li>You'll receive a refresh token</li>
+                            <li>Save it securely</li>
+                        </ol>
+                    </div>
+                    
+                    <div class="warning-box">
+                        <strong>⚠️ Save All This Information:</strong>
+                    </div>
+                    
+                    <div class="code-box">
+Amazon Refresh Token: [paste here]
+Amazon Seller ID: [found in Seller Central > Settings > Account Info]
+Amazon Marketplace ID: [usually ATVPDKIKX0DER for US]
+                    </div>
+                </div>
+
+                <div class="step">
+                    <h3><span class="step-number">7</span> Enable Notifications (Optional but Recommended)</h3>
+                    <ol>
+                        <li>In your Amazon Developer Console, go to <strong>"Notifications"</strong></li>
+                        <li>Click <strong>"Create Destination"</strong></li>
+                        <li>Select <strong>"SQS"</strong> (Simple Queue Service)</li>
+                        <li>Name it: <code>warehouse-notifications</code></li>
+                        <li>Save the SQS Queue URL provided</li>
+                        <li><strong>Share this URL with your developer</strong> - they'll need it to receive real-time order updates</li>
+                    </ol>
+                </div>
+
+                <div class="step">
+                    <h3><span class="step-number">8</span> Test Your Setup</h3>
+                    <ol>
+                        <li>In the Developer Console, look for <strong>"Test"</strong> or <strong>"Sandbox"</strong></li>
+                        <li>Try making a test API call (your developer can help with this)</li>
+                        <li>If it works, you're all set! ✅</li>
+                    </ol>
+                </div>
+
+                <div class="success-box">
+                    <strong>⏰ Approval Wait Time:</strong> Amazon may take 2-3 business days to fully approve your developer account and enable API access. You'll receive an email when it's ready.
+                </div>
+            </div>
+
+            <!-- eBay Section -->
+            <div id="ebay" class="section">
+                <div class="section-header">
+                    <span class="platform-icon">🔴</span>
+                    <div>
+                        <h2>Part 2: eBay Developer Program</h2>
+                        <p style="color: #666; font-size: 14px;">Setting up eBay API access</p>
+                    </div>
+                    <span class="time-badge">⏱️ 30 min + 1-2 days</span>
+                </div>
+
+                <div class="step">
+                    <h3><span class="step-number">1</span> Access eBay Developer Program</h3>
+                    <ol>
+                        <li>Go to: <strong>https://developer.ebay.com</strong></li>
+                        <li>Click <strong>"Register"</strong> or <strong>"Sign In"</strong> in the top right</li>
+                        <li>Use your <strong>regular eBay seller account</strong> credentials to log in</li>
+                        <li>If you don't have a developer account yet, you'll be prompted to create one</li>
+                    </ol>
+                </div>
+
+                <div class="step">
+                    <h3><span class="step-number">2</span> Register as a Developer</h3>
+                    <ol>
+                        <li>Click <strong>"My Account"</strong> after logging in</li>
+                        <li>Fill in the registration form:
+                            <ul>
+                                <li><strong>First Name & Last Name:</strong> Your name</li>
+                                <li><strong>Email:</strong> Your business email</li>
+                                <li><strong>Company Name:</strong> Your business name (can be individual)</li>
+                                <li><strong>Country:</strong> Your country</li>
+                                <li><strong>Phone:</strong> Your phone number</li>
+                            </ul>
+                        </li>
+                        <li>Accept the <strong>Developer Terms of Use</strong></li>
+                        <li>Click <strong>"Continue"</strong> or <strong>"Register"</strong></li>
+                    </ol>
+                </div>
+
+                <div class="step">
+                    <h3><span class="step-number">3</span> Create Production Keys</h3>
+                    <ol>
+                        <li>Go to <strong>"My Account"</strong> → <strong>"Application Keysets"</strong></li>
+                        <li>You'll see options for <strong>Sandbox</strong> and <strong>Production</strong></li>
+                        <li>Click <strong>"Create Production Keyset"</strong></li>
+                        <li>Fill in the application details:</li>
+                    </ol>
+                    
+                    <div class="code-box">
+<strong>Application Title:</strong>
+Warehouse Management System
+
+<strong>Application Description:</strong>
+Integration for syncing orders and inventory between eBay and warehouse
+
+<strong>Application Type:</strong>
+Web Application
+
+<strong>Grant Type:</strong>
+Authorization Code (for OAuth)
+                    </div>
+                    
+                    <ol start="5">
+                        <li>Click <strong>"Create Keyset"</strong></li>
+                    </ol>
+                </div>
+
+                <div class="step">
+                    <h3><span class="step-number">4</span> Copy Your Credentials</h3>
+                    <p>After creating the keyset, you'll see three important credentials:</p>
+                    
+                    <div class="warning-box">
+                        <strong>⚠️ SAVE THESE IMMEDIATELY!</strong> (They may not be shown again)
+                    </div>
+                    
+                    <div class="code-box">
+eBay App ID (Client ID): [paste here]
+eBay Dev ID: [paste here]
+eBay Cert ID (Client Secret): [paste here]
+                    </div>
+                    
+                    <div class="info-box">
+                        <strong>ℹ️ How to find them later:</strong>
+                        <ol>
+                            <li>Go to <strong>"My Account"</strong> → <strong>"Application Keysets"</strong></li>
+                            <li>Click on your application name</li>
+                            <li>Your credentials will be displayed (you may need to click "View" on the Cert ID)</li>
+                        </ol>
+                    </div>
+                </div>
+
+                <div class="step">
+                    <h3><span class="step-number">5</span> Configure OAuth Scopes</h3>
+                    <ol>
+                        <li>In your application settings, look for <strong>"OAuth Scopes"</strong> or <strong>"Permissions"</strong></li>
+                        <li>Make sure these are enabled:
+                            <ul>
+                                <li>✅ <code>https://api.ebay.com/oauth/api_scope/sell.inventory</code> (manage inventory)</li>
+                                <li>✅ <code>https://api.ebay.com/oauth/api_scope/sell.fulfillment</code> (manage orders)</li>
+                                <li>✅ <code>https://api.ebay.com/oauth/api_scope/sell.account</code> (account access)</li>
+                            </ul>
+                        </li>
+                        <li>Click <strong>"Save Changes"</strong></li>
+                    </ol>
+                </div>
+
+                <div class="step">
+                    <h3><span class="step-number">6</span> Configure Redirect URLs</h3>
+                    <ol>
+                        <li>Still in your application settings, find <strong>"OAuth Redirect URIs"</strong></li>
+                        <li>Click <strong>"Add Redirect URI"</strong></li>
+                        <li>For now, enter:</li>
+                    </ol>
+                    
+                    <div class="code-box">
+https://localhost/auth/ebay/callback
+                    </div>
+                    
+                    <ol start="4">
+                        <li>Click <strong>"Save"</strong></li>
+                        <li>Later, your developer will provide you with the actual URL to update this</li>
+                    </ol>
+                </div>
+
+                <div class="step">
+                    <h3><span class="step-number">7</span> Enable Required Scopes</h3>
+                    <ol>
+                        <li>In your application settings, look for <strong>"OAuth Scopes"</strong> or <strong>"Permissions"</strong></li>
+                        <li>Make sure these are enabled:
+                            <ul>
+                                <li>✅ <code>https://api.ebay.com/oauth/api_scope/sell.inventory</code> (manage inventory)</li>
+                                <li>✅ <code>https://api.ebay.com/oauth/api_scope/sell.fulfillment</code> (manage orders)</li>
+                                <li>✅ <code>https://api.ebay.com/oauth/api_scope/sell.account</code> (account access)</li>
+                            </ul>
+                        </li>
+                        <li>Click <strong>"Save Changes"</strong></li>
+                    </ol>
+                </div>
+
+                <div class="step">
+                    <h3><span class="step-number">8</span> Get Your OAuth User Token</h3>
+                    <p>This requires authorization:</p>
+                    
+                    <div class="info-box">
+                        <strong>Method 1: Developer Assisted</strong>
+                        <ol>
+                            <li>Your developer will create an authorization URL using your App ID</li>
+                            <li>Visit that URL in your browser</li>
+                            <li>You'll see an eBay login/consent screen</li>
+                            <li>Click <strong>"Agree"</strong> or <strong>"Authorize"</strong></li>
+                            <li>You'll be redirected to a page with a code</li>
+                            <li>Share that code with your developer, who will exchange it for an access token</li>
+                        </ol>
+                    </div>
+                    
+                    <div class="info-box" style="margin-top: 10px;">
+                        <strong>Method 2: Alternative Method</strong>
+                        <ol>
+                            <li>In eBay Developer Program, go to <strong>"User Tokens"</strong></li>
+                            <li>Click <strong>"Generate User Token"</strong></li>
+                            <li>Select your application</li>
+                            <li>Choose the same scopes as above</li>
+                            <li>Click <strong>"Generate Token"</strong></li>
+                            <li>Copy and save the token</li>
+                        </ol>
+                    </div>
+                    
+                    <div class="warning-box">
+                        <strong>⚠️ Save This:</strong>
+                    </div>
+                    
+                    <div class="code-box">
+eBay OAuth User Token: [paste here]
+eBay OAuth Refresh Token: [paste here - if provided]
+Token Expiration Date: [paste here]
+                    </div>
+                </div>
+
+                <div class="step">
+                    <h3><span class="step-number">9</span> Set Up Notifications (Optional)</h3>
+                    <ol>
+                        <li>Go to <strong>"Notifications"</strong> in the Developer Program</li>
+                        <li>Click <strong>"Create Notification"</strong></li>
+                        <li>Select <strong>"Platform Notifications"</strong></li>
+                        <li>Choose notification types:
+                            <ul>
+                                <li>✅ Order created</li>
+                                <li>✅ Order updated</li>
+                                <li>✅ Item sold</li>
+                            </ul>
+                        </li>
+                        <li>Enter your webhook URL (your developer will provide this)</li>
+                        <li>Click <strong>"Subscribe"</strong></li>
+                    </ol>
+                </div>
+
+                <div class="step">
+                    <h3><span class="step-number">10</span> Get Your Seller Account Information</h3>
+                    <p>You'll also need these details:</p>
+                    <ol>
+                        <li>Go to your regular eBay Seller Account</li>
+                        <li>Click <strong>"Account"</strong> → <strong>"Personal Information"</strong></li>
+                        <li>Find and save:</li>
+                    </ol>
+                    
+                    <div class="code-box">
+eBay User ID: [your seller username]
+eBay Site ID: [e.g., 0 for US, 3 for UK, 77 for Germany]
+                    </div>
+                </div>
+
+                <div class="success-box">
+                    <strong>⏰ Approval Wait Time:</strong> eBay typically approves developer accounts within 1-2 business days. You'll receive an email confirmation.
+                </div>
+            </div>
+
+            <!-- Shopify Section -->
+            <div id="shopify" class="section">
+                <div class="section-header">
+                    <span class="platform-icon">🟢</span>
+                    <div>
+                        <h2>Part 3: Shopify Setup</h2>
+                        <p style="color: #666; font-size: 14px;">Setting up Shopify Admin API</p>
+                    </div>
+                    <span class="time-badge" style="background: #28a745;">⏱️ 30 min - Instant!</span>
+                </div>
+
+                <div class="step">
+                    <h3><span class="step-number">1</span> Access Your Shopify Admin</h3>
+                    <ol>
+                        <li>Log in to your Shopify store at: <strong>https://[your-store-name].myshopify.com/admin</strong></li>
+                        <li>Replace <code>[your-store-name]</code> with your actual store name</li>
+                        <li>Enter your Shopify admin credentials</li>
+                    </ol>
+                </div>
+
+                <div class="step">
+                    <h3><span class="step-number">2</span> Enable Custom App Development</h3>
+                    <ol>
+                        <li>In the left sidebar, click <strong>"Settings"</strong> at the bottom</li>
+                        <li>Click on <strong>"Apps and sales channels"</strong></li>
+                        <li>Click <strong>"Develop apps"</strong> at the top</li>
+                        <li>If you see a message saying "App development is disabled":
+                            <ul>
+                                <li>Click <strong>"Allow custom app development"</strong></li>
+                                <li>Confirm by clicking <strong>"Allow custom app development"</strong> again</li>
+                            </ul>
+                        </li>
+                    </ol>
+                </div>
+
+                <div class="step">
+                    <h3><span class="step-number">3</span> Create a Custom App</h3>
+                    <ol>
+                        <li>Click <strong>"Create an app"</strong> button</li>
+                        <li>Enter the app name:</li>
+                    </ol>
+                    
+                    <div class="code-box">
+App Name: Warehouse Management Integration
+                    </div>
+                    
+                    <ol start="3">
+                        <li>In the <strong>"App developer"</strong> field, select yourself or your primary admin email</li>
+                        <li>Click <strong>"Create app"</strong></li>
+                    </ol>
+                </div>
+
+                <div class="step">
+                    <h3><span class="step-number">4</span> Configure API Scopes (Permissions)</h3>
+                    <ol>
+                        <li>After creating the app, click the <strong>"Configuration"</strong> tab</li>
+                        <li>Under <strong>"Admin API integration"</strong>, click <strong>"Configure"</strong></li>
+                        <li>Enable these permissions:
+                            <ul>
+                                <li>✅ <strong>Orders:</strong> <code>read_orders</code>, <code>write_orders</code></li>
+                                <li>✅ <strong>Inventory:</strong> <code>read_inventory</code>, <code>write_inventory</code></li>
+                                <li>✅ <strong>Products:</strong> <code>read_products</code>, <code>write_products</code> (optional)</li>
+                                <li>✅ <strong>Fulfillment:</strong> <code>read_fulfillments</code>, <code>write_fulfillments</code></li>
+                            </ul>
+                        </li>
+                        <li>Click <strong>"Save"</strong> at the bottom</li>
+                    </ol>
+                </div>
+
+                <div class="step">
+                    <h3><span class="step-number">5</span> Install the App</h3>
+                    <ol>
+                        <li>Click on the <strong>"API credentials"</strong> tab</li>
+                        <li>Click <strong>"Install app"</strong> button</li>
+                        <li>You'll see a confirmation popup</li>
+                        <li>Click <strong>"Install"</strong> to confirm</li>
+                    </ol>
+                </div>
+
+                <div class="step">
+                    <h3><span class="step-number">6</span> Get Your API Credentials</h3>
+                    <p>After installing, you'll see your credentials:</p>
+                    
+                    <div class="warning-box">
+                        <strong>⚠️ COPY THESE IMMEDIATELY!</strong> The Admin API access token is only shown once!
+                    </div>
+                    
+                    <div class="code-box">
+Shopify Store URL: [your-store-name].myshopify.com
+Shopify API Key: [paste here]
+Shopify API Secret Key: [click "Reveal" to see it, then paste here]
+Admin API Access Token: [paste here - VERY IMPORTANT!]
+API Version: 2024-01 (or latest version shown)
+                    </div>
+                    
+                    <div class="warning-box">
+                        <strong>⚠️ If you miss copying the access token:</strong> You'll need to uninstall and reinstall the app to see it again.
+                    </div>
+                </div>
+
+                <div class="step">
+                    <h3><span class="step-number">7</span> Enable Webhooks</h3>
+                    <ol>
+                        <li>In your app, go to <strong>"Configuration"</strong> tab</li>
+                        <li>Scroll to <strong>"Webhooks"</strong> section</li>
+                        <li>Click <strong>"Create webhook"</strong></li>
+                        <li>Create webhooks for these events:</li>
+                    </ol>
+                    
+                    <div class="info-box">
+                        <strong>Order Webhooks:</strong>
+                        <ul>
+                            <li>Event: <code>orders/create</code></li>
+                            <li>URL: <em>[Your developer will provide this]</em></li>
+                            <li>Click <strong>"Save"</strong></li>
+                        </ul>
+                        <ul style="margin-top: 10px;">
+                            <li>Event: <code>orders/updated</code></li>
+                            <li>URL: <em>[Same as above]</em></li>
+                            <li>Click <strong>"Save"</strong></li>
+                        </ul>
+                    </div>
+                    
+                    <div class="info-box" style="margin-top: 10px;">
+                        <strong>Inventory Webhooks:</strong>
+                        <ul>
+                            <li>Event: <code>inventory_levels/update</code></li>
+                            <li>URL: <em>[Same as above]</em></li>
+                            <li>Click <strong>"Save"</strong></li>
+                        </ul>
+                    </div>
+                    
+                    <ol start="5">
+                        <li>For now, you can use a temporary URL like <code>https://example.com/webhook</code></li>
+                        <li>Your developer will give you the real webhook URL to update later</li>
+                    </ol>
+                </div>
+
+                <div class="step">
+                    <h3><span class="step-number">8</span> Test Your Setup</h3>
+                    <ol>
+                        <li>Go to your Shopify Admin → <strong>"Orders"</strong></li>
+                        <li>Create a test order (you can mark it as test order)</li>
+                        <li>Your developer can verify if the order data can be accessed via the API</li>
+                        <li>✅ If successful, you're all set!</li>
+                    </ol>
+                </div>
+
+                <div class="step">
+                    <h3><span class="step-number">9</span> Note Your Shop Information</h3>
+                    <p>You'll also need these details:</p>
+                    
+                    <div class="code-box">
+Shop ID: [found in Settings → General → bottom of page]
+Shop Domain: [your-store-name].myshopify.com
+Primary Location ID: [Settings → Locations → click your location → ID in URL]
+                    </div>
+                </div>
+
+                <div class="success-box">
+                    <strong>⏰ Approval Wait Time:</strong> None! Shopify custom apps work immediately. ✅
+                </div>
+            </div>
+
+            <!-- Final Checklist -->
+            <div id="checklist" class="section">
+                <h2 style="margin-bottom: 20px;">📋 Final Checklist</h2>
+                <p>Before sending credentials to your developer, make sure you have all of these:</p>
+
+                <h3 style="margin-top: 30px; color: #FF9800;">Amazon Credentials</h3>
+                <ul class="checklist">
+                    <li>Amazon Client ID</li>
+                    <li>Amazon Client Secret</li>
+                    <li>Amazon Refresh Token</li>
+                    <li>Amazon Seller ID</li>
+                    <li>Amazon Marketplace ID (e.g., ATVPDKIKX0DER)</li>
+                    <li>SQS Queue URL (optional)</li>
+                </ul>
+
+                <h3 style="margin-top: 30px; color: #E53935;">eBay Credentials</h3>
+                <ul class="checklist">
+                    <li>eBay App ID (Client ID)</li>
+                    <li>eBay Dev ID</li>
+                    <li>eBay Cert ID (Client Secret)</li>
+                    <li>eBay OAuth User Token</li>
+                    <li>eBay Refresh Token</li>
+                    <li>eBay User ID (seller username)</li>
+                    <li>eBay Site ID (e.g., 0 for US)</li>
+                </ul>
+
+                <h3 style="margin-top: 30px; color: #4CAF50;">Shopify Credentials</h3>
+                <ul class="checklist">
+                    <li>Shopify Store URL</li>
+                    <li>Shopify API Key</li>
+                    <li>Shopify API Secret Key</li>
+                    <li>Shopify Admin API Access Token</li>
+                    <li>API Version (e.g., 2024-01)</li>
+                    <li>Shop ID</li>
+                    <li>Primary Location ID</li>
+                </ul>
+            </div>
+
+            <!-- Security Section -->
+            <div id="security" class="section">
+                <h2 style="margin-bottom: 20px;">🔐 Security Best Practices</h2>
+
+                <div class="success-box">
+                    <strong>✅ DO:</strong>
+                    <ul style="margin-top: 10px; margin-left: 20px;">
+                        <li>Store credentials in a password manager (LastPass, 1Password, etc.)</li>
+                        <li>Only share credentials with trusted developers via secure channels</li>
+                        <li>Use password-protected documents or encrypted email</li>
+                        <li>Regularly review authorized apps in each marketplace</li>
+                        <li>Enable two-factor authentication on all marketplace accounts</li>
+                    </ul>
+                </div>
+
+                <div class="warning-box">
+                    <strong>❌ DON'T:</strong>
+                    <ul style="margin-top: 10px; margin-left: 20px;">
+                        <li>Share credentials via plain email or text message</li>
+                        <li>Save credentials in unsecured documents</li>
+                        <li>Share your master login passwords (API tokens are separate)</li>
+                        <li>Authorize apps you don't recognize</li>
+                        <li>Take screenshots of credentials and store them unencrypted</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Help Section -->
+            <div id="help" class="section">
+                <h2 style="margin-bottom: 20px;">🆘 Common Issues & Getting Help</h2>
+
+                <div class="info-box">
+                    <strong>Issue: "I can't find the Developer section on Amazon"</strong><br>
+                    <strong>Solution:</strong> Make sure you're on <code>https://developer.amazonservices.com</code> (NOT regular Amazon.com or Seller Central). It's a separate portal.
+                </div>
+
+                <div class="info-box">
+                    <strong>Issue: "I accidentally closed the Shopify token page"</strong><br>
+                    <strong>Solution:</strong> Go back to Apps → Your app → API credentials → Click "Uninstall app" → Click "Install app" again → You'll see the token again!
+                </div>
+
+                <div class="info-box">
+                    <strong>Issue: "My tokens keep expiring"</strong><br>
+                    <strong>Solution:</strong> Amazon refresh tokens don't expire. eBay tokens expire every 18 months (you'll need to regenerate). Shopify tokens don't expire unless you uninstall the app.
+                </div>
+
+                <h3 style="margin-top: 30px; margin-bottom: 15px;">Contact Support</h3>
+
+                <div class="support-card">
+                    <h4>🟠 Amazon Support</h4>
+                    <p><strong>URL:</strong> https://sellercentral.amazon.com/gp/contact-us</p>
+                    <p><strong>Phone (US):</strong> 1-866-216-1072</p>
+                    <p><strong>Search for:</strong> "SP-API" or "Developer support"</p>
+                </div>
+
+                <div class="support-card">
+                    <h4>🔴 eBay Developer Support</h4>
+                    <p><strong>URL:</strong> https://developer.ebay.com/support</p>
+                    <p><strong>Forum:</strong> https://community.ebay.com/t5/Developer/ct-p/developer-apis</p>
+                </div>
+
+                <div class="support-card">
+                    <h4>🟢 Shopify Support</h4>
+                    <p><strong>Help Center:</strong> https://help.shopify.com</p>
+                    <p><strong>Live Chat:</strong> Available 24/7 in your admin</p>
+                </div>
+            </div>
+
+            <!-- Timeline Summary -->
+            <div class="section">
+                <h2 style="margin-bottom: 20px;">📅 Timeline Summary</h2>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Marketplace</th>
+                                <th>Setup Time</th>
+                                <th>Approval Wait</th>
+                                <th>Total Time</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>🟠 Amazon</td>
+                                <td>30-45 min</td>
+                                <td>2-3 days</td>
+                                <td>~3 days</td>
+                            </tr>
+                            <tr>
+                                <td>🔴 eBay</td>
+                                <td>30 min</td>
+                                <td>1-2 days</td>
+                                <td>~2 days</td>
+                            </tr>
+                            <tr>
+                                <td>🟢 Shopify</td>
+                                <td>20-30 min</td>
+                                <td>Immediate</td>
+                                <td>~30 min</td>
+                            </tr>
+                            <tr style="background: #f5f5f5; font-weight: bold;">
+                                <td>TOTAL</td>
+                                <td>~1.5 hours</td>
+                                <td>2-3 days</td>
+                                <td>~3 days</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="info-box" style="margin-top: 20px;">
+                    <strong>💡 Pro Tip:</strong> Start with Amazon first (longest approval), then eBay, then Shopify. By the time you finish Shopify, Amazon should be approved!
+                </div>
+            </div>
+
+            <!-- Next Steps -->
+            <div class="section">
+                <h2 style="margin-bottom: 20px;">✅ Next Steps</h2>
+                <p>Once you've gathered all the credentials:</p>
+
+                <ol style="margin: 20px 0; margin-left: 20px;">
+                    <li style="margin: 10px 0;"><strong>Securely share them with your developer</strong>
+                        <ul style="margin-left: 20px;">
+                            <li>Use a password-protected document</li>
+                            <li>Or a secure sharing service like 1Password shared vaults</li>
+                            <li>Never send via plain email or chat</li>
+                        </ul>
+                    </li>
+                    <li style="margin: 10px 0;"><strong>Your developer will:</strong>
+                        <ul style="margin-left: 20px;">
+                            <li>Test the credentials</li>
+                            <li>Set up the integration</li>
+                            <li>Update the webhook URLs</li>
+                            <li>Test the complete flow</li>
+                        </ul>
+                    </li>
+                    <li style="margin: 10px 0;"><strong>You'll be able to:</strong>
+                        <ul style="margin-left: 20px;">
+                            <li>See all your orders in one place</li>
+                            <li>Update inventory once, sync everywhere</li>
+                            <li>Ship orders faster</li>
+                            <li>Reduce manual data entry by 80%+</li>
+                        </ul>
+                    </li>
+                </ol>
+
+                <div class="success-box" style="margin-top: 30px; text-align: center; padding: 20px;">
+                    <h3 style="margin-bottom: 10px;">🎉 Congratulations!</h3>
+                    <p>Once you complete these steps, your warehouse system will be connected to all your marketplaces, making your life much easier!</p>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="footer">
+            <p><strong>Document Version:</strong> 1.0 | <strong>Last Updated:</strong> October 17, 2024</p>
+            <p style="margin-top: 10px;">Created for: Warehouse Management System Marketplace Integration</p>
+            <p style="margin-top: 10px; font-size: 14px;">Questions? Contact your developer or refer back to this guide</p>
+        </div>
+    </div>
+</body>
+</html>
+
