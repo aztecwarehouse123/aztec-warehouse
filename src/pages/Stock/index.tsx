@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback} from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef} from 'react';
 import { Plus, Search, Edit2, Trash2, Loader2, CheckSquare, RefreshCw, ChevronDown, Play } from 'lucide-react';
 // import { motion } from 'framer-motion';
 import Button from '../../components/ui/Button';
@@ -64,6 +64,13 @@ const Stock: React.FC = () => {
     barcode: string;
     existingLocations: StockItem[];
   } | null>(null);
+  
+  // Ref to store scroll position before edit
+  const savedScrollPosition = useRef<number>(0);
+  const shouldRestoreScroll = useRef<boolean>(false);
+  const editedItemId = useRef<string | null>(null);
+  const scrollRestoreTimeoutId = useRef<NodeJS.Timeout | null>(null);
+  const hasRestoredScroll = useRef<boolean>(false);
 
 
   // Debounce search input
@@ -115,6 +122,90 @@ const Stock: React.FC = () => {
     fetchStockItems();
     fetchTotalCount();
   }, [fetchStockItems,fetchTotalCount]);
+
+  // Restore scroll position after items update when editing
+  useEffect(() => {
+    // Only restore scroll if conditions are met and we're still in restoration window
+    if (shouldRestoreScroll.current && !isEditModalOpen && !isLoading && !isQuantityConfirmModalOpen) {
+      // Clear any existing timeout to reschedule restoration
+      if (scrollRestoreTimeoutId.current) {
+        clearTimeout(scrollRestoreTimeoutId.current);
+      }
+      
+      // Use multiple requestAnimationFrames to ensure DOM has fully updated
+      // This waits for the browser to complete the render cycle
+      const restoreScroll = () => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            // Additional small delay to ensure everything is settled
+            const finalTimeout = setTimeout(() => {
+              const targetPosition = savedScrollPosition.current;
+              window.scrollTo({
+                top: targetPosition,
+                behavior: 'auto'
+              });
+              
+              // Mark that we've restored (for tracking purposes)
+              hasRestoredScroll.current = true;
+              
+              // Don't reset flags here - keep them active for a longer period
+              // This allows multiple restorations if items update again
+              scrollRestoreTimeoutId.current = null;
+            }, 50);
+            
+            // Store the final timeout ID to clear if needed
+            scrollRestoreTimeoutId.current = finalTimeout;
+          });
+        });
+      };
+      
+      // Initial delay to ensure state updates have propagated
+      // Use a longer delay to wait for all possible updates to complete
+      scrollRestoreTimeoutId.current = setTimeout(restoreScroll, 150);
+      
+      return () => {
+        if (scrollRestoreTimeoutId.current) {
+          clearTimeout(scrollRestoreTimeoutId.current);
+          scrollRestoreTimeoutId.current = null;
+        }
+      };
+    }
+  }, [items, isEditModalOpen, isLoading, isQuantityConfirmModalOpen]);
+
+  // Clean up restoration flags after a longer period when editing is complete
+  // Use a ref to store the timeout so we can reset it when items update
+  const cleanupTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  useEffect(() => {
+    // Clear any existing cleanup timeout
+    if (cleanupTimeoutRef.current) {
+      clearTimeout(cleanupTimeoutRef.current);
+      cleanupTimeoutRef.current = null;
+    }
+    
+    if (!shouldRestoreScroll.current) {
+      // Reset all flags when restoration is disabled
+      hasRestoredScroll.current = false;
+      editedItemId.current = null;
+    } else if (shouldRestoreScroll.current && !isEditModalOpen && !isLoading && !isQuantityConfirmModalOpen) {
+      // Reset cleanup timeout every time items update (this extends the window)
+      // Auto-disable restoration after 3 seconds of inactivity to prevent indefinite restoration
+      cleanupTimeoutRef.current = setTimeout(() => {
+        shouldRestoreScroll.current = false;
+        hasRestoredScroll.current = false;
+        editedItemId.current = null;
+        scrollRestoreTimeoutId.current = null;
+        cleanupTimeoutRef.current = null;
+      }, 3000);
+    }
+    
+    return () => {
+      if (cleanupTimeoutRef.current) {
+        clearTimeout(cleanupTimeoutRef.current);
+        cleanupTimeoutRef.current = null;
+      }
+    };
+  }, [items, isEditModalOpen, isLoading, isQuantityConfirmModalOpen]);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -660,6 +751,11 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
 
   const handleEditClick = useCallback((e: React.MouseEvent, item: StockItem) => {
     e.stopPropagation();
+    // Save current scroll position before opening edit modal
+    savedScrollPosition.current = window.pageYOffset || document.documentElement.scrollTop;
+    editedItemId.current = item.id;
+    shouldRestoreScroll.current = true;
+    hasRestoredScroll.current = false; // Reset flag for new edit session
     setSelectedItem(item);
     setIsEditModalOpen(true);
   }, []);
