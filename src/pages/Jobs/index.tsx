@@ -1215,14 +1215,53 @@ const Jobs: React.FC = () => {
         item.verified || jobVerifiedItems.includes(item.barcode)
       ).length;
       
-      // Update job items with verification status
-      const updatedItems = job.items.map(item => ({
-        ...item,
-        verified: jobVerifiedItems.includes(item.barcode) || item.verified
-      }));
+      // Validate and fix items before updating - ensure all required fields are present
+      // Firestore doesn't accept undefined values, so we need to use null or omit fields
+      const updatedItems: FirestoreJobItem[] = job.items.map(item => {
+        // Ensure all required fields have valid values
+        const validatedItem: FirestoreJobItem = {
+          barcode: item.barcode || '',
+          name: item.name ?? null,
+          asin: item.asin ?? null,
+          quantity: Number(item.quantity) || 1,
+          verified: jobVerifiedItems.includes(item.barcode) || item.verified,
+          reason: item.reason || 'Unknown',
+          storeName: item.storeName || 'Unknown'
+        };
+        
+        // Only include optional fields if they have values (Firestore doesn't accept undefined)
+        if (item.locationCode) {
+          validatedItem.locationCode = item.locationCode;
+        }
+        if (item.shelfNumber) {
+          validatedItem.shelfNumber = item.shelfNumber;
+        }
+        if (item.stockItemId) {
+          validatedItem.stockItemId = item.stockItemId;
+        }
+        
+        return validatedItem;
+      });
+      
+      // Check for items with missing critical data
+      const invalidItems = updatedItems.filter(item => !item.barcode || !item.reason || !item.storeName);
+      if (invalidItems.length > 0) {
+        console.error('Invalid items found:', invalidItems);
+        showToast(`Job ${job.jobId} has ${invalidItems.length} item(s) with missing required data (barcode, reason, or storeName). Please check the job items.`, 'error');
+        return;
+      }
+      
+      // Verify the job document exists before updating
+      const jobDocRef = doc(db, 'jobs', job.id);
+      const jobDoc = await getDoc(jobDocRef);
+      if (!jobDoc.exists()) {
+        showToast(`Job ${job.jobId} not found in database. It may have been deleted.`, 'error');
+        fetchJobs(); // Refresh to sync with database
+        return;
+      }
       
       // Update the job in database with all verified items
-      await updateDoc(doc(db, 'jobs', job.id), { 
+      await updateDoc(jobDocRef, { 
         status: 'completed', 
         packer: user?.name || job.packer || null,
         items: updatedItems
@@ -1243,9 +1282,22 @@ const Jobs: React.FC = () => {
       
       showToast(`Job ${job.jobId} completed successfully with ${totalVerifiedCount}/${job.items.length} items verified`, 'success');
       fetchJobs();
-    } catch (error) { 
-      console.log('error', error);
-      showToast('Failed to complete job', 'error'); 
+    } catch (error: unknown) { 
+      console.error('Error completing job:', error);
+      const errorMessage = (error instanceof Error && error.message) ? error.message : 'Unknown error';
+      const errorCode = (error && typeof error === 'object' && 'code' in error && typeof error.code === 'string') ? error.code : '';
+      
+      // Provide more specific error messages
+      if (errorCode === 'permission-denied') {
+        showToast(`Permission denied: Unable to complete job ${job.jobId}. Please check your permissions.`, 'error');
+      } else if (errorCode === 'not-found') {
+        showToast(`Job ${job.jobId} not found in database. It may have been deleted.`, 'error');
+        fetchJobs(); // Refresh to sync with database
+      } else if (errorMessage.includes('Invalid data') || errorMessage.includes('Field value') || errorMessage.includes('undefined')) {
+        showToast(`Invalid data in job ${job.jobId}: ${errorMessage}. Please check job items.`, 'error');
+      } else {
+        showToast(`Failed to complete job ${job.jobId}: ${errorMessage}`, 'error');
+      }
     }
   };
 
