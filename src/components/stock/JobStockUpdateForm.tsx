@@ -16,6 +16,7 @@ interface JobStockUpdateFormProps {
 }
 
 interface LocationInfo {
+  id: string; // Document ID to uniquely identify each product entry
   locationCode: string;
   shelfNumber: string;
   quantity: number;
@@ -65,6 +66,7 @@ const JobStockUpdateForm: React.FC<JobStockUpdateFormProps> = ({ item, onSubmit,
           
           if (data.locationCode && data.shelfNumber && (data.quantity || 0) > 0) {
             locations.push({
+              id: doc.id, // Store document ID to uniquely identify each product entry
               // Normalize to strings to avoid strict equality mismatches (number vs string)
               locationCode: String(data.locationCode).trim(),
               shelfNumber: String(data.shelfNumber).trim(),
@@ -74,19 +76,20 @@ const JobStockUpdateForm: React.FC<JobStockUpdateFormProps> = ({ item, onSubmit,
           }
         });
 
-        // Remove duplicates and sort by location
-        const uniqueLocations = locations.filter((location, index, self) => 
-          index === self.findIndex(l => 
-            l.locationCode === location.locationCode && l.shelfNumber === location.shelfNumber
-          )
-        ).sort((a, b) => a.locationCode.localeCompare(b.locationCode));
+        // Sort by location code and shelf number, but keep all entries (no deduplication)
+        // Each product entry is separate even if they share the same location
+        const sortedLocations = locations.sort((a, b) => {
+          const locationCompare = a.locationCode.localeCompare(b.locationCode);
+          if (locationCompare !== 0) return locationCompare;
+          return String(a.shelfNumber).localeCompare(String(b.shelfNumber));
+        });
 
-        setAvailableLocations(uniqueLocations);
+        setAvailableLocations(sortedLocations);
         
         // Auto-select first location if available
-        if (uniqueLocations.length > 0) {
-          const firstLocation = uniqueLocations[0];
-          setSelectedLocation(`${firstLocation.locationCode}-${firstLocation.shelfNumber}`);
+        if (sortedLocations.length > 0) {
+          const firstLocation = sortedLocations[0];
+          setSelectedLocation(firstLocation.id); // Use document ID as the value
           setStoreName(firstLocation.storeName);
         }
       } catch (error) {
@@ -104,10 +107,8 @@ const JobStockUpdateForm: React.FC<JobStockUpdateFormProps> = ({ item, onSubmit,
     setSelectedLocation(locationValue);
     
     if (locationValue) {
-      const [locationCode, shelfNumber] = locationValue.split('-');
-      const selectedLocationData = availableLocations.find(loc => 
-        String(loc.locationCode) === String(locationCode) && String(loc.shelfNumber) === String(shelfNumber)
-      );
+      // Value is the document ID
+      const selectedLocationData = availableLocations.find(loc => loc.id === locationValue);
       
       if (selectedLocationData) {
         setStoreName(selectedLocationData.storeName);
@@ -129,24 +130,25 @@ const JobStockUpdateForm: React.FC<JobStockUpdateFormProps> = ({ item, onSubmit,
     const finalReason = reason === 'other' ? otherReason : reason;
     const finalStoreName = storeName.trim();
     
-    const [locationCode, shelfNumber] = selectedLocation.split('-');
+    // Value is the document ID
+    const selectedLocationData = availableLocations.find(loc => loc.id === selectedLocation);
+    
+    if (!selectedLocationData) return;
     
     await onSubmit({ 
-      id: item.id, 
-      quantity: item.quantity - quantityNum, 
+      id: selectedLocationData.id, // Use the specific document ID for this product entry
+      quantity: selectedLocationData.quantity - quantityNum, // Use the quantity from the selected location
       reason: finalReason,
       storeName: finalStoreName,
-      locationCode,
-      shelfNumber
+      locationCode: selectedLocationData.locationCode,
+      shelfNumber: selectedLocationData.shelfNumber
     });
   };
 
   const getMaxQuantityForLocation = () => {
     if (!selectedLocation) return item.quantity;
-    const [locationCode, shelfNumber] = selectedLocation.split('-');
-    const location = availableLocations.find(loc => 
-      String(loc.locationCode) === String(locationCode) && String(loc.shelfNumber) === String(shelfNumber)
-    );
+    // Value is the document ID
+    const location = availableLocations.find(loc => loc.id === selectedLocation);
     return location ? location.quantity : item.quantity;
   };
 
@@ -220,7 +222,7 @@ const JobStockUpdateForm: React.FC<JobStockUpdateFormProps> = ({ item, onSubmit,
               options={[
                 { value: '', label: 'Select a location' },
                 ...availableLocations.map(loc => ({
-                  value: `${loc.locationCode}-${loc.shelfNumber}`,
+                  value: loc.id, // Use document ID as the value
                   label: `${loc.locationCode} - Shelf ${loc.shelfNumber} (${loc.quantity} units) - ${loc.storeName?.toUpperCase()}`
                 }))
               ]}

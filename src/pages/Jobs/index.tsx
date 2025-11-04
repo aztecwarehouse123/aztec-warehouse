@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Plus, RefreshCw, CheckSquare, ClipboardList, Trash2, ChevronUp, ChevronDown, Search, ArrowLeft, Calculator, Clock } from 'lucide-react';
 import { db } from '../../config/firebase';
-import { addDoc, collection, deleteDoc, doc, getDocs, orderBy, query, serverTimestamp, Timestamp, updateDoc, where, onSnapshot } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, orderBy, query, serverTimestamp, Timestamp, updateDoc, where, onSnapshot } from 'firebase/firestore';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '../../contexts/ToastContext';
 import Button from '../../components/ui/Button';
@@ -43,6 +43,7 @@ type FirestoreJobItem = {
   shelfNumber?: string;
   reason?: string;
   storeName?: string;
+  stockItemId?: string; // Document ID of the stock item
 };
 
 type FirestoreJob = {
@@ -602,6 +603,7 @@ const Jobs: React.FC = () => {
             shelfNumber: it.shelfNumber,
             reason: it.reason || 'Unknown',
             storeName: it.storeName || 'Unknown',
+            stockItemId: it.stockItemId, // Include document ID if available
           })) : [],
           pickingTime: data.pickingTime || 0,
         };
@@ -875,52 +877,32 @@ const Jobs: React.FC = () => {
   const handleStockUpdate = async (data: { id: string; quantity: number; reason: string; storeName: string; locationCode: string; shelfNumber: string }) => {
     if (!selectedStockItem) return;
     
-    // Calculate the deducted quantity
-    const deductedQuantity = selectedStockItem.quantity - data.quantity;
+    let deductedQuantity = 0; // Declare outside try block so it's accessible later
     
-    // Find the specific stock item for this location (not just by barcode)
-    // Use a resilient matching to account for mixed data types and duplicates
+    // Use the specific document ID that was selected
     try {
-      const baseQuery = query(
-        collection(db, 'inventory'),
-        where('barcode', '==', selectedStockItem.barcode),
-        where('locationCode', '==', String(data.locationCode).trim())
-      );
-      const baseSnapshot = await getDocs(baseQuery);
+      const stockDocRef = doc(db, 'inventory', data.id);
+      const stockDoc = await getDoc(stockDocRef);
 
-      if (baseSnapshot.empty) {
-        showToast('Stock item not found for this location', 'error');
+      if (!stockDoc.exists()) {
+        showToast('Stock item not found', 'error');
         return;
       }
 
-      const targetShelfStr = String(data.shelfNumber).trim();
-      const targetShelfNum = Number(targetShelfStr);
-
-      // Filter by shelf match across string or numeric representations
-      const matchingDocs = baseSnapshot.docs.filter(d => {
-        const docShelf = d.data().shelfNumber;
-        return String(docShelf).trim() === targetShelfStr || (!Number.isNaN(targetShelfNum) && Number(docShelf) === targetShelfNum);
-      });
-
-      if (matchingDocs.length === 0) {
-        showToast('Stock item not found for this shelf', 'error');
-        return;
-      }
-
-      // Prefer the document with the highest positive quantity
-      const bestDoc = matchingDocs
-        .slice()
-        .sort((a, b) => (Number(b.data().quantity) || 0) - (Number(a.data().quantity) || 0))[0];
-
+      const docData = stockDoc.data();
+      const currentQuantity = Number(docData.quantity) || 0;
       const locationSpecificStockItem = {
         ...selectedStockItem,
-        id: bestDoc.id,
-        quantity: Number(bestDoc.data().quantity) || 0
+        id: stockDoc.id,
+        quantity: currentQuantity
       };
 
+      // Calculate the deducted quantity (data.quantity is the new quantity after deduction)
+      deductedQuantity = currentQuantity - data.quantity;
+
       // Validate that we don't deduct more than available
-      if (deductedQuantity > locationSpecificStockItem.quantity) {
-        showToast(`Cannot deduct ${deductedQuantity} units - only ${locationSpecificStockItem.quantity} units available at this location`, 'error');
+      if (deductedQuantity > currentQuantity) {
+        showToast(`Cannot deduct ${deductedQuantity} units - only ${currentQuantity} units available at this location`, 'error');
         return;
       }
 
@@ -943,25 +925,28 @@ const Jobs: React.FC = () => {
       return;
     }
     
-    // Add the barcode to the job items - treat barcode+location as unique identifier
+    // Add the barcode to the job items - use stockItemId to uniquely identify separate entries
     if (selectedStockItem.barcode) {
       setNewJobItems(prev => {
         const barcode = selectedStockItem.barcode!;
         
-        // Check if this exact barcode+location combination already exists
+        // Check if this exact stockItemId already exists (for separate entries at same location)
+        // Fall back to barcode+location if stockItemId is not available
         const existingIndex = prev.findIndex(item => 
-          item.barcode === barcode && 
-          item.locationCode === data.locationCode && 
-          item.shelfNumber === data.shelfNumber
+          item.stockItemId 
+            ? item.stockItemId === data.id 
+            : (item.barcode === barcode && 
+               item.locationCode === data.locationCode && 
+               item.shelfNumber === data.shelfNumber)
         );
         
         if (existingIndex >= 0) {
-          // Update existing item quantity for this specific location
+          // Update existing item quantity for this specific stock item entry
           const updated = [...prev];
           updated[existingIndex] = { ...updated[existingIndex], quantity: updated[existingIndex].quantity + deductedQuantity };
           return updated;
         } else {
-          // Add new item with location information
+          // Add new item with location information and stock item ID
           return [...prev, { 
             barcode: barcode, 
             name: selectedStockItem.name, // Add product name
@@ -970,7 +955,8 @@ const Jobs: React.FC = () => {
             locationCode: data.locationCode,
             shelfNumber: data.shelfNumber,
             reason: data.reason,
-            storeName: data.storeName
+            storeName: data.storeName,
+            stockItemId: data.id // Include document ID to distinguish separate entries at same location
           }];
         }
       });
@@ -1006,7 +992,8 @@ const Jobs: React.FC = () => {
         locationCode: data.locationCode,
         shelfNumber: data.shelfNumber,
         reason: data.reason,
-        storeName: data.storeName
+        storeName: data.storeName,
+        stockItemId: data.id // Include document ID to distinguish separate entries at same location
       };
       
       await updateDoc(doc(db, 'liveJobSessions', sessionDoc.id), {

@@ -98,4 +98,5 @@ export interface JobItem {
   shelfNumber?: string;
   reason: string;
   storeName: string;
+  stockItemId?: string; // Document ID of the stock item to uniquely identify separate entries at the same location
 }
