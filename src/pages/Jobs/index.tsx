@@ -133,16 +133,18 @@ const Jobs: React.FC = () => {
 
   // Reports state
   const [reportDate, setReportDate] = useState<Date>(() => {
-    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
     // Set to start of day to avoid timezone issues
-    today.setHours(0, 0, 0, 0);
-    return today;
+    yesterday.setHours(0, 0, 0, 0);
+    return yesterday;
   });
   const [selectedUserForChart, setSelectedUserForChart] = useState<string>('');
   const [dateRange, setDateRange] = useState<{ start: Date; end: Date }>(() => {
     const end = new Date();
+    end.setDate(end.getDate() - 1); // Default to yesterday
     const start = new Date();
-    start.setDate(start.getDate() - 6); // Default to last 7 days
+    start.setDate(start.getDate() - 7); // Default to last 7 days from yesterday
     start.setHours(0, 0, 0, 0);
     end.setHours(23, 59, 59, 999);
     return { start, end };
@@ -181,11 +183,12 @@ const Jobs: React.FC = () => {
   }>({ workerStats: [], hourlyProductivity: [] });
   const [isLoadingProductivity, setIsLoadingProductivity] = useState(false);
   const [productivityDate, setProductivityDate] = useState<Date>(() => {
-    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
     // Ensure we get the local date without timezone issues
-    const year = today.getFullYear();
-    const month = today.getMonth();
-    const date = today.getDate();
+    const year = yesterday.getFullYear();
+    const month = yesterday.getMonth();
+    const date = yesterday.getDate();
     return new Date(year, month, date);
   });
 
@@ -805,7 +808,11 @@ const Jobs: React.FC = () => {
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
-  const openNewJobModal = () => {
+  const openNewJobModal = async () => {
+    setIsLoading(true);
+    // Add 3 second delay
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    
     setManualBarcode(''); // Reset manual barcode input
     setNewJobItems([]); // Reset job items
     setPendingStockUpdates([]); // Reset pending updates
@@ -814,6 +821,7 @@ const Jobs: React.FC = () => {
     setShowHurryUpAlert(false); // Reset alert state
     setLastAlertTime(0); // Reset last alert time
     setIsNewJobModalOpen(true);
+    setIsLoading(false);
     
     // Create a live job session in Firebase
     const sessionId = `session_${Date.now()}_${user?.name || 'Unknown'}`;
@@ -846,6 +854,10 @@ const Jobs: React.FC = () => {
     const barcode = manualBarcode.trim();
     if (!barcode) return;
 
+    setIsLoading(true);
+    // Add 3 second delay
+    await new Promise(resolve => setTimeout(resolve, 3000));
+
     const exists = await checkBarcodeExists(barcode);
     if (!exists) {
       showToast(`Product with barcode ${barcode} does not exist`, 'error');
@@ -871,59 +883,66 @@ const Jobs: React.FC = () => {
     } catch (error) {
       console.log('error', error);
       showToast('Error fetching stock item details', 'error');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleStockUpdate = async (data: { id: string; quantity: number; reason: string; storeName: string; locationCode: string; shelfNumber: string }) => {
     if (!selectedStockItem) return;
     
-    let deductedQuantity = 0; // Declare outside try block so it's accessible later
-    
-    // Use the specific document ID that was selected
+    setIsLoading(true);
     try {
-      const stockDocRef = doc(db, 'inventory', data.id);
-      const stockDoc = await getDoc(stockDocRef);
+      // Add 3 second delay
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      let deductedQuantity = 0; // Declare outside try block so it's accessible later
+      
+      // Use the specific document ID that was selected
+      try {
+        const stockDocRef = doc(db, 'inventory', data.id);
+        const stockDoc = await getDoc(stockDocRef);
 
-      if (!stockDoc.exists()) {
-        showToast('Stock item not found', 'error');
+        if (!stockDoc.exists()) {
+          showToast('Stock item not found', 'error');
+          return;
+        }
+
+        const docData = stockDoc.data();
+        const currentQuantity = Number(docData.quantity) || 0;
+        const locationSpecificStockItem = {
+          ...selectedStockItem,
+          id: stockDoc.id,
+          quantity: currentQuantity
+        };
+
+        // Calculate the deducted quantity (data.quantity is the new quantity after deduction)
+        deductedQuantity = currentQuantity - data.quantity;
+
+        // Validate that we don't deduct more than available
+        if (deductedQuantity > currentQuantity) {
+          showToast(`Cannot deduct ${deductedQuantity} units - only ${currentQuantity} units available at this location`, 'error');
+          return;
+        }
+
+        if (deductedQuantity < 0) {
+          showToast('Cannot deduct negative quantity', 'error');
+          return;
+        }
+
+        // Add to pending stock updates with the location-specific stock item
+        setPendingStockUpdates(prev => [...prev, {
+          stockItem: locationSpecificStockItem,
+          deductedQuantity,
+          reason: data.reason,
+          storeName: data.storeName,
+          locationCode: data.locationCode,
+          shelfNumber: data.shelfNumber
+        }]);
+      } catch {
+        showToast('Error locating stock for this location', 'error');
         return;
       }
-
-      const docData = stockDoc.data();
-      const currentQuantity = Number(docData.quantity) || 0;
-      const locationSpecificStockItem = {
-        ...selectedStockItem,
-        id: stockDoc.id,
-        quantity: currentQuantity
-      };
-
-      // Calculate the deducted quantity (data.quantity is the new quantity after deduction)
-      deductedQuantity = currentQuantity - data.quantity;
-
-      // Validate that we don't deduct more than available
-      if (deductedQuantity > currentQuantity) {
-        showToast(`Cannot deduct ${deductedQuantity} units - only ${currentQuantity} units available at this location`, 'error');
-        return;
-      }
-
-      if (deductedQuantity < 0) {
-        showToast('Cannot deduct negative quantity', 'error');
-        return;
-      }
-
-      // Add to pending stock updates with the location-specific stock item
-      setPendingStockUpdates(prev => [...prev, {
-        stockItem: locationSpecificStockItem,
-        deductedQuantity,
-        reason: data.reason,
-        storeName: data.storeName,
-        locationCode: data.locationCode,
-        shelfNumber: data.shelfNumber
-      }]);
-    } catch {
-      showToast('Error locating stock for this location', 'error');
-      return;
-    }
     
     // Add the barcode to the job items - use stockItemId to uniquely identify separate entries
     if (selectedStockItem.barcode) {
@@ -1001,8 +1020,11 @@ const Jobs: React.FC = () => {
       });
     }
     
-    // Refresh the search functionality
-    refreshSearch();
+      // Refresh the search functionality
+      refreshSearch();
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleStockUpdateCancel = () => {
@@ -1072,6 +1094,9 @@ const Jobs: React.FC = () => {
     setIsJobCreationInProgress(true);
     setIsLoading(true);
     try {
+      // Add 3 second delay
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
       // Apply all pending stock updates with validation
       for (const update of pendingStockUpdates) {
         const stockRef = doc(db, 'inventory', update.stockItem.id);
@@ -1307,7 +1332,11 @@ const Jobs: React.FC = () => {
 
   const confirmDeleteJob = async () => {
     if (!jobToDelete) return;
+    setIsLoading(true);
     try {
+      // Add 3 second delay
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
       await logActivity(
         `deleted job ${jobToDelete.jobId} (status: ${jobToDelete.status} with ${jobToDelete.items.length} items (${jobToDelete.items.reduce((sum, item) => sum + item.quantity, 0)} total units))`
       );
@@ -1327,6 +1356,8 @@ const Jobs: React.FC = () => {
       fetchJobs();
     } catch {
       showToast('Failed to delete job', 'error');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -3208,7 +3239,11 @@ const Jobs: React.FC = () => {
   <ConfirmationModal
     isOpen={isCloseBarcodeConfirmOpen}
     onClose={() => setIsCloseBarcodeConfirmOpen(false)}
-    onConfirm={() => {
+    onConfirm={async () => {
+      setIsLoading(true);
+      // Add 3 second delay
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
       setIsCloseBarcodeConfirmOpen(false);
       setIsNewJobModalOpen(false);
       setJobCreationStartTime(null); // Reset timer
@@ -3231,6 +3266,7 @@ const Jobs: React.FC = () => {
       }).catch(error => {
         console.log('error', error);
       });
+      setIsLoading(false);
     }}
     title="Close without finishing?"
     message="Are you sure you want to close? All jobs will be lost."

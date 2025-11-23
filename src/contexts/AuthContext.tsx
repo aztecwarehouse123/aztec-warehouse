@@ -38,6 +38,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setIsLoading(true);
     
     try {
+      // Add 5 second delay
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
       // Get all users from the collection
       const usersSnapshot = await getDocs(collection(db, 'users'));
   

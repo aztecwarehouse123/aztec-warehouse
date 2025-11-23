@@ -107,6 +107,9 @@ const Orders: React.FC = () => {
   const handleAddOrder = async (order: Omit<Order, 'id'>) => {
     setIsLoading(true);
     try {
+      // Add 5 second delay
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
       await addDoc(collection(db, 'orders'), {
         ...order,
         createdAt: serverTimestamp(),
