@@ -33,12 +33,7 @@ interface DashboardStats {
 const ReportsAnalytics: React.FC = () => {
   const [timeRange, setTimeRange] = useState<'hourly' | 'daily' | 'weekly' | 'monthly'>('daily');
   const [startDate, setStartDate] = useState<Date | null>(subDays(new Date(), 7));
-  const [endDate, setEndDate] = useState<Date | null>(() => {
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    yesterday.setHours(23, 59, 59, 999);
-    return yesterday;
-  });
+  const [endDate, setEndDate] = useState<Date | null>(new Date());
 
   const [inventory, setInventory] = useState<StockItem[]>([]);
   const [orders, setOrders] = useState<any[]>([]);

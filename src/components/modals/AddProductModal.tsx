@@ -61,9 +61,6 @@ const AddProductModal: React.FC<AddProductModalProps> = ({ isOpen, onClose, onSu
     }
     setIsLoading(true);
     try {
-      // Add 5 second delay
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
       // Convert product name to uppercase before storing
       const uppercaseName = form.name.toUpperCase();
       

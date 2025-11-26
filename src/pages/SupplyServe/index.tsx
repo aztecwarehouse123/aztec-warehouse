@@ -229,9 +229,6 @@ const Stock: React.FC = () => {
     setIsLoading(true);
     
     try {
-      // Add 5 second delay
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
       const newItems: StockItem[] = [];
       
       // Check for hidden products with the same barcode and delete them
