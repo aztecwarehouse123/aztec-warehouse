@@ -1798,7 +1798,7 @@ const Jobs: React.FC = () => {
                 Live Jobs
               </Button>
             )}
-            <Button 
+            {user?.role !=='staff' && (<Button 
               variant={showReports ? "primary" : "secondary"} 
               onClick={() => {
                 setShowCompleted(false);
@@ -1810,7 +1810,7 @@ const Jobs: React.FC = () => {
               size='sm'
             >
               Reports
-            </Button>
+            </Button>)}
             {(user?.role === 'admin' || user?.role === 'manager') && (
               <Button 
                 variant={showProductivity ? "primary" : "secondary"} 
@@ -2021,7 +2021,7 @@ const Jobs: React.FC = () => {
         )}
 
         {/* Reports Section */}
-        {showReports && (
+        {showReports && user?.role !=='staff' &&(
           <>
             {/* Reports Header with Date Picker */}
             <div className="flex items-center justify-between mb-6">
