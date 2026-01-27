@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Barcode, Trash2, CheckCircle } from 'lucide-react';
 import Input from '../ui/Input';
 import Button from '../ui/Button';
@@ -339,6 +339,9 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
     hiddenProduct: StockItem;
     newProductName: string;
   } | null>(null);
+
+  // Ref to prevent double submissions
+  const isSubmittingRef = useRef(false);
 
   // Ensure fulfillment type is consistent with store name
   useEffect(() => {
@@ -686,6 +689,12 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Prevent double submission
+    if (isSubmittingRef.current || isLoading) {
+      return;
+    }
+    
     if (validate()) {
       // Ensure supplier and storeName are set to first option if not selected
       const supplier = formData.supplier || supplierOptions[0].value;
@@ -730,24 +739,31 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
         setIsDuplicateModalOpen(true);
         return;
       }
+      
+      isSubmittingRef.current = true;
       try {
         await onSubmit(stockData);
       } catch (error) {
         console.error('Error adding stock:', error);
+      } finally {
+        isSubmittingRef.current = false;
       }
     }
   };
 
   const handleConfirmDuplicate = async () => {
-    if (pendingStockData) {
+    if (pendingStockData && !isSubmittingRef.current && !isLoading) {
+      isSubmittingRef.current = true;
       try {
         await onSubmit(pendingStockData);
       } catch (error) {
         console.error('Error adding stock:', error);
+      } finally {
+        isSubmittingRef.current = false;
+        setIsDuplicateModalOpen(false);
+        setPendingStockData(null);
+        setDuplicateInfo(null);
       }
-      setIsDuplicateModalOpen(false);
-      setPendingStockData(null);
-      setDuplicateInfo(null);
     }
   };
 

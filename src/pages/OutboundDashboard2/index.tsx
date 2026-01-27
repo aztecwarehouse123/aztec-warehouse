@@ -4,7 +4,7 @@ import { StockItem } from '../../types';
 import { useToast } from '../../contexts/ToastContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { db } from '../../config/firebase';
-import { collection, getDocs, query, orderBy, where, Timestamp } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, where, Timestamp, limit } from 'firebase/firestore';
 import { startOfDay, endOfDay, format, parseISO, subDays } from 'date-fns';
 import Select from '../../components/ui/Select';
 
@@ -123,7 +123,8 @@ const OutboundDashboard2: React.FC = () => {
         collection(db, 'activityLogs'),
         where('time', '>=', dateRange.start.toISOString()),
         where('time', '<=', dateRange.end.toISOString()),
-        orderBy('time', 'desc')
+        orderBy('time', 'desc'),
+        limit(500)
       );
 
       const outboundLogsSnapshot = await getDocs(outboundLogsQuery);

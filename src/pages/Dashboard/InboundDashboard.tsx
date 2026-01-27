@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Package, AlertTriangle, Plus, AlertCircle, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import { collection, query, getDocs, Timestamp, where } from 'firebase/firestore';
+import { collection, query, getDocs, Timestamp, where, limit } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { StockItem } from '../../types';
 import StatsCard from '../../components/dashboard/StatsCard';
@@ -47,7 +47,8 @@ const InboundDashboard: React.FC = () => {
         const logsQuery = query(
           collection(db, 'activityLogs'),
           where('time', '>=', startOfToday.toISOString()),
-          where('time', '<=', endOfToday.toISOString())
+          where('time', '<=', endOfToday.toISOString()),
+          limit(1000)
         );
         
         const logsSnapshot = await getDocs(logsQuery);

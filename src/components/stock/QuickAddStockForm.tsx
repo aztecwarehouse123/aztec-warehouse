@@ -256,6 +256,9 @@ const QuickAddStockForm: React.FC<QuickAddStockFormProps> = ({ onSubmit, onClose
   const [isFetchingProductInfo, setIsFetchingProductInfo] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Ref to prevent double submissions
+  const isSubmittingRef = useRef(false);
 
   // Initialize shelf options for the default location
   useEffect(() => {
@@ -435,6 +438,11 @@ const QuickAddStockForm: React.FC<QuickAddStockFormProps> = ({ onSubmit, onClose
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Prevent double submission
+    if (isSubmittingRef.current || isLoading) {
+      return;
+    }
+    
     if (!validate()) {
       return;
     }
@@ -457,11 +465,14 @@ const QuickAddStockForm: React.FC<QuickAddStockFormProps> = ({ onSubmit, onClose
        storeName: 'not set' // Default store name
      };
 
+    isSubmittingRef.current = true;
     try {
       await onSubmit([stockItem]);
       onClose(); // Close modal after successful submission
     } catch (error) {
       console.error('Error adding stock:', error);
+    } finally {
+      isSubmittingRef.current = false;
     }
   };
 

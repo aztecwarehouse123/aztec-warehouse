@@ -31,6 +31,7 @@ type Job = {
   packer?: string | null;
   items: JobItem[];
   pickingTime?: number; // Time taken to complete picking in seconds
+  trolleyNumber?: number | null; // Trolley number assigned to the job (1-20)
 };
 
 type FirestoreJobItem = {
@@ -55,6 +56,7 @@ type FirestoreJob = {
   packer?: string | null;
   items?: FirestoreJobItem[];
   pickingTime?: number; // Time taken to complete picking in seconds
+  trolleyNumber?: number | null; // Trolley number assigned to the job (1-20)
 };
 
 const Jobs: React.FC = () => {
@@ -90,6 +92,8 @@ const Jobs: React.FC = () => {
   const [verifyingItems, setVerifyingItems] = useState<Set<string>>(new Set());
   // State to prevent duplicate job creation when button is clicked multiple times
   const [isJobCreationInProgress, setIsJobCreationInProgress] = useState(false);
+  // State to track jobs currently being completed to prevent duplicate completions
+  const [completingJobs, setCompletingJobs] = useState<Set<string>>(new Set());
   // Timer alert states
   const [showHurryUpAlert, setShowHurryUpAlert] = useState(false);
   // Confirm closing Add Barcode modal (lose progress)
@@ -104,6 +108,9 @@ const Jobs: React.FC = () => {
   
   // Calculator modal state
   const [isCalculatorModalOpen, setIsCalculatorModalOpen] = useState(false);
+  
+  // Trolley number state for new job
+  const [selectedTrolleyNumber, setSelectedTrolleyNumber] = useState<number | null>(null);
   
   // Search functionality state
   const [searchQuery, setSearchQuery] = useState('');
@@ -606,30 +613,31 @@ const Jobs: React.FC = () => {
             stockItemId: it.stockItemId, // Include document ID if available
           })) : [],
           pickingTime: data.pickingTime || 0,
+          trolleyNumber: data.trolleyNumber ?? null,
         };
       });
       
-      // Enhance items with product names from inventory for items that don't have names
-      const enhancedList = await Promise.all(list.map(async (job) => {
-        const enhancedItems = await Promise.all(job.items.map(async (item) => {
-          if (item.name) return item; // Item already has a name
-          
-          try {
-            // Fetch product name from inventory
-            const q = query(collection(db, 'inventory'), where('barcode', '==', item.barcode));
-            const snapshot = await getDocs(q);
-            if (!snapshot.empty) {
-              const stockData = snapshot.docs[0].data();
-              return { ...item, name: stockData.name || null };
-            }
-          } catch (error) {
-            console.log('error', error);
-            console.log('')
-          }
-          return item;
-        }));
-        
-        return { ...job, items: enhancedItems };
+      // OPTIMIZED: Fetch all inventory items once and create a barcode-to-name map
+      // This replaces the N+1 query problem (hundreds of individual queries)
+      // with just 1 additional query
+      const inventoryQuery = query(collection(db, 'inventory'));
+      const inventorySnapshot = await getDocs(inventoryQuery);
+      const barcodeToNameMap = new Map<string, string | null>();
+      
+      inventorySnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        if (data.barcode) {
+          barcodeToNameMap.set(data.barcode, data.name || null);
+        }
+      });
+      
+      // Enhance items with product names using the map (no additional queries)
+      const enhancedList = list.map(job => ({
+        ...job,
+        items: job.items.map(item => ({
+          ...item,
+          name: item.name || barcodeToNameMap.get(item.barcode) || null
+        }))
       }));
       
       setJobs(enhancedList);
@@ -813,6 +821,7 @@ const Jobs: React.FC = () => {
     setElapsedTime(0); // Reset elapsed time
     setShowHurryUpAlert(false); // Reset alert state
     setLastAlertTime(0); // Reset last alert time
+    setSelectedTrolleyNumber(null); // Reset trolley number
     setIsNewJobModalOpen(true);
     
     // Create a live job session in Firebase
@@ -1110,7 +1119,8 @@ const Jobs: React.FC = () => {
         picker: user?.name || null,
         packer: null,
         items: newJobItems,
-        pickingTime: elapsedTime // Store the elapsed time
+        pickingTime: elapsedTime, // Store the elapsed time
+        trolleyNumber: selectedTrolleyNumber ?? null // Store the selected trolley number
       });
       await updateDoc(ref, { docId: ref.id });
       
@@ -1128,6 +1138,7 @@ const Jobs: React.FC = () => {
       setElapsedTime(0); // Reset elapsed time
       setShowHurryUpAlert(false); // Reset alert state
       setLastAlertTime(0); // Reset last alert time
+      setSelectedTrolleyNumber(null); // Reset trolley number
       
               // Delete the live job session from Firebase since job is now completed
         const sessionQuery = query(
@@ -1151,6 +1162,14 @@ const Jobs: React.FC = () => {
   };
 
   const completePicking = async (job: Job) => {
+    // Prevent duplicate completions
+    if (completingJobs.has(job.id)) {
+      return;
+    }
+
+    // Set loading state
+    setCompletingJobs(prev => new Set(prev).add(job.id));
+
     try {
       await updateDoc(doc(db, 'jobs', job.id), { status: 'awaiting_pack', picker: user?.name || job.picker || null });
       
@@ -1161,7 +1180,17 @@ const Jobs: React.FC = () => {
       showToast(`Job ${job.jobId} completed and awaiting pack`, 'success');
       
       fetchJobs();
-    } catch { showToast('Failed to update job', 'error'); }
+    } catch (error) {
+      showToast('Failed to update job', 'error');
+      console.error('Error completing picking:', error);
+    } finally {
+      // Clear loading state
+      setCompletingJobs(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(job.id);
+        return newSet;
+      });
+    }
   };
 
   const verifyItem = async (job: Job, barcode: string, verified: boolean) => {
@@ -1204,6 +1233,14 @@ const Jobs: React.FC = () => {
   };
 
   const completePacking = async (job: Job) => {
+    // Prevent duplicate completions
+    if (completingJobs.has(job.id)) {
+      return;
+    }
+
+    // Set loading state
+    setCompletingJobs(prev => new Set(prev).add(job.id));
+
     try {
       // Get all locally verified items for this job
       const jobVerifiedItems = Array.from(locallyVerifiedItems)
@@ -1214,6 +1251,17 @@ const Jobs: React.FC = () => {
       const totalVerifiedCount = job.items.filter(item => 
         item.verified || jobVerifiedItems.includes(item.barcode)
       ).length;
+      
+      // Validate that all items are verified before completing the job
+      if (totalVerifiedCount < job.items.length) {
+        showToast(`Cannot complete job ${job.jobId}. Please verify all items first. (${totalVerifiedCount}/${job.items.length} verified)`, 'error');
+        setCompletingJobs(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(job.id);
+          return newSet;
+        });
+        return;
+      }
       
       // Validate and fix items before updating - ensure all required fields are present
       // Firestore doesn't accept undefined values, so we need to use null or omit fields
@@ -1298,6 +1346,13 @@ const Jobs: React.FC = () => {
       } else {
         showToast(`Failed to complete job ${job.jobId}: ${errorMessage}`, 'error');
       }
+    } finally {
+      // Clear loading state
+      setCompletingJobs(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(job.id);
+        return newSet;
+      });
     }
   };
 
@@ -1481,6 +1536,11 @@ const Jobs: React.FC = () => {
                     {job.pickingTime && job.pickingTime > 0 && (
                       <span className={`ml-2 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
                         • Picking: {formatElapsedTime(job.pickingTime)}
+                      </span>
+                    )}
+                    {job.trolleyNumber && (
+                      <span className={`ml-2 ${isDarkMode ? 'text-purple-400' : 'text-purple-600'} font-medium`}>
+                        • Trolley: {job.trolleyNumber}
                       </span>
                     )}
                   </p>
@@ -1688,12 +1748,24 @@ const Jobs: React.FC = () => {
             {/* Bottom Action Buttons */}
             <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
               {isPicking && (
-                <Button onClick={() => completePicking(job)} size='sm' className="flex items-center gap-1 w-full sm:w-auto">
+                <Button 
+                  onClick={() => completePicking(job)} 
+                  size='sm' 
+                  className="flex items-center gap-1 w-full sm:w-auto"
+                  isLoading={completingJobs.has(job.id)}
+                  disabled={completingJobs.has(job.id)}
+                >
                   <CheckSquare size={14} /> <span className="hidden sm:inline">Finish Picking</span>
                 </Button>
               )}
               {isAwaitingPack && (
-                <Button onClick={() => completePacking(job)} size='sm' className="flex items-center gap-1 w-full sm:w-auto">
+                <Button 
+                  onClick={() => completePacking(job)} 
+                  size='sm' 
+                  className="flex items-center gap-1 w-full sm:w-auto"
+                  isLoading={completingJobs.has(job.id)}
+                  disabled={completingJobs.has(job.id)}
+                >
                   <CheckSquare size={14} /> <span className="hidden sm:inline">Complete Job</span>
                 </Button>
               )}
@@ -3174,11 +3246,41 @@ const Jobs: React.FC = () => {
                 ))}
               </div>
                   
+              {/* Trolley Number Selector */}
+              <div className="pt-2 space-y-2">
+                <label className={`block text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                  Select Trolley Number <span className="text-red-500">*</span>
+                </label>
+                <div className="grid grid-cols-5 sm:grid-cols-10 gap-2">
+                  {Array.from({ length: 20 }, (_, i) => i + 1).map((num) => (
+                    <button
+                      key={num}
+                      type="button"
+                      onClick={() => setSelectedTrolleyNumber(num)}
+                      className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                        selectedTrolleyNumber === num
+                          ? 'bg-blue-500 text-white hover:bg-blue-600'
+                          : isDarkMode
+                          ? 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                          : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                      }`}
+                    >
+                      {num}
+                    </button>
+                  ))}
+                </div>
+                {!selectedTrolleyNumber && (
+                  <p className={`text-xs ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>
+                    Please select a trolley number before finishing picking
+                  </p>
+                )}
+              </div>
+                  
               {/* Finish Picking Button */}
               <div className="pt-2">
                   <Button 
                   onClick={finishNewJobPicking}
-                  disabled={newJobItems.length === 0 || isJobCreationInProgress}
+                  disabled={newJobItems.length === 0 || isJobCreationInProgress || !selectedTrolleyNumber}
                   isLoading={isJobCreationInProgress}
                   className="w-full flex items-center justify-center gap-2"
                     size="sm" 
@@ -3216,6 +3318,7 @@ const Jobs: React.FC = () => {
       setShowHurryUpAlert(false); // Reset alert state
       setLastAlertTime(0); // Reset last alert time
       setShowSearchSection(false); // Reset search section
+      setSelectedTrolleyNumber(null); // Reset trolley number
 
       // Delete the live job session from Firebase if user closes without finishing
       const sessionQuery = query(

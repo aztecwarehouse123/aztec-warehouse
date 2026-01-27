@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Barcode } from 'lucide-react';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
@@ -317,6 +317,9 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
   const [showOtherSupplierInput, setShowOtherSupplierInput] = useState(initialSupplier === 'other');
   const [otherSupplier, setOtherSupplier] = useState(initialOtherSupplier);
   const [isBarcodeScanModalOpen, setIsBarcodeScanModalOpen] = useState(false);
+  
+  // Ref to prevent double submissions
+  const isSubmittingRef = useRef(false);
 
   // Ensure fulfillment type is consistent with store name
   useEffect(() => {
@@ -370,7 +373,13 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Prevent double submission
+    if (isSubmittingRef.current || isLoading) {
+      return;
+    }
+    
     if (validate()) {
+      isSubmittingRef.current = true;
       try {
         const data: StockItem = {
           id: item.id,
@@ -394,6 +403,8 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
       } catch (error) {
         console.error('Error updating stock:', error);
         setValidationMessage('Failed to update stock. Please try again.');
+      } finally {
+        isSubmittingRef.current = false;
       }
     }
   };

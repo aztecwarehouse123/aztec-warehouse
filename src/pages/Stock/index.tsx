@@ -611,8 +611,10 @@ const Stock: React.FC = () => {
             logChanges.push(`barcode from "${originalItem.barcode || 'none'}" to "${data.barcode || 'none'}"`);
         }
 
-
-        // If there are changes other than quantity, update them immediately
+        // Handle quantity update separately to ensure it's always processed
+        const quantityChanged = data.quantity !== originalItem.quantity;
+        
+        // If there are changes other than quantity, update them first
         if (Object.keys(changes).length > 0) {
             const stockRef = doc(db, 'inventory', data.id);
             await updateDoc(stockRef, { ...changes, lastUpdated: Timestamp.fromDate(now) });
@@ -625,45 +627,62 @@ const Stock: React.FC = () => {
                     time: now.toISOString()
                 });
             }
-            
-            const updatedItems = items.map(item =>
-                item.id === data.id ? { ...item, ...changes, lastUpdated: now } : item
-            );
-            setItems(updatedItems);
-            showToast('Stock details updated successfully', 'success');
-            setIsEditModalOpen(false);
-            setSelectedItem(null);
         }
 
         // Handle quantity update
-        if (data.quantity > originalItem.quantity) {
-            setPendingQuantityUpdate({ itemId: data.id, newQuantity: data.quantity });
-            setIsQuantityConfirmModalOpen(true);
-            setIsEditModalOpen(false);
-        } else if (data.quantity !== originalItem.quantity) {
-            // If quantity is decreased, update it directly
-            const stockRef = doc(db, 'inventory', data.id);
-            await updateDoc(stockRef, { quantity: data.quantity, lastUpdated: Timestamp.fromDate(now) });
+        if (quantityChanged) {
+            if (data.quantity > originalItem.quantity) {
+                // If quantity is increased, show confirmation modal
+                setPendingQuantityUpdate({ itemId: data.id, newQuantity: data.quantity });
+                setIsQuantityConfirmModalOpen(true);
+                setIsEditModalOpen(false);
+                
+                // Update other fields in local state if there were changes
+                if (Object.keys(changes).length > 0) {
+                    setItems(prevItems => prevItems.map(item =>
+                        item.id === data.id ? { ...item, ...changes, lastUpdated: now } : item
+                    ));
+                }
+            } else {
+                // If quantity is decreased, update it directly
+                const stockRef = doc(db, 'inventory', data.id);
+                await updateDoc(stockRef, { 
+                    ...changes, 
+                    quantity: data.quantity, 
+                    lastUpdated: Timestamp.fromDate(now) 
+                });
 
-            if (user) {
-          await addDoc(collection(db, 'activityLogs'), {
-            user: user.name,
-            role: user.role,
-            detail: `edited product "${data.name}": quantity from ${originalItem.quantity} to ${data.quantity}`,
-            time: now.toISOString()
-          });
-      }
-      
-      const updatedItems = items.map(item => 
-                item.id === data.id ? { ...item, quantity: data.quantity, lastUpdated: now } : item
-      );
-      setItems(updatedItems);
-            showToast('Stock quantity updated', 'success');
+                if (user) {
+                    await addDoc(collection(db, 'activityLogs'), {
+                        user: user.name,
+                        role: user.role,
+                        detail: `edited product "${data.name}": quantity from ${originalItem.quantity} to ${data.quantity}`,
+                        time: now.toISOString()
+                    });
+                }
+                
+                // Update local state with all changes including quantity
+                setItems(prevItems => prevItems.map(item => 
+                    item.id === data.id ? { ...item, ...changes, quantity: data.quantity, lastUpdated: now } : item
+                ));
+                
+                // Refetch to ensure consistency
+                await fetchStockItems();
+                
+                showToast('Stock quantity updated', 'success');
+                setIsEditModalOpen(false);
+                setSelectedItem(null);
+            }
+        } else {
+            // No quantity change, just update other fields if there were changes
+            if (Object.keys(changes).length > 0) {
+                setItems(prevItems => prevItems.map(item =>
+                    item.id === data.id ? { ...item, ...changes, lastUpdated: now } : item
+                ));
+                showToast('Stock details updated successfully', 'success');
+            }
             setIsEditModalOpen(false);
             setSelectedItem(null);
-        } else {
-      setIsEditModalOpen(false);
-          setSelectedItem(null);
         }
 
     } catch (error) {
@@ -672,7 +691,7 @@ const Stock: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [items,user,showToast]);
+  }, [user, showToast, fetchStockItems]);
 
 const handleConfirmQuantityUpdate = useCallback( async () => {
     if (!pendingQuantityUpdate) return;
@@ -681,12 +700,26 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
     try {
         const { itemId, newQuantity } = pendingQuantityUpdate;
         const now = new Date();
-        const originalItem = items.find(item => item.id === itemId);
+        
+        // Get the original item from current state using functional update
+        let originalItem: StockItem | undefined;
+        setItems(prevItems => {
+            originalItem = prevItems.find(item => item.id === itemId);
+            return prevItems; // Don't update yet
+        });
+
+        if (!originalItem) {
+            showToast('Item not found', 'error');
+            setIsQuantityConfirmModalOpen(false);
+            setPendingQuantityUpdate(null);
+            setIsLoading(false);
+            return;
+        }
 
         const stockRef = doc(db, 'inventory', itemId);
         await updateDoc(stockRef, { quantity: newQuantity, lastUpdated: Timestamp.fromDate(now) });
 
-        if (user && originalItem) {
+        if (user) {
             await addDoc(collection(db, 'activityLogs'), {
                 user: user.name,
                 role: user.role,
@@ -695,10 +728,14 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
             });
         }
 
-        const updatedItems = items.map(item =>
+        // Update local state
+        setItems(prevItems => prevItems.map(item =>
             item.id === itemId ? { ...item, quantity: newQuantity, lastUpdated: now } : item
-        );
-        setItems(updatedItems);
+        ));
+        
+        // Refetch to ensure consistency with database
+        await fetchStockItems();
+        
         showToast('Stock quantity updated successfully', 'success');
         setSelectedItem(null);
     } catch (error) {
@@ -709,7 +746,7 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
         setIsQuantityConfirmModalOpen(false);
         setPendingQuantityUpdate(null);
     }
-},[pendingQuantityUpdate, items, user, showToast]);
+},[pendingQuantityUpdate, user, showToast, fetchStockItems]);
 
 
   const handleDeleteStock = useCallback( async (id: string) => {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { db } from '../../config/firebase';
-import { collection, query, where, getDocs, Timestamp, orderBy } from 'firebase/firestore';
+import { collection, query, where, getDocs, Timestamp, orderBy, limit } from 'firebase/firestore';
 import { format, subDays, subHours } from 'date-fns';
 import { XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { Download, Package, TrendingDown, PoundSterling, AlertCircle, RefreshCw } from 'lucide-react';
@@ -94,7 +94,8 @@ const ReportsAnalytics: React.FC = () => {
         collection(db, 'activityLogs'),
         where('time', '>=', startDateValue.toISOString()),
         where('time', '<=', endDateValue.toISOString()),
-        orderBy('time', 'desc')
+        orderBy('time', 'desc'),
+        limit(500)
       );
 
       const logsSnapshot = await getDocs(logsQuery);
