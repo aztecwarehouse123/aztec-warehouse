@@ -3245,8 +3245,12 @@ const Jobs: React.FC = () => {
                   </div>
                 ))}
               </div>
-                  
-              {/* Trolley Number Selector */}
+            </div>
+          )}
+          
+          {/* Trolley Number Selector - Always visible when not in search section */}
+          {!showSearchSection && (
+            <>
               <div className="pt-2 space-y-2">
                 <label className={`block text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
                   Select Trolley Number <span className="text-red-500">*</span>
@@ -3288,9 +3292,9 @@ const Jobs: React.FC = () => {
                   <CheckSquare size={16} /> 
                   {isJobCreationInProgress ? 'Creating Job...' : 'Finish Picking'}
                   </Button>
-                </div>     
-              </div>
-            )}
+                </div>
+            </>
+          )}
 
 
         </div>
