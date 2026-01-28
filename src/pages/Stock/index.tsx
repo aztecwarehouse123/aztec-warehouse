@@ -701,12 +701,8 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
         const { itemId, newQuantity } = pendingQuantityUpdate;
         const now = new Date();
         
-        // Get the original item from current state using functional update
-        let originalItem: StockItem | undefined;
-        setItems(prevItems => {
-            originalItem = prevItems.find(item => item.id === itemId);
-            return prevItems; // Don't update yet
-        });
+        // Get the original item from current state
+        const originalItem = items.find(item => item.id === itemId);
 
         if (!originalItem) {
             showToast('Item not found', 'error');
@@ -746,7 +742,7 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
         setIsQuantityConfirmModalOpen(false);
         setPendingQuantityUpdate(null);
     }
-},[pendingQuantityUpdate, user, showToast, fetchStockItems]);
+},[pendingQuantityUpdate, items, user, showToast, fetchStockItems]);
 
 
   const handleDeleteStock = useCallback( async (id: string) => {
