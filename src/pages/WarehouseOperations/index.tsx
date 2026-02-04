@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../config/firebase';
-import { collection, getDocs, query, orderBy, where, limit } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, where } from 'firebase/firestore';
 import {  Download, RefreshCw, Search } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import { format, startOfDay, endOfDay } from 'date-fns';
@@ -56,7 +56,7 @@ const WarehouseOperations: React.FC = () => {
   const fetchActivityLogs = async () => {
     setIsLogsLoading(true);
     try {
-      let logsQuery = query(collection(db, 'activityLogs'), orderBy('time', 'desc'), limit(500));
+      let logsQuery = query(collection(db, 'activityLogs'), orderBy('time', 'desc'));
       
       // Apply date filter
       if (startDate && endDate) {
@@ -64,22 +64,19 @@ const WarehouseOperations: React.FC = () => {
           collection(db, 'activityLogs'),
           where('time', '>=', startOfDay(startDate).toISOString()),
           where('time', '<=', endOfDay(endDate).toISOString()),
-          orderBy('time', 'desc'),
-          limit(500)
+          orderBy('time', 'desc')
         );
       } else if (startDate) {
         logsQuery = query(
           collection(db, 'activityLogs'),
           where('time', '>=', startOfDay(startDate).toISOString()),
-          orderBy('time', 'desc'),
-          limit(500)
+          orderBy('time', 'desc')
         );
       } else if (endDate) {
         logsQuery = query(
           collection(db, 'activityLogs'),
           where('time', '<=', endOfDay(endDate).toISOString()),
-          orderBy('time', 'desc'),
-          limit(500)
+          orderBy('time', 'desc')
         );
       }
 
