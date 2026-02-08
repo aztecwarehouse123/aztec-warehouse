@@ -396,7 +396,7 @@ const Stock: React.FC = () => {
             await addDoc(collection(db, 'activityLogs'), {
               user: user.name,
               role: user.role,
-              detail: `edited product "${existingProduct.name}": quantity from ${existingProduct.quantity} to ${newQuantity}`,
+              detail: `edited product "${existingProduct.name}": quantity from ${existingProduct.quantity} to ${newQuantity} — Quantity before: ${existingProduct.quantity}, Quantity after: ${newQuantity}`,
               time: new Date().toISOString()
             });
           }

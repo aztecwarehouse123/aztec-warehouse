@@ -1097,9 +1097,9 @@ const Jobs: React.FC = () => {
           lastUpdated: serverTimestamp()
         });
         
-        // Add activity log for each stock update
+        // Add activity log for each stock update (with quantity before/after)
         await addDoc(collection(db, 'activityLogs'), {
-          detail: `${update.deductedQuantity} units deducted from stock "${update.stockItem.name}"  (Reason: ${update.reason}, Store: ${update.storeName}) by ${user?.role} from location ${update.locationCode} shelf ${update.shelfNumber}`,
+          detail: `${update.deductedQuantity} units deducted from stock "${update.stockItem.name}" (Reason: ${update.reason}, Store: ${update.storeName}) by ${user?.role} from location ${update.locationCode} shelf ${update.shelfNumber} — Quantity before: ${update.stockItem.quantity}, Quantity after: ${newQuantity}`,
           time: new Date().toISOString(),
           user: user?.name,
           role: user?.role

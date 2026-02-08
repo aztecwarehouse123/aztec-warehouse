@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef} from 'react';
-import { Plus, Search, Edit2, Trash2, Loader2, CheckSquare, RefreshCw, ChevronDown, Play } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Loader2, CheckSquare, RefreshCw, ChevronDown, Play, History } from 'lucide-react';
 // import { motion } from 'framer-motion';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
@@ -12,6 +12,7 @@ import StockDetailsModal from '../../components/modals/StockDetailsModal';
 import DeleteConfirmationModal from '../../components/modals/DeleteConfirmationModal';
 import LocationConfirmationModal from '../../components/modals/LocationConfirmationModal';
 import ProductLocationInfoModal from '../../components/modals/ProductLocationInfoModal';
+import ProductLocationHistoryModal from '../../components/modals/ProductLocationHistoryModal';
 import { StockItem } from '../../types';
 import { useToast } from '../../contexts/ToastContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -63,6 +64,11 @@ const Stock: React.FC = () => {
     productName: string;
     barcode: string;
     existingLocations: StockItem[];
+  } | null>(null);
+  const [historyModalProduct, setHistoryModalProduct] = useState<{
+    productName: string;
+    locationCode: string;
+    shelfNumber: string;
   } | null>(null);
   
   // Ref to store scroll position before edit
@@ -996,6 +1002,20 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
       <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'} text-right`}>
         <div className="flex items-center justify-end gap-2">
           <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setHistoryModalProduct({
+                productName: item.name,
+                locationCode: item.locationCode,
+                shelfNumber: item.shelfNumber,
+              });
+            }}
+            className={`p-1 ${isDarkMode ? 'text-slate-400 hover:text-slate-300' : 'text-slate-600 hover:text-slate-700'} transition-colors`}
+            title="View location history"
+          >
+            <History size={16} />
+          </button>
+          <button
             onClick={(e) => handleEditClick(e, item)}
             className={`p-1 ${isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'} transition-colors`}
           >
@@ -1595,6 +1615,20 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
                   <Button
                     size="sm"
                     variant="secondary"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setHistoryModalProduct({
+                        productName: item.name,
+                        locationCode: item.locationCode,
+                        shelfNumber: item.shelfNumber,
+                      });
+                    }}
+                  >
+                    <History size={14} /> History
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
                     onClick={(e) => { e.stopPropagation(); handleEditClick(e, item); }}
                   >
                     <Edit2 size={14} /> Edit
@@ -1753,6 +1787,17 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
           productName={productLocationInfo.productName}
           barcode={productLocationInfo.barcode}
           existingLocations={productLocationInfo.existingLocations}
+        />
+      )}
+
+      {/* Product location history modal */}
+      {historyModalProduct && (
+        <ProductLocationHistoryModal
+          isOpen={!!historyModalProduct}
+          onClose={() => setHistoryModalProduct(null)}
+          productName={historyModalProduct.productName}
+          locationCode={historyModalProduct.locationCode}
+          shelfNumber={historyModalProduct.shelfNumber}
         />
       )}
     </div>

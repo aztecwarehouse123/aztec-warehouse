@@ -256,10 +256,10 @@ const OutboundStock: React.FC = () => {
         lastUpdated: Timestamp.fromDate(now)
       });
 
-      // Add activity log
+      // Add activity log (with quantity before/after)
+      const deductedQty = originalItem.quantity - data.quantity;
       await addDoc(collection(db, 'activityLogs'), {
-        
-        detail: `${originalItem.quantity - data.quantity} units deducted from stock "${originalItem.name}" (Reason: ${data.reason}, Store: ${data.storeName?.toUpperCase()}) by ${user.role} from location ${originalItem.locationCode} shelf ${originalItem.shelfNumber}`,
+        detail: `${deductedQty} units deducted from stock "${originalItem.name}" (Reason: ${data.reason}, Store: ${data.storeName?.toUpperCase()}) by ${user.role} from location ${originalItem.locationCode} shelf ${originalItem.shelfNumber} — Quantity before: ${originalItem.quantity}, Quantity after: ${data.quantity}`,
         time: new Date().toISOString(),
         user: user.name,
         role: user.role
