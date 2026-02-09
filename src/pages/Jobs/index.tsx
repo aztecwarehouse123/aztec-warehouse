@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Plus, RefreshCw, CheckSquare, ClipboardList, Trash2, ChevronUp, ChevronDown, Search, ArrowLeft, Calculator, Clock } from 'lucide-react';
+import { Plus, RefreshCw, CheckSquare, ClipboardList, Trash2, ChevronUp, ChevronDown, Search, ArrowLeft, Calculator, Clock, Undo2 } from 'lucide-react';
 import { db } from '../../config/firebase';
 import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, orderBy, query, serverTimestamp, Timestamp, updateDoc, where, onSnapshot } from 'firebase/firestore';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -32,6 +32,8 @@ type Job = {
   items: JobItem[];
   pickingTime?: number; // Time taken to complete picking in seconds
   trolleyNumber?: number | null; // Trolley number assigned to the job (1-20)
+  verifyingTimeAccumulated?: number; // seconds (paused segments)
+  verifyingTime?: number | null; // seconds (final, when completed)
 };
 
 type FirestoreJobItem = {
@@ -55,8 +57,10 @@ type FirestoreJob = {
   picker?: string | null;
   packer?: string | null;
   items?: FirestoreJobItem[];
-  pickingTime?: number; // Time taken to complete picking in seconds
-  trolleyNumber?: number | null; // Trolley number assigned to the job (1-20)
+  pickingTime?: number;
+  trolleyNumber?: number | null;
+  verifyingTimeAccumulated?: number;
+  verifyingTime?: number | null;
 };
 
 const Jobs: React.FC = () => {
@@ -78,6 +82,8 @@ const Jobs: React.FC = () => {
   }>>([]);
   const [editingItem, setEditingItem] = useState<{index: number, barcode: string, quantity: number, reason?: string, storeName?: string, name?: string | null} | null>(null);
   const [editingJobItem, setEditingJobItem] = useState<{jobId: string, itemIndex: number, barcode: string, quantity: number, locationCode?: string, shelfNumber?: string, reason?: string, storeName?: string} | null>(null);
+  const [addBackToStockItem, setAddBackToStockItem] = useState<{ job: Job; itemIndex: number; item: JobItem } | null>(null);
+  const [addBackToStockLoading, setAddBackToStockLoading] = useState(false);
   const [jobToDelete, setJobToDelete] = useState<Job | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
@@ -105,6 +111,12 @@ const Jobs: React.FC = () => {
   
   // State to track expanded jobs to prevent collapse on re-render
   const [expandedJobs, setExpandedJobs] = useState<Set<string>>(new Set());
+  // Verification mode: only one job at a time; user cannot collapse or open another job until Complete or Stop Verifying
+  const [jobIdInVerificationMode, setJobIdInVerificationMode] = useState<string | null>(null);
+  // Current verification segment start (ms); used to compute elapsed when Stop or Complete
+  const [verificationSegmentStartTime, setVerificationSegmentStartTime] = useState<number | null>(null);
+  // Live verifying elapsed (seconds) for UI; updated every second when in verification mode
+  const [verifyingElapsedSeconds, setVerifyingElapsedSeconds] = useState<number>(0);
   
   // Calculator modal state
   const [isCalculatorModalOpen, setIsCalculatorModalOpen] = useState(false);
@@ -614,6 +626,8 @@ const Jobs: React.FC = () => {
           })) : [],
           pickingTime: data.pickingTime || 0,
           trolleyNumber: data.trolleyNumber ?? null,
+          verifyingTimeAccumulated: data.verifyingTimeAccumulated ?? 0,
+          verifyingTime: data.verifyingTime ?? null,
         };
       });
       
@@ -762,18 +776,65 @@ const Jobs: React.FC = () => {
     }
   }, [reportDate, showReports]);
 
-  // Function to toggle job expansion
+  // Function to toggle job expansion (only one job open at a time). Lock: cannot expand another or collapse current when in verification mode.
   const toggleJobExpansion = (jobId: string) => {
+    if (jobIdInVerificationMode !== null && jobIdInVerificationMode !== jobId) {
+      showToast('Finish or stop verifying the current job first.', 'warning');
+      return;
+    }
+    if (jobIdInVerificationMode === jobId) {
+      showToast('Stop verifying or complete the job to close.', 'info');
+      return;
+    }
     setExpandedJobs(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(jobId)) {
+      if (prev.has(jobId)) {
+        const newSet = new Set(prev);
         newSet.delete(jobId);
-      } else {
-        newSet.add(jobId);
+        return newSet;
       }
-      return newSet;
+      return new Set([jobId]);
     });
   };
+
+  const startVerification = (job: Job) => {
+    setJobIdInVerificationMode(job.id);
+    setVerificationSegmentStartTime(Date.now());
+    setVerifyingElapsedSeconds(0);
+    setExpandedJobs(new Set([job.id]));
+  };
+
+  const stopVerification = async (job: Job) => {
+    const segmentSeconds = verificationSegmentStartTime
+      ? Math.floor((Date.now() - verificationSegmentStartTime) / 1000)
+      : 0;
+    setVerificationSegmentStartTime(null);
+    setJobIdInVerificationMode(null);
+    setVerifyingElapsedSeconds(0);
+    try {
+      const newAccumulated = (job.verifyingTimeAccumulated ?? 0) + segmentSeconds;
+      await updateDoc(doc(db, 'jobs', job.id), {
+        verifyingTimeAccumulated: newAccumulated,
+      });
+      showToast('Verifying paused. You can resume by clicking Verify Items again.', 'success');
+      fetchJobs();
+    } catch (e) {
+      console.error('Stop verification error:', e);
+      showToast('Failed to pause verifying time', 'error');
+      fetchJobs();
+    }
+  };
+
+  // Live verifying timer: update every second when in verification mode
+  useEffect(() => {
+    if (!jobIdInVerificationMode || verificationSegmentStartTime === null) return;
+    const interval = setInterval(() => {
+      const job = jobs.find(j => j.id === jobIdInVerificationMode);
+      const accumulated = job?.verifyingTimeAccumulated ?? 0;
+      const currentSegment = Math.floor((Date.now() - verificationSegmentStartTime) / 1000);
+      setVerifyingElapsedSeconds(accumulated + currentSegment);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [jobIdInVerificationMode, verificationSegmentStartTime, jobs]);
 
   // Timer for job creation
   useEffect(() => {
@@ -1308,15 +1369,24 @@ const Jobs: React.FC = () => {
         return;
       }
       
-      // Update the job in database with all verified items
+      // Compute final verifying time (current segment + accumulated)
+      const segmentSeconds = verificationSegmentStartTime && jobIdInVerificationMode === job.id
+        ? Math.floor((Date.now() - verificationSegmentStartTime) / 1000)
+        : 0;
+      const totalVerifyingTime = (job.verifyingTimeAccumulated ?? 0) + segmentSeconds;
+      setVerificationSegmentStartTime(null);
+      setJobIdInVerificationMode(prev => (prev === job.id ? null : prev));
+
+      // Update the job in database with all verified items and verifying time
       await updateDoc(jobDocRef, { 
         status: 'completed', 
         packer: user?.name || job.packer || null,
-        items: updatedItems
+        items: updatedItems,
+        verifyingTime: totalVerifyingTime,
       });
       
       await logActivity(  
-        `completed packing for job ${job.jobId} with ${job.items.length} items (${job.items.reduce((sum, item) => sum + item.quantity, 0)} total units) - ${totalVerifiedCount} items verified`
+        `completed packing for job ${job.jobId} with ${job.items.length} items (${job.items.reduce((sum, item) => sum + item.quantity, 0)} total units) - ${totalVerifiedCount} items verified (verifying time: ${totalVerifyingTime}s)`
       );
       
       // Clear locally verified items for this job
@@ -1426,6 +1496,85 @@ const Jobs: React.FC = () => {
       fetchJobs();
     } catch {
       showToast('Failed to remove job item', 'error');
+    }
+  };
+
+  const confirmAddBackToStock = async () => {
+    if (!addBackToStockItem || !user) return;
+    const { job, itemIndex, item } = addBackToStockItem;
+    setAddBackToStockLoading(true);
+    try {
+      let stockRef: ReturnType<typeof doc> | null = null;
+      let currentQuantity = 0;
+
+      if (item.stockItemId) {
+        const stockDocRef = doc(db, 'inventory', item.stockItemId);
+        const stockSnap = await getDoc(stockDocRef);
+        if (stockSnap.exists()) {
+          stockRef = stockDocRef;
+          currentQuantity = Number(stockSnap.data()?.quantity ?? 0);
+        }
+      }
+      if (!stockRef) {
+        const q = query(collection(db, 'inventory'), where('barcode', '==', item.barcode));
+        const snapshot = await getDocs(q);
+        if (snapshot.empty) {
+          showToast(`Stock record not found for barcode ${item.barcode}`, 'error');
+          return;
+        }
+        const target = item.locationCode && item.shelfNumber
+          ? snapshot.docs.find(d => d.data().locationCode === item.locationCode && d.data().shelfNumber === item.shelfNumber)
+          : snapshot.docs[0];
+        const docToUse = target ?? snapshot.docs[0];
+        stockRef = doc(db, 'inventory', docToUse.id);
+        currentQuantity = Number(docToUse.data()?.quantity ?? 0);
+      }
+
+      const newQuantity = currentQuantity + item.quantity;
+      await updateDoc(stockRef, {
+        quantity: newQuantity,
+        lastUpdated: serverTimestamp()
+      });
+
+      const updatedItems = job.items.filter((_, index) => index !== itemIndex);
+
+      if (updatedItems.length === 0) {
+        await deleteDoc(doc(db, 'jobs', job.id));
+        await logActivity(
+          `deleted job ${job.jobId} (empty — last item returned to stock)`
+        );
+        await logActivity(
+          `added ${item.quantity} unit(s) back to stock for "${item.name || item.barcode}" (barcode: ${item.barcode}) from job ${job.jobId} — Reason: ${item.reason}, Store: ${item.storeName}${item.locationCode && item.shelfNumber ? `, Location: ${item.locationCode}-${item.shelfNumber}` : ''} — Quantity before: ${currentQuantity}, Quantity after: ${newQuantity}`
+        );
+        setLocallyVerifiedItems(prev => {
+          const next = new Set(prev);
+          job.items.forEach(i => next.delete(`${job.id}-${i.barcode}`));
+          return next;
+        });
+        if (jobIdInVerificationMode === job.id) {
+          setJobIdInVerificationMode(null);
+          setVerificationSegmentStartTime(null);
+        }
+        showToast(`${item.quantity} unit(s) added back to stock. Job ${job.jobId} deleted (no items left).`, 'success');
+      } else {
+        await updateDoc(doc(db, 'jobs', job.id), { items: updatedItems });
+        await logActivity(
+          `added ${item.quantity} unit(s) back to stock for "${item.name || item.barcode}" (barcode: ${item.barcode}) from job ${job.jobId} — Reason: ${item.reason}, Store: ${item.storeName}${item.locationCode && item.shelfNumber ? `, Location: ${item.locationCode}-${item.shelfNumber}` : ''} — Quantity before: ${currentQuantity}, Quantity after: ${newQuantity}`
+        );
+        setLocallyVerifiedItems(prev => {
+          const next = new Set(prev);
+          next.delete(`${job.id}-${item.barcode}`);
+          return next;
+        });
+        showToast(`${item.quantity} unit(s) added back to stock`, 'success');
+      }
+      setAddBackToStockItem(null);
+      fetchJobs();
+    } catch (e) {
+      console.error('Add back to stock error:', e);
+      showToast('Failed to add item back to stock', 'error');
+    } finally {
+      setAddBackToStockLoading(false);
     }
   };
 
@@ -1549,6 +1698,11 @@ const Jobs: React.FC = () => {
                   {(showCompleted || showArchived) && job.packer && (
                     <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-xs leading-relaxed`}>
                       Verified by {job.packer}
+                      {job.verifyingTime != null && job.verifyingTime > 0 && (
+                        <span className={`ml-2 ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                          • Verifying: {formatElapsedTime(job.verifyingTime)}
+                        </span>
+                      )}
                     </p>
                   )}
                   
@@ -1570,10 +1724,26 @@ const Jobs: React.FC = () => {
               </div>
               
               {/* Action Buttons */}
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <span className={`px-2 py-1 rounded-full text-xs font-medium ${isCompleted ? 'bg-green-100 text-green-700' : isAwaitingPack ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'}`}>
+              <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
+                <span className={`px-2 py-1 rounded-full text-xs font-medium ${isCompleted ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : isAwaitingPack ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'}`}>
                   {isCompleted ? 'Completed' : isAwaitingPack ? 'Awaiting Pack' : 'Picking'}
                 </span>
+                {isAwaitingPack && (
+                  jobIdInVerificationMode === job.id ? (
+                    <>
+                      <span className={`text-xs font-medium px-2 py-1 rounded ${isDarkMode ? 'text-slate-300 bg-slate-700' : 'text-slate-700 bg-slate-200'}`}>
+                        Verifying: {formatElapsedTime(verifyingElapsedSeconds)}
+                      </span>
+                      <Button variant="secondary" size="sm" onClick={() => stopVerification(job)} className="h-8 px-2 text-xs">
+                        Stop Verifying
+                      </Button>
+                    </>
+                  ) : (
+                    <Button size="sm" onClick={() => startVerification(job)} className="h-8 px-2 text-xs bg-blue-500 hover:bg-blue-600 text-white">
+                      Verify Items
+                    </Button>
+                  )
+                )}
                 <Button variant="secondary" onClick={fetchJobs} size='sm' className="h-8 w-8 p-0">
                   <RefreshCw size={14} />
                 </Button>
@@ -1588,14 +1758,14 @@ const Jobs: React.FC = () => {
         {/* Expandable Items Section */}
         {isExpanded && (
           <div className="p-3 sm:p-4 space-y-4">
-            {/* Action Buttons Row */}
+            {/* Action Buttons Row - Verification Status only when in verification mode */}
             <div className="flex flex-wrap items-center gap-2">
               {isPicking && (
                 <Button onClick={() => setIsStockUpdateModalOpen(true)} className="flex items-center gap-1" size='sm'>
                   <ClipboardList size={14} /> <span className="hidden sm:inline">Scan</span>
                 </Button>
               )}
-              {isAwaitingPack && (
+              {isAwaitingPack && jobIdInVerificationMode === job.id && (
                 <div className={`text-sm ${isDarkMode ? 'text-slate-300' : 'text-slate-600'} bg-slate-100 dark:bg-slate-700 px-3 py-2 rounded-lg`}>
                   Verification Status: {job.items.filter(item => 
                     item.verified || locallyVerifiedItems.has(`${job.id}-${item.barcode}`)
@@ -1660,9 +1830,9 @@ const Jobs: React.FC = () => {
                           )}
                         </div>
                         
-                        {/* Action Buttons */}
+                        {/* Action Buttons - only in verification mode */}
                         <div className="flex items-center gap-2 flex-shrink-0">
-                          {isAwaitingPack && (
+                          {isAwaitingPack && jobIdInVerificationMode === job.id && (
                             <Button
                               variant={it.verified || locallyVerifiedItems.has(`${job.id}-${it.barcode}`) ? "success" : "primary"}
                               size="sm"
@@ -1683,29 +1853,17 @@ const Jobs: React.FC = () => {
                               )}
                             </Button>
                           )}
-                          
-
-                          
-                          {isAwaitingPack && !editingJobItem && (
+                          {isAwaitingPack && jobIdInVerificationMode === job.id && !editingJobItem && (
                             <>
-                              {/* <Button 
-                                variant="secondary" 
-                                size="sm" 
-                                onClick={() => setEditingJobItem({
-                                  jobId: job.id,
-                                  itemIndex,
-                                  barcode: it.barcode,
-                                  quantity: it.quantity,
-                                  locationCode: it.locationCode,
-                                  shelfNumber: it.shelfNumber,
-                                  reason: it.reason,
-                                  storeName: it.storeName
-                                })} 
-                                className="h-8 w-8 p-0 flex items-center justify-center"
-                                title="Edit item"
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => setAddBackToStockItem({ job, itemIndex, item: it })}
+                                className="h-8 w-8 p-0 flex items-center justify-center text-white bg-green-500 hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-500"
+                                title="Add back to stock"
                               >
-                                <Edit size={16} />
-                              </Button> */}
+                                <Undo2 size={16} />
+                              </Button>
                               <Button 
                                 variant="danger" 
                                 size="sm" 
@@ -1758,7 +1916,7 @@ const Jobs: React.FC = () => {
                   <CheckSquare size={14} /> <span className="hidden sm:inline">Finish Picking</span>
                 </Button>
               )}
-              {isAwaitingPack && (
+              {isAwaitingPack && jobIdInVerificationMode === job.id && (
                 <Button 
                   onClick={() => completePacking(job)} 
                   size='sm' 
@@ -3309,6 +3467,50 @@ const Jobs: React.FC = () => {
         message={jobToDelete ? `Are you sure you want to delete Job ${jobToDelete.jobId}? This action cannot be undone.` : ''}
         isLoading={false}
       />
+
+      {/* Add back to stock modal */}
+      <Modal
+        isOpen={!!addBackToStockItem}
+        onClose={() => !addBackToStockLoading && setAddBackToStockItem(null)}
+        title="Add item back to stock"
+        size="sm"
+      >
+        {addBackToStockItem && (
+          <div className="space-y-4">
+            <div className={`text-sm ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+              <p className="font-medium mb-2">{addBackToStockItem.item.name || addBackToStockItem.item.barcode}</p>
+              <p>Barcode: {addBackToStockItem.item.barcode}</p>
+              <p>Quantity to return: {addBackToStockItem.item.quantity}</p>
+              {addBackToStockItem.item.locationCode && addBackToStockItem.item.shelfNumber && (
+                <p>Location: {addBackToStockItem.item.locationCode}-{addBackToStockItem.item.shelfNumber}</p>
+              )}
+              {addBackToStockItem.item.reason && <p>Reason: {addBackToStockItem.item.reason}</p>}
+              {addBackToStockItem.item.storeName && <p>Store: {addBackToStockItem.item.storeName}</p>}
+            </div>
+            <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+              This will add {addBackToStockItem.item.quantity} unit(s) back to inventory and remove the item from the job. An activity log will be created.
+            </p>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setAddBackToStockItem(null)}
+                disabled={addBackToStockLoading}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={confirmAddBackToStock}
+                isLoading={addBackToStockLoading}
+                disabled={addBackToStockLoading}
+              >
+                Add back to stock
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
   {/* Confirm close Add Barcode modal */}
   <ConfirmationModal
