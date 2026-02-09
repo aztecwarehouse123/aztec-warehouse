@@ -1854,26 +1854,15 @@ const Jobs: React.FC = () => {
                             </Button>
                           )}
                           {isAwaitingPack && jobIdInVerificationMode === job.id && !editingJobItem && (
-                            <>
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => setAddBackToStockItem({ job, itemIndex, item: it })}
-                                className="h-8 w-8 p-0 flex items-center justify-center text-white bg-green-500 hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-500"
-                                title="Add back to stock"
-                              >
-                                <Undo2 size={16} />
-                              </Button>
-                              <Button 
-                                variant="danger" 
-                                size="sm" 
-                                onClick={() => removeJobItem(job, itemIndex)} 
-                                className="h-8 w-8 p-0 flex items-center justify-center"
-                                title="Remove item"
-                              >
-                                <Trash2 size={16} />
-                              </Button>
-                            </>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => setAddBackToStockItem({ job, itemIndex, item: it })}
+                              className="h-8 w-8 p-0 flex items-center justify-center text-white bg-green-500 hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-500"
+                              title="Add back to stock"
+                            >
+                              <Undo2 size={16} />
+                            </Button>
                           )}
                         </div>
                       </div>
@@ -3464,7 +3453,7 @@ const Jobs: React.FC = () => {
         onClose={() => setJobToDelete(null)}
         onConfirm={confirmDeleteJob}
         title="Delete Job"
-        message={jobToDelete ? `Are you sure you want to delete Job ${jobToDelete.jobId}? This action cannot be undone.` : ''}
+        message={jobToDelete ? `Are you sure you want to delete Job ${jobToDelete.jobId}? This action cannot be undone. Deleting this job will not add the items back to stock.` : ''}
         isLoading={false}
       />
 
