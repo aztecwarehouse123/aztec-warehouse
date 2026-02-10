@@ -84,6 +84,7 @@ const Jobs: React.FC = () => {
   const [editingJobItem, setEditingJobItem] = useState<{jobId: string, itemIndex: number, barcode: string, quantity: number, locationCode?: string, shelfNumber?: string, reason?: string, storeName?: string} | null>(null);
   const [addBackToStockItem, setAddBackToStockItem] = useState<{ job: Job; itemIndex: number; item: JobItem } | null>(null);
   const [addBackToStockLoading, setAddBackToStockLoading] = useState(false);
+  const [addBackQuantity, setAddBackQuantity] = useState<number>(0);
   const [jobToDelete, setJobToDelete] = useState<Job | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
@@ -199,6 +200,8 @@ const Jobs: React.FC = () => {
     }>;
   }>({ workerStats: [], hourlyProductivity: [] });
   const [isLoadingProductivity, setIsLoadingProductivity] = useState(false);
+  // Global jobs operation loading (hide jobs list while backend updates run)
+  const [isJobsOperationInProgress, setIsJobsOperationInProgress] = useState(false);
   const [productivityDate, setProductivityDate] = useState<Date>(() => {
     const today = new Date();
     // Ensure we get the local date without timezone issues
@@ -1141,6 +1144,7 @@ const Jobs: React.FC = () => {
     
     setIsJobCreationInProgress(true);
     setIsLoading(true);
+    setIsJobsOperationInProgress(true);
     try {
       // Apply all pending stock updates with validation
       for (const update of pendingStockUpdates) {
@@ -1219,6 +1223,7 @@ const Jobs: React.FC = () => {
     } finally {
       setIsLoading(false);
       setIsJobCreationInProgress(false);
+      setIsJobsOperationInProgress(false);
     }
   };
 
@@ -1230,6 +1235,7 @@ const Jobs: React.FC = () => {
 
     // Set loading state
     setCompletingJobs(prev => new Set(prev).add(job.id));
+     setIsJobsOperationInProgress(true);
 
     try {
       await updateDoc(doc(db, 'jobs', job.id), { status: 'awaiting_pack', picker: user?.name || job.picker || null });
@@ -1251,6 +1257,7 @@ const Jobs: React.FC = () => {
         newSet.delete(job.id);
         return newSet;
       });
+      setIsJobsOperationInProgress(false);
     }
   };
 
@@ -1301,6 +1308,7 @@ const Jobs: React.FC = () => {
 
     // Set loading state
     setCompletingJobs(prev => new Set(prev).add(job.id));
+    setIsJobsOperationInProgress(true);
 
     try {
       // Get all locally verified items for this job
@@ -1423,6 +1431,7 @@ const Jobs: React.FC = () => {
         newSet.delete(job.id);
         return newSet;
       });
+      setIsJobsOperationInProgress(false);
     }
   };
 
@@ -1433,6 +1442,7 @@ const Jobs: React.FC = () => {
   const confirmDeleteJob = async () => {
     if (!jobToDelete) return;
     try {
+      setIsJobsOperationInProgress(true);
       await logActivity(
         `deleted job ${jobToDelete.jobId} (status: ${jobToDelete.status} with ${jobToDelete.items.length} items (${jobToDelete.items.reduce((sum, item) => sum + item.quantity, 0)} total units))`
       );
@@ -1452,11 +1462,14 @@ const Jobs: React.FC = () => {
       fetchJobs();
     } catch {
       showToast('Failed to delete job', 'error');
+    } finally {
+      setIsJobsOperationInProgress(false);
     }
   };
 
   const updateJobItem = async (job: Job, itemIndex: number, newBarcode: string, newQuantity: number) => {
     try {
+      setIsJobsOperationInProgress(true);
       const updatedItems = [...job.items];
       updatedItems[itemIndex] = {
         ...updatedItems[itemIndex],
@@ -1477,33 +1490,19 @@ const Jobs: React.FC = () => {
       fetchJobs();
     } catch {
       showToast('Failed to update job item', 'error');
-    }
-  };
-
-  const removeJobItem = async (job: Job, itemIndex: number) => {
-    try {
-      const updatedItems = job.items.filter((_, index) => index !== itemIndex);
-      
-      await updateDoc(doc(db, 'jobs', job.id), {
-        items: updatedItems
-      });
-      
-      await logActivity(
-        `removed item ${job.items[itemIndex].barcode} (qty: ${job.items[itemIndex].quantity}) from job ${job.jobId}`
-      );
-      
-      showToast('Job item removed successfully', 'success');
-      fetchJobs();
-    } catch {
-      showToast('Failed to remove job item', 'error');
+    } finally {
+      setIsJobsOperationInProgress(false);
     }
   };
 
   const confirmAddBackToStock = async () => {
     if (!addBackToStockItem || !user) return;
     const { job, itemIndex, item } = addBackToStockItem;
+    const maxQty = item.quantity;
+    const qtyToReturn = Math.max(1, Math.min(addBackQuantity || maxQty, maxQty));
     setAddBackToStockLoading(true);
     try {
+      setIsJobsOperationInProgress(true);
       let stockRef: ReturnType<typeof doc> | null = null;
       let currentQuantity = 0;
 
@@ -1530,13 +1529,19 @@ const Jobs: React.FC = () => {
         currentQuantity = Number(docToUse.data()?.quantity ?? 0);
       }
 
-      const newQuantity = currentQuantity + item.quantity;
+      const newQuantity = currentQuantity + qtyToReturn;
       await updateDoc(stockRef, {
         quantity: newQuantity,
         lastUpdated: serverTimestamp()
       });
 
-      const updatedItems = job.items.filter((_, index) => index !== itemIndex);
+      const updatedItems: JobItem[] = qtyToReturn >= item.quantity
+        ? job.items.filter((_, index) => index !== itemIndex)
+        : job.items.map((jobItem, index) =>
+            index === itemIndex
+              ? { ...jobItem, quantity: jobItem.quantity - qtyToReturn }
+              : jobItem
+          );
 
       if (updatedItems.length === 0) {
         await deleteDoc(doc(db, 'jobs', job.id));
@@ -1544,7 +1549,7 @@ const Jobs: React.FC = () => {
           `deleted job ${job.jobId} (empty — last item returned to stock)`
         );
         await logActivity(
-          `added ${item.quantity} unit(s) back to stock for "${item.name || item.barcode}" (barcode: ${item.barcode}) from job ${job.jobId} — Reason: ${item.reason}, Store: ${item.storeName}${item.locationCode && item.shelfNumber ? `, Location: ${item.locationCode}-${item.shelfNumber}` : ''} — Quantity before: ${currentQuantity}, Quantity after: ${newQuantity}`
+          `added ${qtyToReturn} unit(s) back to stock for "${item.name || item.barcode}" (barcode: ${item.barcode}) from job ${job.jobId} — Reason: ${item.reason}, Store: ${item.storeName}${item.locationCode && item.shelfNumber ? `, Location: ${item.locationCode}-${item.shelfNumber}` : ''} — Quantity before: ${currentQuantity}, Quantity after: ${newQuantity}`
         );
         setLocallyVerifiedItems(prev => {
           const next = new Set(prev);
@@ -1555,26 +1560,28 @@ const Jobs: React.FC = () => {
           setJobIdInVerificationMode(null);
           setVerificationSegmentStartTime(null);
         }
-        showToast(`${item.quantity} unit(s) added back to stock. Job ${job.jobId} deleted (no items left).`, 'success');
+        showToast(`${qtyToReturn} unit(s) added back to stock. Job ${job.jobId} deleted (no items left).`, 'success');
       } else {
         await updateDoc(doc(db, 'jobs', job.id), { items: updatedItems });
         await logActivity(
-          `added ${item.quantity} unit(s) back to stock for "${item.name || item.barcode}" (barcode: ${item.barcode}) from job ${job.jobId} — Reason: ${item.reason}, Store: ${item.storeName}${item.locationCode && item.shelfNumber ? `, Location: ${item.locationCode}-${item.shelfNumber}` : ''} — Quantity before: ${currentQuantity}, Quantity after: ${newQuantity}`
+          `added ${qtyToReturn} unit(s) back to stock for "${item.name || item.barcode}" (barcode: ${item.barcode}) from job ${job.jobId} — Reason: ${item.reason}, Store: ${item.storeName}${item.locationCode && item.shelfNumber ? `, Location: ${item.locationCode}-${item.shelfNumber}` : ''} — Quantity before: ${currentQuantity}, Quantity after: ${newQuantity}`
         );
         setLocallyVerifiedItems(prev => {
           const next = new Set(prev);
           next.delete(`${job.id}-${item.barcode}`);
           return next;
         });
-        showToast(`${item.quantity} unit(s) added back to stock`, 'success');
+        showToast(`${qtyToReturn} unit(s) added back to stock`, 'success');
       }
       setAddBackToStockItem(null);
+      setAddBackQuantity(0);
       fetchJobs();
     } catch (e) {
       console.error('Add back to stock error:', e);
       showToast('Failed to add item back to stock', 'error');
     } finally {
       setAddBackToStockLoading(false);
+      setIsJobsOperationInProgress(false);
     }
   };
 
@@ -1857,8 +1864,11 @@ const Jobs: React.FC = () => {
                             <Button
                               variant="secondary"
                               size="sm"
-                              onClick={() => setAddBackToStockItem({ job, itemIndex, item: it })}
-                              className="h-8 w-8 p-0 flex items-center justify-center text-white bg-green-500 hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-500"
+                              onClick={() => {
+                                setAddBackToStockItem({ job, itemIndex, item: it });
+                                setAddBackQuantity(it.quantity);
+                              }}
+                              className="h-8 w-8 p-0 flex items-center justify-center !bg-green-500 !hover:bg-green-600 !text-white dark:!bg-green-600 dark:!hover:bg-green-500"
                               title="Add back to stock"
                             >
                               <Undo2 size={16} />
@@ -2172,9 +2182,24 @@ const Jobs: React.FC = () => {
           </div>
         )}
         
-        {!showReports && !showProductivity && filteredJobs.map(job => (
-          <JobRow key={job.id} job={job} />
-        ))}
+        {!showReports && !showProductivity && (
+          <>
+            {(isLoading || isJobsOperationInProgress) ? (
+              <div className="flex items-center justify-center py-16">
+                <div className="flex flex-col items-center gap-3">
+                  <RefreshCw className="animate-spin text-blue-500" size={24} />
+                  <p className={`${isDarkMode ? 'text-slate-300' : 'text-slate-600'} text-sm`}>
+                    Updating jobs, please wait...
+                  </p>
+                </div>
+              </div>
+            ) : (
+              filteredJobs.map(job => (
+                <JobRow key={job.id} job={job} />
+              ))
+            )}
+          </>
+        )}
         
         {/* Live Jobs Section */}
         {showLiveJobs && (
@@ -3460,7 +3485,11 @@ const Jobs: React.FC = () => {
       {/* Add back to stock modal */}
       <Modal
         isOpen={!!addBackToStockItem}
-        onClose={() => !addBackToStockLoading && setAddBackToStockItem(null)}
+        onClose={() => {
+          if (addBackToStockLoading) return;
+          setAddBackToStockItem(null);
+          setAddBackQuantity(0);
+        }}
         title="Add item back to stock"
         size="sm"
       >
@@ -3469,21 +3498,68 @@ const Jobs: React.FC = () => {
             <div className={`text-sm ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
               <p className="font-medium mb-2">{addBackToStockItem.item.name || addBackToStockItem.item.barcode}</p>
               <p>Barcode: {addBackToStockItem.item.barcode}</p>
-              <p>Quantity to return: {addBackToStockItem.item.quantity}</p>
+              <p>Available in job: {addBackToStockItem.item.quantity}</p>
               {addBackToStockItem.item.locationCode && addBackToStockItem.item.shelfNumber && (
                 <p>Location: {addBackToStockItem.item.locationCode}-{addBackToStockItem.item.shelfNumber}</p>
               )}
               {addBackToStockItem.item.reason && <p>Reason: {addBackToStockItem.item.reason}</p>}
               {addBackToStockItem.item.storeName && <p>Store: {addBackToStockItem.item.storeName}</p>}
             </div>
-            <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-              This will add {addBackToStockItem.item.quantity} unit(s) back to inventory and remove the item from the job. An activity log will be created.
-            </p>
+            <div className="space-y-2">
+              <p className={`text-xs ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                Select quantity to add back to stock:
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="h-8 w-8 p-0 flex items-center justify-center"
+                  onClick={() => setAddBackQuantity(prev => Math.max(1, (prev || 1) - 1))}
+                  disabled={addBackToStockLoading}
+                >
+                  -
+                </Button>
+                <Input
+                  type="number"
+                  min={1}
+                  max={addBackToStockItem.item.quantity}
+                  value={addBackQuantity || ''}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                    const raw = parseInt(e.target.value || '0', 10);
+                    if (isNaN(raw)) {
+                      setAddBackQuantity(0);
+                      return;
+                    }
+                    const clamped = Math.max(1, Math.min(raw, addBackToStockItem.item.quantity));
+                    setAddBackQuantity(clamped);
+                  }}
+                  className="w-20 text-center"
+                />
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="h-8 w-8 p-0 flex items-center justify-center"
+                  onClick={() => setAddBackQuantity(prev => {
+                    const current = prev || 0;
+                    return Math.min(addBackToStockItem.item.quantity, current + 1);
+                  })}
+                  disabled={addBackToStockLoading}
+                >
+                  +
+                </Button>
+              </div>
+              <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                This will add up to {addBackToStockItem.item.quantity} unit(s) back to inventory. If you return the full quantity, the item will be removed from the job. An activity log will be created.
+              </p>
+            </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() => setAddBackToStockItem(null)}
+                onClick={() => {
+                  setAddBackToStockItem(null);
+                  setAddBackQuantity(0);
+                }}
                 disabled={addBackToStockLoading}
               >
                 Cancel
