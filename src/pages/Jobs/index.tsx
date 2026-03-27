@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Plus, RefreshCw, CheckSquare, ClipboardList, Trash2, ChevronUp, ChevronDown, Search, ArrowLeft, Calculator, Clock, Undo2 } from 'lucide-react';
 import { db } from '../../config/firebase';
-import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, orderBy, query, serverTimestamp, Timestamp, updateDoc, where, onSnapshot } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, orderBy, query, runTransaction, serverTimestamp, Timestamp, updateDoc, where, onSnapshot } from 'firebase/firestore';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '../../contexts/ToastContext';
 import Button from '../../components/ui/Button';
@@ -177,7 +177,14 @@ const Jobs: React.FC = () => {
       avgTimePerJob: number;
       totalTime: number;
     }>;
-  }>({ dailyStats: [], userStats: [] });
+    verifierStats: Array<{
+      name: string;
+      jobsVerified: number;
+      itemsVerified: number;
+      avgVerifyingTime: number;
+      totalVerifyingTime: number;
+    }>;
+  }>({ dailyStats: [], userStats: [], verifierStats: [] });
   const [isLoadingReports, setIsLoadingReports] = useState(false);
 
   // Productivity data state
@@ -544,7 +551,70 @@ const Jobs: React.FC = () => {
       // Sort user stats by items picked (descending)
       userStats.sort((a, b) => b.itemsPicked - a.itemsPicked);
 
-              setReportData({ dailyStats, userStats });
+      // Generate verifier productivity stats from activity logs
+      // (same source as Warehouse Operations page, so counts stay consistent)
+      const verifierStats: Array<{
+        name: string;
+        jobsVerified: number;
+        itemsVerified: number;
+        avgVerifyingTime: number;
+        totalVerifyingTime: number;
+      }> = [];
+      const verifierMap = new Map<string, { jobsVerified: number; itemsVerified: number; totalVerifyingTime: number; jobsWithTime: number }>();
+      const logsQuery = query(
+        collection(db, 'activityLogs'),
+        where('time', '>=', startOfDay.toISOString()),
+        where('time', '<=', endOfDay.toISOString()),
+        orderBy('time', 'desc')
+      );
+      const logsSnapshot = await getDocs(logsQuery);
+      logsSnapshot.forEach((logDoc) => {
+        const data = logDoc.data();
+        const detail = String(data.detail || '').toLowerCase();
+        const role = String(data.role || '');
+        const verifierName = String(data.user || '').trim();
+        if (!verifierName) return;
+        if (detail.includes('completed packing for job') === false) return;
+        // Keep staff parity with Warehouse Operations visibility
+        if (user?.role === 'staff' && role === 'admin') return;
+
+        const current = verifierMap.get(verifierName) || {
+          jobsVerified: 0,
+          itemsVerified: 0,
+          totalVerifyingTime: 0,
+          jobsWithTime: 0
+        };
+        current.jobsVerified += 1;
+
+        const itemsMatch = detail.match(/-\s*(\d+)\s*items verified/i);
+        if (itemsMatch) {
+          current.itemsVerified += Number(itemsMatch[1]) || 0;
+        }
+
+        const timeMatch = detail.match(/verifying time:\s*(\d+)s/i);
+        if (timeMatch) {
+          const seconds = Number(timeMatch[1]) || 0;
+          current.totalVerifyingTime += seconds;
+          current.jobsWithTime += 1;
+        }
+
+        verifierMap.set(verifierName, current);
+      });
+
+      verifierMap.forEach((stats, name) => {
+        verifierStats.push({
+          name,
+          jobsVerified: stats.jobsVerified,
+          itemsVerified: stats.itemsVerified,
+          avgVerifyingTime: stats.jobsWithTime > 0 ? stats.totalVerifyingTime / stats.jobsWithTime : 0,
+          totalVerifyingTime: stats.totalVerifyingTime
+        });
+      });
+
+      // Sort verifier stats by jobs verified (descending)
+      verifierStats.sort((a, b) => b.jobsVerified - a.jobsVerified);
+
+      setReportData({ dailyStats, userStats, verifierStats });
       
       // Add a small delay to make loading more visible
       await new Promise(resolve => setTimeout(resolve, 500));
@@ -556,7 +626,7 @@ const Jobs: React.FC = () => {
     } finally {
       setIsLoadingReports(false);
     }
-  }, [jobs, showToast]);
+  }, [jobs, showToast, user?.role]);
 
   const logActivity = async ( details: string) => {
     if (!user) return;
@@ -1149,22 +1219,29 @@ const Jobs: React.FC = () => {
       // Apply all pending stock updates with validation
       for (const update of pendingStockUpdates) {
         const stockRef = doc(db, 'inventory', update.stockItem.id);
-        const newQuantity = update.stockItem.quantity - update.deductedQuantity;
+        let quantityBefore = 0;
+        let quantityAfter = 0;
         
-        // Validate that we don't go negative
-        if (newQuantity < 0) {
-          showToast(`Error: Cannot deduct ${update.deductedQuantity} units from "${update.stockItem.name}" - only ${update.stockItem.quantity} units available`, 'error');
-          throw new Error(`Insufficient stock: trying to deduct ${update.deductedQuantity} from ${update.stockItem.quantity} units`);
-        }
-        
-        await updateDoc(stockRef, {
-          quantity: newQuantity,
-          lastUpdated: serverTimestamp()
+        // Atomic stock deduction to avoid race conditions between concurrent workers
+        await runTransaction(db, async (transaction) => {
+          const stockSnap = await transaction.get(stockRef);
+          if (!stockSnap.exists()) {
+            throw new Error(`Stock item not found for id ${update.stockItem.id}`);
+          }
+          quantityBefore = Number(stockSnap.data()?.quantity ?? 0);
+          quantityAfter = quantityBefore - update.deductedQuantity;
+          if (quantityAfter < 0) {
+            throw new Error(`Insufficient stock: trying to deduct ${update.deductedQuantity} from ${quantityBefore} units`);
+          }
+          transaction.update(stockRef, {
+            quantity: quantityAfter,
+            lastUpdated: serverTimestamp()
+          });
         });
         
         // Add activity log for each stock update (with quantity before/after)
         await addDoc(collection(db, 'activityLogs'), {
-          detail: `${update.deductedQuantity} units deducted from stock "${update.stockItem.name}" (Reason: ${update.reason}, Store: ${update.storeName}) by ${user?.role} from location ${update.locationCode} shelf ${update.shelfNumber} — Quantity before: ${update.stockItem.quantity}, Quantity after: ${newQuantity}`,
+          detail: `${update.deductedQuantity} units deducted from stock "${update.stockItem.name}" (Reason: ${update.reason}, Store: ${update.storeName}) by ${user?.role} from location ${update.locationCode} shelf ${update.shelfNumber} — Quantity before: ${quantityBefore}, Quantity after: ${quantityAfter}`,
           time: new Date().toISOString(),
           user: user?.name,
           role: user?.role
@@ -1504,14 +1581,12 @@ const Jobs: React.FC = () => {
     try {
       setIsJobsOperationInProgress(true);
       let stockRef: ReturnType<typeof doc> | null = null;
-      let currentQuantity = 0;
 
       if (item.stockItemId) {
         const stockDocRef = doc(db, 'inventory', item.stockItemId);
         const stockSnap = await getDoc(stockDocRef);
         if (stockSnap.exists()) {
           stockRef = stockDocRef;
-          currentQuantity = Number(stockSnap.data()?.quantity ?? 0);
         }
       }
       if (!stockRef) {
@@ -1526,13 +1601,22 @@ const Jobs: React.FC = () => {
           : snapshot.docs[0];
         const docToUse = target ?? snapshot.docs[0];
         stockRef = doc(db, 'inventory', docToUse.id);
-        currentQuantity = Number(docToUse.data()?.quantity ?? 0);
       }
 
-      const newQuantity = currentQuantity + qtyToReturn;
-      await updateDoc(stockRef, {
-        quantity: newQuantity,
-        lastUpdated: serverTimestamp()
+      let currentQuantity = 0;
+      let newQuantity = 0;
+      // Atomic stock add-back to avoid race conditions
+      await runTransaction(db, async (transaction) => {
+        const stockSnap = await transaction.get(stockRef!);
+        if (!stockSnap.exists()) {
+          throw new Error(`Stock item not found for add-back (${item.barcode})`);
+        }
+        currentQuantity = Number(stockSnap.data()?.quantity ?? 0);
+        newQuantity = currentQuantity + qtyToReturn;
+        transaction.update(stockRef!, {
+          quantity: newQuantity,
+          lastUpdated: serverTimestamp()
+        });
       });
 
       const updatedItems: JobItem[] = qtyToReturn >= item.quantity
@@ -2401,6 +2485,53 @@ const Jobs: React.FC = () => {
                     )}
                   </div>
 
+                  {/* Verifier Productivity Table */}
+                  <div className={`p-4 sm:p-6 rounded-lg border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                    <h3 className={`text-base sm:text-lg font-semibold mb-3 sm:mb-4 ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
+                      Verifier Productivity - {reportDate.toLocaleDateString()}
+                    </h3>
+                    {reportData.verifierStats.length > 0 ? (
+                      <div className="overflow-x-auto">
+                        <table className="w-full min-w-[600px]">
+                          <thead>
+                            <tr className={`border-b ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+                              <th className={`text-left py-2 px-2 sm:px-3 text-xs sm:text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>Verifier</th>
+                              <th className={`text-center py-2 px-2 sm:px-3 text-xs sm:text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>Jobs Verified</th>
+                              <th className={`text-center py-2 px-2 sm:px-3 text-xs sm:text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>Items Verified</th>
+                              <th className={`text-center py-2 px-2 sm:px-3 text-xs sm:text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>Avg Verifying Time</th>
+                              <th className={`text-center py-2 px-2 sm:px-3 text-xs sm:text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>Total Verifying Time</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {reportData.verifierStats.map((verifier, index) => (
+                              <tr key={index} className={`border-b ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+                                <td className={`py-2 sm:py-3 px-2 sm:px-3 text-xs sm:text-sm font-medium ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
+                                  {verifier.name}
+                                </td>
+                                <td className={`text-center py-2 sm:py-3 px-2 sm:px-3 text-xs sm:text-sm ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+                                  {verifier.jobsVerified}
+                                </td>
+                                <td className={`text-center py-2 sm:py-3 px-2 sm:px-3 text-xs sm:text-sm ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'} font-semibold`}>
+                                  {verifier.itemsVerified}
+                                </td>
+                                <td className={`text-center py-2 sm:py-3 px-2 sm:px-3 text-xs sm:text-sm ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+                                  {formatElapsedTime(verifier.avgVerifyingTime)}
+                                </td>
+                                <td className={`text-center py-2 sm:py-3 px-2 sm:px-3 text-xs sm:text-sm ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+                                  {formatElapsedTime(verifier.totalVerifyingTime)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className={`text-center py-6 sm:py-8 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                        No verifier productivity data for selected date
+                      </div>
+                    )}
+                  </div>
+
                                 {/* Performance Overview - Last 7 Days */}
                   <div className={`p-4 sm:p-6 rounded-lg border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
                     <h3 className={`text-base sm:text-lg font-semibold mb-3 sm:mb-4 ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
@@ -2981,7 +3112,7 @@ const Jobs: React.FC = () => {
           </>
         )}
         
-        {!showReports && !showProductivity && filteredJobs.length === 0 && getLiveJobs().uiSessions.length === 0 && (
+        {!showReports && !showProductivity && !isLoading && !isJobsOperationInProgress && filteredJobs.length === 0 && getLiveJobs().uiSessions.length === 0 && (
           <div className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-center py-8`}>
             {showArchived ? (
               <div className="space-y-2">

@@ -37,6 +37,28 @@ const WarehouseOperations: React.FC = () => {
   const { isDarkMode } = useTheme();
   const { user } = useAuth();
 
+  const formatSecondsToMinSec = (seconds: number): string => {
+    if (seconds < 60) return `${seconds}s`;
+    if (seconds < 3600) {
+      const mins = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      return `${mins}m ${secs}s`;
+    }
+    const hours = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    return `${hours}h ${mins}m ${secs}s`;
+  };
+
+  const formatActivityDetail = (detail: string): string => {
+    // Convert "... verifying time: 1962s" -> "... verifying time: 32m 42s"
+    return detail.replace(/verifying time:\s*(\d+)s/gi, (_match, secondsText: string) => {
+      const seconds = Number(secondsText);
+      if (Number.isNaN(seconds)) return _match;
+      return `verifying time: ${formatSecondsToMinSec(seconds)}`;
+    });
+  };
+
   // Fetch all users for the user filter
   const fetchUsers = async () => {
     try {
@@ -447,7 +469,7 @@ const WarehouseOperations: React.FC = () => {
                       >
                         <td className={`px-4 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{log.user}</td>
                         <td className={`px-2 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{log.role}</td>
-                        <td className={`px-2 py-4 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{log.detail}</td>
+                        <td className={`px-2 py-4 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{formatActivityDetail(log.detail)}</td>
                         <td className={`px-2 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{format(new Date(log.time), 'MMM d, yyyy h:mm:ss a')}</td>
                       </motion.tr>
                     ))}
@@ -484,8 +506,8 @@ const WarehouseOperations: React.FC = () => {
                           </div>
                         </td>
                         <td className={`px-2 py-4 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
-                          <div className="max-w-xs truncate" title={log.detail}>
-                            {log.detail}
+                          <div className="max-w-xs truncate" title={formatActivityDetail(log.detail)}>
+                            {formatActivityDetail(log.detail)}
                           </div>
                         </td>
                         <td className={`px-2 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
@@ -520,7 +542,7 @@ const WarehouseOperations: React.FC = () => {
                       </span>
                     </div>
                     <div className={`text-sm leading-relaxed ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
-                      {log.detail}
+                      {formatActivityDetail(log.detail)}
                     </div>
                     <div className="mt-2 text-xs">
                       <span className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>
