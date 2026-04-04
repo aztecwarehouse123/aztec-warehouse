@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../../config/firebase';
 import { collection, getDocs, query, orderBy, where } from 'firebase/firestore';
 import {  Download, RefreshCw, Search } from 'lucide-react';
@@ -14,6 +14,7 @@ import Button from '../../components/ui/Button';
 import { User } from '../../types';
 import Input from '../../components/ui/Input';
 import { useAuth } from '../../contexts/AuthContext';
+import { isWmsAlertDetail, WMS_ALERT_PREFIX } from '../../utils/wmsActivityLog';
 
 interface ActivityLog {
   id: string;
@@ -168,6 +169,8 @@ const WarehouseOperations: React.FC = () => {
               return detail.includes('job') || detail.includes('task') || detail.includes('work');
             case 'location_operations':
               return detail.includes('location') || detail.includes('shelf') || detail.includes('moved to');
+            case 'wms_alerts':
+              return isWmsAlertDetail(log.detail);
             default:
               return true;
           }
@@ -253,13 +256,26 @@ const WarehouseOperations: React.FC = () => {
     { value: 'user_management', label: 'User Management' },
     { value: 'profile_update', label: 'Profile Update' },
     { value: 'job_operations', label: 'Job Operations' },
-    { value: 'location_operations', label: 'Location Operations' }
+    { value: 'location_operations', label: 'Location Operations' },
+    { value: 'wms_alerts', label: 'System / dev alerts' }
   ];
 
   const clearDateRange = () => {
     setStartDate(null);
     setEndDate(null);
   };
+
+  const wmsAlertCount = useMemo(
+    () => activityLogs.filter((log) => isWmsAlertDetail(log.detail)).length,
+    [activityLogs]
+  );
+
+  const alertRowClass = (detail: string) =>
+    isWmsAlertDetail(detail)
+      ? isDarkMode
+        ? 'bg-red-950/50 border-l-4 border-red-500'
+        : 'bg-red-50 border-l-4 border-red-600'
+      : '';
 
   const exportToCSV = () => {
     try {
@@ -439,6 +455,26 @@ const WarehouseOperations: React.FC = () => {
           </div>
         </div>
 
+        {!isLogsLoading && wmsAlertCount > 0 && (
+          <div
+            className={`mx-4 sm:mx-6 mb-2 rounded-lg border px-4 py-3 text-sm ${
+              isDarkMode
+                ? 'border-red-500/80 bg-red-950/40 text-red-100'
+                : 'border-red-300 bg-red-50 text-red-900'
+            }`}
+            role="alert"
+          >
+            <p className="font-semibold">
+              {wmsAlertCount} system / developer alert{wmsAlertCount !== 1 ? 's' : ''} in this view
+            </p>
+            <p className={`mt-1 ${isDarkMode ? 'text-red-200/90' : 'text-red-800'}`}>
+              Rows prefixed with <code className="rounded bg-black/10 px-1">{WMS_ALERT_PREFIX}</code> include
+              the error detail in parentheses and the correction applied. Use Action type &quot;System / dev
+              alerts&quot; to show only these.
+            </p>
+          </div>
+        )}
+
         {isLogsLoading ? (
           <div className="flex justify-center items-center h-32">
             <div className={`animate-spin rounded-full h-8 w-8 border-b-2 ${isDarkMode ? 'border-white' : 'border-slate-800'}`}></div>
@@ -465,11 +501,11 @@ const WarehouseOperations: React.FC = () => {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -20 }}
                         transition={{ duration: 0.3 }}
-                        className={`${isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-slate-50'}`}
+                        className={`${isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-slate-50'} ${alertRowClass(log.detail)}`}
                       >
-                        <td className={`px-4 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{log.user}</td>
-                        <td className={`px-2 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{log.role}</td>
-                        <td className={`px-2 py-4 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{formatActivityDetail(log.detail)}</td>
+                        <td className={`px-4 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'} ${isWmsAlertDetail(log.detail) ? (isDarkMode ? 'text-red-100' : 'text-red-900') : ''}`}>{log.user}</td>
+                        <td className={`px-2 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'} ${isWmsAlertDetail(log.detail) ? (isDarkMode ? 'text-red-100' : 'text-red-900') : ''}`}>{log.role}</td>
+                        <td className={`px-2 py-4 text-sm break-words max-w-xl ${isDarkMode ? 'text-slate-200' : 'text-slate-800'} ${isWmsAlertDetail(log.detail) ? (isDarkMode ? 'text-red-100 font-medium' : 'text-red-900 font-medium') : ''}`}>{formatActivityDetail(log.detail)}</td>
                         <td className={`px-2 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{format(new Date(log.time), 'MMM d, yyyy h:mm:ss a')}</td>
                       </motion.tr>
                     ))}
@@ -497,15 +533,15 @@ const WarehouseOperations: React.FC = () => {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -20 }}
                         transition={{ duration: 0.3 }}
-                        className={`${isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-slate-50'}`}
+                        className={`${isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-slate-50'} ${alertRowClass(log.detail)}`}
                       >
-                        <td className={`px-3 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                        <td className={`px-3 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'} ${isWmsAlertDetail(log.detail) ? (isDarkMode ? 'text-red-100' : 'text-red-900') : ''}`}>
                           <div className="flex flex-col">
                             <span className="font-medium">{log.user}</span>
-                            <span className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{log.role}</span>
+                            <span className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} ${isWmsAlertDetail(log.detail) ? (isDarkMode ? '!text-red-200' : '!text-red-800') : ''}`}>{log.role}</span>
                           </div>
                         </td>
-                        <td className={`px-2 py-4 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                        <td className={`px-2 py-4 text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-800'} ${isWmsAlertDetail(log.detail) ? (isDarkMode ? 'text-red-100 font-medium' : 'text-red-900 font-medium') : ''}`}>
                           <div className="max-w-xs truncate" title={formatActivityDetail(log.detail)}>
                             {formatActivityDetail(log.detail)}
                           </div>
@@ -530,18 +566,60 @@ const WarehouseOperations: React.FC = () => {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -20 }}
                     transition={{ duration: 0.3 }}
-                    className={`rounded-lg border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} p-4 shadow-sm`}
+                    className={`rounded-lg border p-4 shadow-sm ${
+                      isWmsAlertDetail(log.detail)
+                        ? isDarkMode
+                          ? 'bg-red-950/50 border-red-500'
+                          : 'bg-red-50 border-red-500'
+                        : isDarkMode
+                          ? 'bg-slate-800 border-slate-700'
+                          : 'bg-white border-slate-200'
+                    }`}
                   >
                     <div className="flex justify-between items-start mb-3">
                       <div className="flex flex-col">
-                        <span className={`font-semibold text-sm ${isDarkMode ? 'text-blue-400' : 'text-blue-700'}`}>{log.user}</span>
-                        <span className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{log.role}</span>
+                        <span
+                          className={`font-semibold text-sm ${
+                            isWmsAlertDetail(log.detail)
+                              ? isDarkMode
+                                ? 'text-red-200'
+                                : 'text-red-800'
+                              : isDarkMode
+                                ? 'text-blue-400'
+                                : 'text-blue-700'
+                          }`}
+                        >
+                          {log.user}
+                        </span>
+                        <span
+                          className={`text-xs ${
+                            isWmsAlertDetail(log.detail)
+                              ? isDarkMode
+                                ? 'text-red-300'
+                                : 'text-red-700'
+                              : isDarkMode
+                                ? 'text-slate-400'
+                                : 'text-slate-500'
+                          }`}
+                        >
+                          {log.role}
+                        </span>
                       </div>
                       <span className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                         {format(new Date(log.time), 'h:mm a')}
                       </span>
                     </div>
-                    <div className={`text-sm leading-relaxed ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                    <div
+                      className={`text-sm leading-relaxed ${
+                        isWmsAlertDetail(log.detail)
+                          ? isDarkMode
+                            ? 'text-red-100 font-medium'
+                            : 'text-red-900 font-medium'
+                          : isDarkMode
+                            ? 'text-slate-200'
+                            : 'text-slate-800'
+                      }`}
+                    >
                       {formatActivityDetail(log.detail)}
                     </div>
                     <div className="mt-2 text-xs">
