@@ -67,6 +67,9 @@ const Jobs: React.FC = () => {
   const [isJobCreationInProgress, setIsJobCreationInProgress] = useState(false);
   /** Synchronous guard — React state updates are async, so double-clicks could still run two finishes. */
   const jobFinishInFlightRef = useRef(false);
+  /** Same for stock update modal — prevents double Update adding quantity twice to pending job. */
+  const stockUpdateInFlightRef = useRef(false);
+  const [isStockUpdateSubmitting, setIsStockUpdateSubmitting] = useState(false);
   // State to track jobs currently being completed to prevent duplicate completions
   const [completingJobs, setCompletingJobs] = useState<Set<string>>(new Set());
   // Timer alert states
@@ -897,10 +900,15 @@ const Jobs: React.FC = () => {
 
   const handleStockUpdate = async (data: { id: string; quantity: number; reason: string; storeName: string; locationCode: string; shelfNumber: string }) => {
     if (!selectedStockItem) return;
-    
-    let deductedQuantity = 0; // Declare outside try block so it's accessible later
-    
-    // Use the specific document ID that was selected
+    if (stockUpdateInFlightRef.current) {
+      showToast('Update is already processing. Please wait.', 'warning');
+      return;
+    }
+    stockUpdateInFlightRef.current = true;
+    setIsStockUpdateSubmitting(true);
+
+    let deductedQuantity = 0;
+
     try {
       const stockDocRef = doc(db, 'inventory', data.id);
       const stockDoc = await getDoc(stockDocRef);
@@ -918,10 +926,8 @@ const Jobs: React.FC = () => {
         quantity: currentQuantity
       };
 
-      // Calculate the deducted quantity (data.quantity is the new quantity after deduction)
       deductedQuantity = currentQuantity - data.quantity;
 
-      // Validate that we don't deduct more than available
       if (deductedQuantity > currentQuantity) {
         showToast(`Cannot deduct ${deductedQuantity} units - only ${currentQuantity} units available at this location`, 'error');
         return;
@@ -932,7 +938,6 @@ const Jobs: React.FC = () => {
         return;
       }
 
-      // Add to pending stock updates with the location-specific stock item
       setPendingStockUpdates(prev => [...prev, {
         stockItem: locationSpecificStockItem,
         deductedQuantity,
@@ -941,89 +946,78 @@ const Jobs: React.FC = () => {
         locationCode: data.locationCode,
         shelfNumber: data.shelfNumber
       }]);
-    } catch {
-      showToast('Error locating stock for this location', 'error');
-      return;
-    }
-    
-    // Add the barcode to the job items - use stockItemId to uniquely identify separate entries
-    if (selectedStockItem.barcode) {
-      setNewJobItems(prev => {
-        const barcode = selectedStockItem.barcode!;
-        
-        // Check if this exact stockItemId already exists (for separate entries at same location)
-        // Fall back to barcode+location if stockItemId is not available
-        const existingIndex = prev.findIndex(item => 
-          item.stockItemId 
-            ? item.stockItemId === data.id 
-            : (item.barcode === barcode && 
-               item.locationCode === data.locationCode && 
-               item.shelfNumber === data.shelfNumber)
-        );
-        
-        if (existingIndex >= 0) {
-          // Update existing item quantity for this specific stock item entry
-          const updated = [...prev];
-          updated[existingIndex] = { ...updated[existingIndex], quantity: updated[existingIndex].quantity + deductedQuantity };
-          return updated;
-        } else {
-          // Add new item with location information and stock item ID
-          return [...prev, { 
-            barcode: barcode, 
-            name: selectedStockItem.name, // Add product name
-            quantity: deductedQuantity, 
+
+      if (selectedStockItem.barcode) {
+        setNewJobItems(prev => {
+          const barcode = selectedStockItem.barcode!;
+
+          const existingIndex = prev.findIndex(item =>
+            item.stockItemId
+              ? item.stockItemId === data.id
+              : (item.barcode === barcode &&
+                item.locationCode === data.locationCode &&
+                item.shelfNumber === data.shelfNumber)
+          );
+
+          if (existingIndex >= 0) {
+            const updated = [...prev];
+            updated[existingIndex] = { ...updated[existingIndex], quantity: updated[existingIndex].quantity + deductedQuantity };
+            return updated;
+          }
+          return [...prev, {
+            barcode,
+            name: selectedStockItem.name,
+            quantity: deductedQuantity,
             verified: false,
             locationCode: data.locationCode,
             shelfNumber: data.shelfNumber,
             reason: data.reason,
             storeName: data.storeName,
-            stockItemId: data.id // Include document ID to distinguish separate entries at same location
+            stockItemId: data.id
           }];
-        }
-      });
+        });
+      }
+
+      showToast('Item added to job', 'success');
+      setIsStockUpdateModalOpen(false);
+      setSelectedStockItem(null);
+      setIsNewJobModalOpen(true);
+      setManualBarcode('');
+
+      const sessionQuery = query(
+        collection(db, 'liveJobSessions'),
+        where('createdBy', '==', user?.name),
+        where('isActive', '==', true)
+      );
+      const sessionSnapshot = await getDocs(sessionQuery);
+      if (!sessionSnapshot.empty) {
+        const sessionDoc = sessionSnapshot.docs[0];
+        const currentItems = sessionDoc.data().items || [];
+
+        const newItem = {
+          barcode: selectedStockItem.barcode!,
+          name: selectedStockItem.name,
+          quantity: deductedQuantity,
+          verified: false,
+          locationCode: data.locationCode,
+          shelfNumber: data.shelfNumber,
+          reason: data.reason,
+          storeName: data.storeName,
+          stockItemId: data.id
+        };
+
+        await updateDoc(doc(db, 'liveJobSessions', sessionDoc.id), {
+          items: [...currentItems, newItem]
+        });
+      }
+
+      refreshSearch();
+    } catch {
+      showToast('Error locating stock for this location', 'error');
+    } finally {
+      stockUpdateInFlightRef.current = false;
+      setIsStockUpdateSubmitting(false);
     }
-    
-    showToast('Item added to job', 'success');
-    setIsStockUpdateModalOpen(false);
-    setSelectedStockItem(null);
-    
-    // Return to the Add Barcode modal to continue adding more barcodes
-    setIsNewJobModalOpen(true);
-    
-    // Reset the barcode input field
-    setManualBarcode('');
-    
-    // Update the active session items in Firebase
-    const sessionQuery = query(
-      collection(db, 'liveJobSessions'),
-      where('createdBy', '==', user?.name),
-      where('isActive', '==', true)
-    );
-    const sessionSnapshot = await getDocs(sessionQuery);
-    if (!sessionSnapshot.empty) {
-      const sessionDoc = sessionSnapshot.docs[0];
-      const currentItems = sessionDoc.data().items || [];
-      
-      // Add new item to the session
-      const newItem = {
-        barcode: selectedStockItem.barcode!,
-        name: selectedStockItem.name,
-        quantity: deductedQuantity,
-        verified: false,
-        locationCode: data.locationCode,
-        shelfNumber: data.shelfNumber,
-        reason: data.reason,
-        storeName: data.storeName,
-        stockItemId: data.id // Include document ID to distinguish separate entries at same location
-      };
-      
-      await updateDoc(doc(db, 'liveJobSessions', sessionDoc.id), {
-        items: [...currentItems, newItem]
-      });
-    }
-    
-    // Refresh the search functionality
-    refreshSearch();
   };
 
   const handleStockUpdateCancel = () => {
@@ -1905,7 +1899,7 @@ const Jobs: React.FC = () => {
             item={selectedStockItem}
             onSubmit={handleStockUpdate}
             onCancel={handleStockUpdateCancel}
-            isLoading={false}
+            isLoading={isStockUpdateSubmitting}
           />
         )}
       </Modal>

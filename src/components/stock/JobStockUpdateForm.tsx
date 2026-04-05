@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Loader2, AlertCircle } from 'lucide-react';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
@@ -33,6 +33,8 @@ const JobStockUpdateForm: React.FC<JobStockUpdateFormProps> = ({ item, onSubmit,
   const [availableLocations, setAvailableLocations] = useState<LocationInfo[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<string>('');
   const [isLoadingLocations, setIsLoadingLocations] = useState(false);
+  /** Blocks double-submit before parent re-renders with isLoading (same event loop tick). */
+  const submitInFlightRef = useRef(false);
   const { isDarkMode } = useTheme();
 
   // Remove store selection logic since we'll auto-populate from location
@@ -118,31 +120,36 @@ const JobStockUpdateForm: React.FC<JobStockUpdateFormProps> = ({ item, onSubmit,
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading || submitInFlightRef.current) return;
+
     const quantityNum = Number(deductQuantity);
     if (!deductQuantity || quantityNum < 0) return;
-    
-    // Check against the selected location's quantity
+
     const maxQuantityForLocation = getMaxQuantityForLocation();
     if (quantityNum > maxQuantityForLocation) return;
-    
+
     if (!selectedLocation) return;
-    
+
     const finalReason = reason === 'other' ? otherReason : reason;
     const finalStoreName = storeName.trim();
-    
-    // Value is the document ID
+
     const selectedLocationData = availableLocations.find(loc => loc.id === selectedLocation);
-    
+
     if (!selectedLocationData) return;
-    
-    await onSubmit({ 
-      id: selectedLocationData.id, // Use the specific document ID for this product entry
-      quantity: selectedLocationData.quantity - quantityNum, // Use the quantity from the selected location
-      reason: finalReason,
-      storeName: finalStoreName,
-      locationCode: selectedLocationData.locationCode,
-      shelfNumber: selectedLocationData.shelfNumber
-    });
+
+    submitInFlightRef.current = true;
+    try {
+      await onSubmit({
+        id: selectedLocationData.id,
+        quantity: selectedLocationData.quantity - quantityNum,
+        reason: finalReason,
+        storeName: finalStoreName,
+        locationCode: selectedLocationData.locationCode,
+        shelfNumber: selectedLocationData.shelfNumber
+      });
+    } finally {
+      submitInFlightRef.current = false;
+    }
   };
 
   const getMaxQuantityForLocation = () => {
