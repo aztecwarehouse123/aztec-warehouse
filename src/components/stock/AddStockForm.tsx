@@ -255,6 +255,8 @@ const locationOptions = [
   { value: 'Z6', label: 'Z6' },
   { value: 'Z7', label: 'Z7' },
   { value: 'Z8', label: 'Z8' },
+  { value: 'TENT-1', label: 'TENT-1' },
+  { value: 'TENT-2', label: 'TENT-2' },
   { value: 'Awaiting Location', label: 'Awaiting Location' },
   { value: 'Awaiting Locations Sparklin', label: 'Awaiting Locations Sparklin' },
   { value: 'Awaiting Locations Aztec', label: 'Awaiting Locations Aztec' }

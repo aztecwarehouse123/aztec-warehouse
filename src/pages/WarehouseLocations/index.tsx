@@ -140,6 +140,7 @@ const WarehouseLocations: React.FC = () => {
     'X1', 'X2', 'X3', 'X4', 'X5', 'X6', 'X7', 'X8',
     'Y1', 'Y2', 'Y3', 'Y4', 'Y5', 'Y6', 'Y7', 'Y8',
     'Z1', 'Z2', 'Z3', 'Z4', 'Z5', 'Z6', 'Z7', 'Z8',
+    'TENT-1', 'TENT-2',
     'Awaiting Location',
     'Awaiting Locations Sparklin',
     'Awaiting Locations Aztec'
