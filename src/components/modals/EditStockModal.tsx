@@ -325,6 +325,7 @@ const EditStockModal: React.FC<EditStockModalProps> = ({ isOpen, onClose, onSave
                 <option value="Z8">Z8</option>
                 <option value="TENT-1">TENT-1</option>
                 <option value="TENT-2">TENT-2</option>
+                <option value="TENT-3">TENT-3</option>
                 <option value="Awaiting Location">Awaiting Location</option>
                 <option value="Awaiting Locations Sparklin">Awaiting Locations Sparklin</option>
                 <option value="Awaiting Locations Aztec">Awaiting Locations Aztec</option>

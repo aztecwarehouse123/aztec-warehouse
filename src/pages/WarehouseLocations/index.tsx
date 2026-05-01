@@ -21,6 +21,26 @@ interface LocationSummary {
   products: StockItem[];
 }
 
+/** Fixed order: awaiting locations → TENT-* → everything else A–Z */
+function compareWarehouseLocationCodes(a: string, b: string): number {
+  const priority = [
+    'Awaiting Location',
+    'Awaiting Locations Sparklin',
+    'Awaiting Locations Aztec',
+    'TENT-1',
+    'TENT-2',
+    'TENT-3',
+  ];
+  const ia = priority.indexOf(a);
+  const ib = priority.indexOf(b);
+  const aIn = ia !== -1;
+  const bIn = ib !== -1;
+  if (aIn && bIn) return ia - ib;
+  if (aIn) return -1;
+  if (bIn) return 1;
+  return a.localeCompare(b);
+}
+
 const WarehouseLocations: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [locations, setLocations] = useState<StockItem[]>([]);
@@ -114,6 +134,12 @@ const WarehouseLocations: React.FC = () => {
 
 
   const allLocationCodes = [
+    'Awaiting Location',
+    'Awaiting Locations Sparklin',
+    'Awaiting Locations Aztec',
+    'TENT-1',
+    'TENT-2',
+    'TENT-3',
     'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8',
     'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8',
     'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8',
@@ -139,11 +165,7 @@ const WarehouseLocations: React.FC = () => {
     'W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'W7', 'W8',
     'X1', 'X2', 'X3', 'X4', 'X5', 'X6', 'X7', 'X8',
     'Y1', 'Y2', 'Y3', 'Y4', 'Y5', 'Y6', 'Y7', 'Y8',
-    'Z1', 'Z2', 'Z3', 'Z4', 'Z5', 'Z6', 'Z7', 'Z8',
-    'TENT-1', 'TENT-2',
-    'Awaiting Location',
-    'Awaiting Locations Sparklin',
-    'Awaiting Locations Aztec'
+    'Z1', 'Z2', 'Z3', 'Z4', 'Z5', 'Z6', 'Z7', 'Z8'
   ];
 
   const locationSummaries = allLocationCodes.reduce((acc, code) => {
@@ -206,26 +228,12 @@ const WarehouseLocations: React.FC = () => {
       if (sortBy === 'totalStock') {
         return b.totalStock - a.totalStock;
       } else if (sortBy === 'locationCode') {
-        // Special handling for 'Awaiting Location' types - always show first
-        if (a.locationCode === 'Awaiting Location') return -1;
-        if (b.locationCode === 'Awaiting Location') return 1;
-        if (a.locationCode === 'Awaiting Locations Sparklin') return -1;
-        if (b.locationCode === 'Awaiting Locations Sparklin') return 1;
-        if (a.locationCode === 'Awaiting Locations Aztec') return -1;
-        if (b.locationCode === 'Awaiting Locations Aztec') return 1;
-        return a.locationCode.localeCompare(b.locationCode);
+        return compareWarehouseLocationCodes(a.locationCode, b.locationCode);
       } else if (sortBy === 'availability') {
         const availA = availability[a.locationCode] !== false;
         const availB = availability[b.locationCode] !== false;
         if (availA === availB) {
-          // Special handling for 'Awaiting Location' types - always show first
-          if (a.locationCode === 'Awaiting Location') return -1;
-          if (b.locationCode === 'Awaiting Location') return 1;
-          if (a.locationCode === 'Awaiting Locations Sparklin') return -1;
-          if (b.locationCode === 'Awaiting Locations Sparklin') return 1;
-          if (a.locationCode === 'Awaiting Locations Aztec') return -1;
-          if (b.locationCode === 'Awaiting Locations Aztec') return 1;
-          return a.locationCode.localeCompare(b.locationCode);
+          return compareWarehouseLocationCodes(a.locationCode, b.locationCode);
         }
         return availA ? -1 : 1;
       }
@@ -529,6 +537,7 @@ const WarehouseLocations: React.FC = () => {
                         {summary.locationCode === 'Awaiting Location' ? 'Awaiting Location' : 
                          summary.locationCode === 'Awaiting Locations Sparklin' ? 'Awaiting Locations Sparklin' :
                          summary.locationCode === 'Awaiting Locations Aztec' ? 'Awaiting Locations Aztec' :
+                         summary.locationCode.startsWith('TENT-') ? summary.locationCode :
                          `Location ${summary.locationCode}`}
                       </h3>
                     </div>
