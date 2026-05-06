@@ -3,7 +3,7 @@ export type User = {
   username: string;
   email: string;
   name: string;
-  role: 'admin' | 'manager' | 'staff' | 'supply_serve' | 'fahiz' | 'aphy';
+  role: 'admin' | 'manager' | 'staff' | 'supply_serve' | 'fahiz' | 'aphy' | 'amazon_admin';
   password?: string;
 };
 

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, ShoppingCart, LogOut, Menu, X, BarChart, Settings, MapPin, Activity, Plus, PackagePlus, PackageMinus, Boxes, Briefcase } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, LogOut, Menu, X, BarChart, Settings, MapPin, Activity, Plus, PackagePlus, PackageMinus, Boxes, Briefcase, PlugZap, ListChecks } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -58,10 +58,14 @@ const Navbar: React.FC = () => {
     { to: "/jobs", icon: <Briefcase size={20} />, label: "Jobs", roles: ['admin', 'manager', 'staff'] },
     { to: "/warehouse-locations", icon: <MapPin size={20} />, label: "Locations", roles: ['admin', 'manager', 'staff'] },
     { to: "/orders", icon: <ShoppingCart size={20} />, label: "Orders", roles: [''] },
-    { to: "/reports-analytics", icon: <BarChart size={20} />, label: "Reports", roles: ['admin', 'manager', 'staff'] },
+    { to: "/reports-analytics", icon: <BarChart size={20} />, label: "Reports", roles: ['admin', 'manager', 'staff', 'amazon_admin'] },
     { to: "/warehouse-operations", icon: <Activity size={20} />, label: "Logs", roles: ['admin', 'manager', 'staff'] },
-    { to: "/settings", icon: <Settings size={20} />, label: "Settings", roles: ['admin', 'manager', 'staff'] },
+    { to: "/settings", icon: <Settings size={20} />, label: "Settings", roles: ['admin', 'manager', 'staff', 'amazon_admin'] },
     { to: "/supply-serve", icon: <PackagePlus size={20} />, label: getSupplyServeLabel(), roles: ['supply_serve', 'fahiz', 'aphy'] },
+    { to: "/amazon", icon: <PlugZap size={20} />, label: "Amazon", roles: ['amazon_admin'] },
+    { to: "/amazon/orders", icon: <ShoppingCart size={20} />, label: "Amazon Orders", roles: ['amazon_admin'] },
+    { to: "/amazon/fulfillment", icon: <ListChecks size={20} />, label: "Fulfillment", roles: ['amazon_admin'] },
+    { to: "/amazon/mapping", icon: <Boxes size={20} />, label: "ASIN/SKU Map", roles: ['amazon_admin'] },
     
   ];
 

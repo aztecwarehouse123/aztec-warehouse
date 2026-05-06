@@ -15,6 +15,10 @@ import OutboundStock from './pages/OutboundStock';
 import WarehouseLocations from './pages/WarehouseLocations';
 import Add from './pages/Add';
 import SupplyServe from './pages/SupplyServe';
+import AmazonIntegration from './pages/AmazonIntegration';
+import AmazonOrders from './pages/AmazonOrders';
+import AmazonFulfillment from './pages/AmazonFulfillment';
+import AmazonMapping from './pages/AmazonMapping';
 
 const ProtectedRoute: React.FC<{
   children: React.ReactNode;
@@ -39,7 +43,7 @@ function App() {
       
       <Route path="/" element={<AppLayout />}>
         <Route index element={
-          <ProtectedRoute allowedRoles={['admin', 'manager', 'staff']}>
+          <ProtectedRoute allowedRoles={['admin', 'manager', 'staff', 'amazon_admin']}>
             <Dashboard />
           </ProtectedRoute>
         } />
@@ -81,12 +85,12 @@ function App() {
           </ProtectedRoute>
         } />
         <Route path="reports-analytics" element={
-          <ProtectedRoute allowedRoles={['admin', 'manager', 'staff']}>
+          <ProtectedRoute allowedRoles={['admin', 'manager', 'staff', 'amazon_admin']}>
             <ReportsAnalytics />
           </ProtectedRoute>
         } />
         <Route path="settings" element={
-          <ProtectedRoute allowedRoles={['admin', 'manager', 'staff']}>
+          <ProtectedRoute allowedRoles={['admin', 'manager', 'staff', 'amazon_admin']}>
             <Settings />
           </ProtectedRoute>
         } />
@@ -98,6 +102,26 @@ function App() {
         <Route path="supply-serve" element={
           <ProtectedRoute allowedRoles={['supply_serve', 'fahiz', 'aphy']}>
             <SupplyServe />
+          </ProtectedRoute>
+        } />
+        <Route path="amazon" element={
+          <ProtectedRoute allowedRoles={['amazon_admin']}>
+            <AmazonIntegration />
+          </ProtectedRoute>
+        } />
+        <Route path="amazon/orders" element={
+          <ProtectedRoute allowedRoles={['amazon_admin']}>
+            <AmazonOrders />
+          </ProtectedRoute>
+        } />
+        <Route path="amazon/fulfillment" element={
+          <ProtectedRoute allowedRoles={['amazon_admin']}>
+            <AmazonFulfillment />
+          </ProtectedRoute>
+        } />
+        <Route path="amazon/mapping" element={
+          <ProtectedRoute allowedRoles={['amazon_admin']}>
+            <AmazonMapping />
           </ProtectedRoute>
         } />
       </Route>

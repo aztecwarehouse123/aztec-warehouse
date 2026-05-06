@@ -23,10 +23,11 @@ const Login: React.FC = () => {
       showToast(`Welcome back, ${user.name}!`, 'success');
       if (user.role === 'staff') {
         navigate('/add');
-      } 
-      if (user.role === 'supply_serve' || user.role === 'fahiz' || user.role === 'aphy'){
+      } else if (user.role === 'amazon_admin') {
+        navigate('/amazon');
+      } else if (user.role === 'supply_serve' || user.role === 'fahiz' || user.role === 'aphy'){
         navigate('/supply-serve');
-      }else {
+      } else {
         navigate('/');
       }
     }

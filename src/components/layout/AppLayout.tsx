@@ -23,7 +23,11 @@ const AppLayout: React.FC = () => {
   return (
     <div className={`flex flex-col min-h-screen ${isDarkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
       <Navbar />
-      <main className="flex-grow container mx-auto px-4 py-6 md:px-6 lg:px-8">
+      <main
+        className={`flex-grow container mx-auto px-4 py-6 md:px-6 lg:px-8 ${
+          isDarkMode ? 'text-slate-200' : 'text-slate-800'
+        }`}
+      >
         <Outlet />
       </main>
     </div>

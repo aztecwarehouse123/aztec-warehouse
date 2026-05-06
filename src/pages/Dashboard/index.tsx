@@ -1,4 +1,5 @@
 import React from 'react';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import AdminDashboard from './AdminDashboard';
 import Add from '../Add';
@@ -15,6 +16,8 @@ const Dashboard: React.FC = () => {
       return <AdminDashboard />;
     case 'staff':
       return <Add/>
+    case 'amazon_admin':
+      return <Navigate to="/amazon" replace />;
     default:
       return null;
   }

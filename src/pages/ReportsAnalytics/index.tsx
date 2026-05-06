@@ -13,6 +13,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
 import { canSeePrices } from '../../utils/roleUtils';
+import AmazonNotificationSettings from '../../components/amazon/AmazonNotificationSettings';
 
 
 
@@ -379,8 +380,14 @@ const ReportsAnalytics: React.FC = () => {
     // No need to refetch data, just trigger re-render
   }, [timeRange]);
 
-  // Redirect non-admin and non-staff users
-  if (!user || (user.role !== 'admin' && user.role !== 'staff' && user.role !== 'manager')) {
+  // Redirect users without access (matches App route roles)
+  if (
+    !user ||
+    (user.role !== 'admin' &&
+      user.role !== 'staff' &&
+      user.role !== 'manager' &&
+      user.role !== 'amazon_admin')
+  ) {
     return <Navigate to="/" replace />;
   }
 
@@ -1242,6 +1249,8 @@ const ReportsAnalytics: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <AmazonNotificationSettings />
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">

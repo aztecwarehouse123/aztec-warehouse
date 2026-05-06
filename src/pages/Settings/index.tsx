@@ -12,6 +12,8 @@ import { doc, updateDoc, collection, addDoc, getDocs, query, where, deleteDoc } 
 import { User as UserType } from '../../types';
 import Modal from '../../components/modals/Modal';
 import Select from '../../components/ui/Select';
+import AmazonNotificationSettings from '../../components/amazon/AmazonNotificationSettings';
+import { filterUsersForManagementList, canAssignAmazonAdminRole } from '../../utils/userVisibility';
 
 const Settings: React.FC = () => {
   const { user, setUser } = useAuth();
@@ -400,6 +402,11 @@ const Settings: React.FC = () => {
     e.preventDefault();
     
     if (!validateAddUser()) return;
+
+    if (addUserFormData.role === 'amazon_admin' && !canAssignAmazonAdminRole(user)) {
+      showToast('You cannot assign the Amazon Admin role.', 'error');
+      return;
+    }
     
     setIsLoading(true);
     
@@ -514,6 +521,18 @@ const Settings: React.FC = () => {
       setUserToDelete(null);
     }
   };
+
+  const addUserRoleOptions = [
+    { value: 'admin', label: 'Admin' },
+    { value: 'manager', label: 'Manager' },
+    { value: 'staff', label: 'Staff' },
+    { value: 'supply_serve', label: 'Supply & Serve' },
+    { value: 'fahiz', label: 'Fahiz' },
+    { value: 'aphy', label: 'APHY' },
+    ...(canAssignAmazonAdminRole(user) ? [{ value: 'amazon_admin', label: 'Amazon Admin' }] : []),
+  ];
+
+  const usersForManagement = filterUsersForManagementList(users, user).filter((u) => u.id !== user?.id);
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -759,6 +778,10 @@ const Settings: React.FC = () => {
         </div>
       </form>
 
+      <div className="mt-8">
+        <AmazonNotificationSettings />
+      </div>
+
       {/* User Management Section */}
       {canManageUsers(user) && (
         <div className={`mt-8 p-6 rounded-lg ${isDarkMode ? 'bg-slate-1000' : 'bg-white'}`}>
@@ -790,9 +813,7 @@ const Settings: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className={`divide-y ${isDarkMode ? 'divide-slate-700 bg-slate-800' : 'divide-gray-200 bg-white'}`}> 
-                  {users
-                    .filter(userItem => userItem.id !== user?.id)
-                    .map((userItem) => (
+                  {usersForManagement.map((userItem) => (
                     <tr key={userItem.id} className={isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-gray-50'}>
                       <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>{userItem.username}</td>
                       <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>{userItem.email || '-'}</td>
@@ -803,6 +824,7 @@ const Settings: React.FC = () => {
                          userItem.role === 'staff' ? 'Staff' : 
                          userItem.role === 'supply_serve' ? 'Supply & Serve' :
                          userItem.role === 'fahiz' ? 'Fahiz' :
+                         userItem.role === 'amazon_admin' ? 'Amazon Admin' :
                          userItem.role === 'aphy' ? 'APHY' : 
                          userItem.role}
                       </td>
@@ -833,7 +855,7 @@ const Settings: React.FC = () => {
             </div>
             {/* Cards for mobile screens */}
             <div className="md:hidden flex flex-col gap-4 p-2">
-              {users.filter(userItem => userItem.id !== user?.id).map((userItem) => (
+              {usersForManagement.map((userItem) => (
                 <div
                   key={userItem.id}
                   className={`rounded-lg shadow p-4 flex flex-col gap-2 ${isDarkMode ? 'bg-slate-800' : 'bg-white'}`}
@@ -869,6 +891,7 @@ const Settings: React.FC = () => {
                      userItem.role === 'staff' ? 'Staff' : 
                      userItem.role === 'supply_serve' ? 'Supply & Serve' :
                      userItem.role === 'fahiz' ? 'Fahiz' :
+                     userItem.role === 'amazon_admin' ? 'Amazon Admin' :
                      userItem.role === 'aphy' ? 'APHY' : 
                      userItem.role}
                   </div>
@@ -923,14 +946,7 @@ const Settings: React.FC = () => {
                   name="role"
                   value={addUserFormData.role}
                   onChange={handleAddUserChange}
-                  options={[
-                    { value: 'admin', label: 'Admin' },
-                    { value: 'manager', label: 'Manager' },
-                    { value: 'staff', label: 'Staff' },
-                    { value: 'supply_serve', label: 'Supply & Serve' },
-                    { value: 'fahiz', label: 'Fahiz' },
-                    { value: 'aphy', label: 'APHY' },
-                  ]}
+                  options={addUserRoleOptions}
                   fullWidth
                 />
               </div>
