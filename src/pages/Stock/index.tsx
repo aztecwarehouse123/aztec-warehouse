@@ -58,6 +58,8 @@ const Stock: React.FC = () => {
   const [isStatusFilterOpen, setIsStatusFilterOpen] = useState(false);
   const [quantityRange, setQuantityRange] = useState<{ min: number | null; max: number | null }>({ min: null, max: null });
   const [isQuantityFilterOpen, setIsQuantityFilterOpen] = useState(false);
+  const [priceFilter, setPriceFilter] = useState<'all' | 'not_set'>('all');
+  const [isPriceFilterOpen, setIsPriceFilterOpen] = useState(false);
   const [totalCount, setTotalCount] = useState<number | null>(null);
   const [isProductLocationInfoModalOpen, setIsProductLocationInfoModalOpen] = useState(false);
   const [productLocationInfo, setProductLocationInfo] = useState<{
@@ -229,16 +231,24 @@ const Stock: React.FC = () => {
       if (!target.closest('.quantity-filter-dropdown')) {
         setIsQuantityFilterOpen(false);
       }
+      if (!target.closest('.price-filter-dropdown')) {
+        setIsPriceFilterOpen(false);
+      }
     };
 
-    if (isStoreFilterOpen || isStatusFilterOpen || isSearchTypeOpen || isQuantityFilterOpen) {
+    if (isStoreFilterOpen || isStatusFilterOpen || isSearchTypeOpen || isQuantityFilterOpen || isPriceFilterOpen) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isStoreFilterOpen, isStatusFilterOpen, isSearchTypeOpen, isQuantityFilterOpen]);
+  }, [isStoreFilterOpen, isStatusFilterOpen, isSearchTypeOpen, isQuantityFilterOpen, isPriceFilterOpen]);
+
+  const isPriceNotSet = useCallback((price: StockItem['price']) => {
+    const numericPrice = Number(price);
+    return !numericPrice || numericPrice <= 0;
+  }, []);
 
   const sortOptions = useMemo(() => {
     const options = [
@@ -319,8 +329,11 @@ const Stock: React.FC = () => {
       const matchesQuantityFilter = !quantityRange.min && !quantityRange.max ? true :
         (!quantityRange.min || item.quantity >= quantityRange.min) &&
         (!quantityRange.max || item.quantity <= quantityRange.max);
+
+      const matchesPriceFilter =
+        priceFilter === 'all' || (priceFilter === 'not_set' && isPriceNotSet(item.price));
       
-      return matchesSearch && matchesStoreFilter && matchesStatusFilter && matchesQuantityFilter;
+      return matchesSearch && matchesStoreFilter && matchesStatusFilter && matchesQuantityFilter && matchesPriceFilter;
     }).sort((a, b) => {
       if (sortBy === 'name') {
         return a.name.localeCompare(b.name);
@@ -333,7 +346,7 @@ const Stock: React.FC = () => {
       }
       return 0;
     });
-  }, [items, debouncedSearchQuery, searchType, storeFilter, statusFilter, quantityRange, sortBy, predefinedStores]);
+  }, [items, debouncedSearchQuery, searchType, storeFilter, statusFilter, quantityRange, priceFilter, sortBy, predefinedStores, isPriceNotSet]);
 
   const checkLocationForExistingProducts = useCallback((locationCode: string, shelfNumber: string): StockItem[] => {
     return items.filter(item => 
@@ -1282,6 +1295,55 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
           )}
         </div>
         
+        {canSeePrices(user) && (
+          <div className="relative price-filter-dropdown">
+            <Button
+              variant="secondary"
+              onClick={() => setIsPriceFilterOpen(!isPriceFilterOpen)}
+              className={`flex items-center gap-2 ${priceFilter === 'not_set' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' : ''}`}
+            >
+              {priceFilter === 'not_set' ? 'Price Not Set' : 'Price Filter'}
+              <ChevronDown size={16} />
+            </Button>
+            {isPriceFilterOpen && (
+              <div className={`absolute top-full left-0 mt-1 w-40 z-50 rounded-lg border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-lg`}>
+                <div className="p-2">
+                  <div className={`text-sm font-medium mb-2 ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>Filter by Price</div>
+                  <div
+                    className={`px-3 py-2 text-sm cursor-pointer rounded transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-700' : 'text-slate-700 hover:bg-slate-100'} ${priceFilter === 'all' ? (isDarkMode ? 'bg-slate-700' : 'bg-slate-100') : ''}`}
+                    onClick={() => {
+                      setPriceFilter('all');
+                      setIsPriceFilterOpen(false);
+                    }}
+                  >
+                    All products
+                  </div>
+                  <div
+                    className={`px-3 py-2 text-sm cursor-pointer rounded transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-700' : 'text-slate-700 hover:bg-slate-100'} ${priceFilter === 'not_set' ? (isDarkMode ? 'bg-slate-700' : 'bg-slate-100') : ''}`}
+                    onClick={() => {
+                      setPriceFilter('not_set');
+                      setIsPriceFilterOpen(false);
+                    }}
+                  >
+                    Price not set
+                  </div>
+                  <div className={`border-t ${isDarkMode ? 'border-slate-700' : 'border-slate-200'} mt-2 pt-2`}>
+                    <button
+                      className={`w-full text-left px-3 py-2 text-sm cursor-pointer rounded transition-colors ${isDarkMode ? 'text-red-400 hover:bg-slate-700' : 'text-red-600 hover:bg-slate-100'}`}
+                      onClick={() => {
+                        setPriceFilter('all');
+                        setIsPriceFilterOpen(false);
+                      }}
+                    >
+                      Clear Filter
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="relative quantity-filter-dropdown">
           <Button
             variant="secondary"
@@ -1371,7 +1433,7 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
       </div>
 
       {/* Search/Filter Results Indicator */}
-      {(debouncedSearchQuery || storeFilter || statusFilter !== 'all' || quantityRange.min !== null || quantityRange.max !== null) && (
+      {(debouncedSearchQuery || storeFilter || statusFilter !== 'all' || priceFilter !== 'all' || quantityRange.min !== null || quantityRange.max !== null) && (
         <div className={`px-4 py-2 rounded-lg ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} border`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -1408,6 +1470,11 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
                   Qty: {quantityRange.min || 0}-{quantityRange.max || '∞'}
                 </span>
               )}
+              {priceFilter === 'not_set' && (
+                <span className={`px-2 py-1 text-xs font-medium rounded-full ${isDarkMode ? 'bg-orange-900 text-orange-300' : 'bg-orange-100 text-orange-700'}`}>
+                  Price: Not set
+                </span>
+              )}
               
               {/* Clear All Filters Button */}
               <button
@@ -1415,6 +1482,7 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
                   setSearchQuery('');
                   setStoreFilter(null);
                   setStatusFilter('all');
+                  setPriceFilter('all');
                   setQuantityRange({ min: null, max: null });
                 }}
                 className={`px-2 py-1 text-xs font-medium rounded transition-colors ${isDarkMode ? 'text-red-400 hover:text-red-300 hover:bg-red-900/20' : 'text-red-600 hover:text-red-700 hover:bg-red-50'}`}
