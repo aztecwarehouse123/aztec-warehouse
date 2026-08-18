@@ -23,6 +23,8 @@ export interface StockItem {
   damagedItems: number; // Number of damaged items
   fulfillmentType: 'fba' | 'mf'; // Fulfillment type: FBA (Fulfilled by Amazon) or MF (Merchant Fulfilled)
   storeName: string; // Store name where the item is from
+  boxSize: string | null;
+  packingMaterial: string | null;
 }
 
 // export type OrderStatus = 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'returned' | 'completed';

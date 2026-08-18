@@ -10,6 +10,7 @@ import { db } from '../../config/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { generateShelfOptions } from '../../utils/shelfUtils';
 import { getWarehouseLocationOptions } from '../../utils/locationUtils';
+import { boxSizeSelectOptions, packingMaterialSelectOptions } from '../../utils/stockOptions';
 
 interface QuickAddStockFormProps {
   onSubmit: (data: Omit<StockItem, 'id'>[]) => Promise<void>;
@@ -24,6 +25,8 @@ interface QuickFormData {
   shelfNumber: string;
   barcode: string;
   quantity: string;
+  boxSize: string;
+  packingMaterial: string;
 }
 
 const locationOptions = getWarehouseLocationOptions();
@@ -36,7 +39,9 @@ const QuickAddStockForm: React.FC<QuickAddStockFormProps> = ({ onSubmit, onClose
     locationCode: 'A1',
     shelfNumber: '0',
     barcode: '',
-    quantity: ''
+    quantity: '',
+    boxSize: '',
+    packingMaterial: ''
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -251,7 +256,9 @@ const QuickAddStockForm: React.FC<QuickAddStockFormProps> = ({ onSubmit, onClose
        status: 'pending', // Default status
        damagedItems: 0, // Default damaged items
        fulfillmentType: 'fba', // Default fulfillment type
-       storeName: 'not set' // Default store name
+       storeName: 'not set', // Default store name
+       boxSize: formData.boxSize || null,
+       packingMaterial: formData.packingMaterial || null
      };
 
     isSubmittingRef.current = true;
@@ -278,6 +285,25 @@ const QuickAddStockForm: React.FC<QuickAddStockFormProps> = ({ onSubmit, onClose
           required
           fullWidth
         />
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Select
+            label="Box Size (Optional)"
+            name="boxSize"
+            value={formData.boxSize}
+            onChange={handleChange}
+            options={boxSizeSelectOptions}
+            fullWidth
+          />
+          <Select
+            label="Packing Material (Optional)"
+            name="packingMaterial"
+            value={formData.packingMaterial}
+            onChange={handleChange}
+            options={packingMaterialSelectOptions}
+            fullWidth
+          />
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Select

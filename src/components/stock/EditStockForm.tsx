@@ -9,6 +9,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import BarcodeScanModal from '../modals/BarcodeScanModal';
 import { generateShelfOptions } from '../../utils/shelfUtils';
 import { getWarehouseLocationOptions } from '../../utils/locationUtils';
+import { boxSizeSelectOptions, packingMaterialSelectOptions } from '../../utils/stockOptions';
 
 interface FormData {
   name: string;
@@ -24,6 +25,8 @@ interface FormData {
   fulfillmentType: 'fba' | 'mf';
   storeName: string;
   barcode?: string;
+  boxSize: string;
+  packingMaterial: string;
 }
 
 interface EditStockFormProps {
@@ -99,7 +102,9 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
     damagedItems: item.damagedItems.toString(),
     fulfillmentType: (isCustomStore ? 'other' : (item.storeName || 'supply & serve')) === 'supply & serve' ? 'mf' : item.fulfillmentType,
     storeName: isCustomStore ? 'other' : (item.storeName || 'supply & serve'),
-    barcode: item.barcode || ''
+    barcode: item.barcode || '',
+    boxSize: item.boxSize || '',
+    packingMaterial: item.packingMaterial || ''
   });
   const [showOtherStoreInput, setShowOtherStoreInput] = useState(isCustomStore);
   const [otherStoreName, setOtherStoreName] = useState(isCustomStore ? initialStoreName : '');
@@ -185,7 +190,9 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
           fulfillmentType: formData.fulfillmentType,
           lastUpdated: new Date(),
           storeName: formData.storeName === 'other' ? otherStoreName : formData.storeName,
-          barcode: formData.barcode || null
+          barcode: formData.barcode || null,
+          boxSize: formData.boxSize || null,
+          packingMaterial: formData.packingMaterial || null
         };
 
         await onSubmit(data, item);
@@ -325,6 +332,25 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
           onChange={handleChange}
           options={generateShelfOptionsForLocation(formData.locationCode)}
           required
+          fullWidth
+        />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Select
+          label="Box Size (Optional)"
+          name="boxSize"
+          value={formData.boxSize}
+          onChange={handleChange}
+          options={boxSizeSelectOptions}
+          fullWidth
+        />
+        <Select
+          label="Packing Material (Optional)"
+          name="packingMaterial"
+          value={formData.packingMaterial}
+          onChange={handleChange}
+          options={packingMaterialSelectOptions}
           fullWidth
         />
       </div>

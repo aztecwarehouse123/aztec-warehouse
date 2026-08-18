@@ -6,16 +6,11 @@ export const AWAITING_LOCATION_CODES = [
 
 export const TENT_LOCATION_CODES = ['TENT-1', 'TENT-2', 'TENT-3'];
 
-/** A–H: shelves 1–12; I–Z: shelves 1–8 */
+/** A–Z: shelves 1–12 */
 export function getLetterNumberLocationCodes(): string[] {
   const codes: string[] = [];
-  for (const letter of 'ABCDEFGH') {
+  for (const letter of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') {
     for (let i = 1; i <= 12; i++) {
-      codes.push(`${letter}${i}`);
-    }
-  }
-  for (const letter of 'IJKLMNOPQRSTUVWXYZ') {
-    for (let i = 1; i <= 8; i++) {
       codes.push(`${letter}${i}`);
     }
   }

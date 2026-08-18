@@ -16,6 +16,7 @@ import ConfirmationModal from '../modals/ConfirmationModal';
 import Modal from '../modals/Modal';
 import { generateShelfOptions } from '../../utils/shelfUtils';
 import { getWarehouseLocationOptions } from '../../utils/locationUtils';
+import { boxSizeSelectOptions, packingMaterialSelectOptions } from '../../utils/stockOptions';
 
 
 interface AddStockFormProps {
@@ -39,6 +40,8 @@ interface FormData {
   fulfillmentType: 'fba' | 'mf';
   storeName: string;
   selectedAsins: string[]; // Add this new field for multiple ASINs
+  boxSize: string;
+  packingMaterial: string;
 }
 
 interface LocationEntry {
@@ -93,7 +96,9 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
     damagedItems: '0',
     fulfillmentType: 'mf', // Default to MF since default store is 'supply & serve'
     storeName: getStoreNameForUser(), // Set based on user role
-    selectedAsins: [] // Initialize empty array for multiple ASINs
+    selectedAsins: [], // Initialize empty array for multiple ASINs
+    boxSize: '',
+    packingMaterial: ''
   });
 
   const [locationEntries, setLocationEntries] = useState<LocationEntry[]>([
@@ -506,7 +511,9 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
         barcode: formData.barcode || null,
         fulfillmentType: formData.fulfillmentType,
         lastUpdated: new Date(),
-        storeName: storeName === 'other' ? otherStoreName : storeName
+        storeName: storeName === 'other' ? otherStoreName : storeName,
+        boxSize: formData.boxSize || null,
+        packingMaterial: formData.packingMaterial || null
       }));
       
       
@@ -698,9 +705,24 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
           />)}
         </div>
 
-        
-
-        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Select
+            label="Box Size (Optional)"
+            name="boxSize"
+            value={formData.boxSize}
+            onChange={handleChange}
+            options={boxSizeSelectOptions}
+            fullWidth
+          />
+          <Select
+            label="Packing Material (Optional)"
+            name="packingMaterial"
+            value={formData.packingMaterial}
+            onChange={handleChange}
+            options={packingMaterialSelectOptions}
+            fullWidth
+          />
+        </div>
 
         <div className="space-y-4">
           <div className="flex justify-between items-center">

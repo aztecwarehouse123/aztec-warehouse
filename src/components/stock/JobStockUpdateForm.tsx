@@ -21,6 +21,8 @@ interface LocationInfo {
   shelfNumber: string;
   quantity: number;
   storeName: string;
+  boxSize: string | null;
+  packingMaterial: string | null;
 }
 
   // const predefinedStores = ['supply & serve', 'APHY', 'AZTEC', 'ZK', 'Fahiz'];
@@ -73,7 +75,9 @@ const JobStockUpdateForm: React.FC<JobStockUpdateFormProps> = ({ item, onSubmit,
               locationCode: String(data.locationCode).trim(),
               shelfNumber: String(data.shelfNumber).trim(),
               quantity: Number(data.quantity) || 0,
-              storeName: (data.storeName ? String(data.storeName) : 'Unknown').trim()
+              storeName: (data.storeName ? String(data.storeName) : 'Unknown').trim(),
+              boxSize: data.boxSize ? String(data.boxSize) : null,
+              packingMaterial: data.packingMaterial ? String(data.packingMaterial) : null,
             });
           }
         });
@@ -159,6 +163,10 @@ const JobStockUpdateForm: React.FC<JobStockUpdateFormProps> = ({ item, onSubmit,
     return location ? location.quantity : item.quantity;
   };
 
+  const selectedLocationData = availableLocations.find(loc => loc.id === selectedLocation);
+  const displayBoxSize = selectedLocationData?.boxSize ?? item.boxSize ?? null;
+  const displayPackingMaterial = selectedLocationData?.packingMaterial ?? item.packingMaterial ?? null;
+
   const getValidationMessage = () => {
     const quantityNum = Number(deductQuantity);
     if (!deductQuantity || quantityNum < 0) {
@@ -203,8 +211,12 @@ const JobStockUpdateForm: React.FC<JobStockUpdateFormProps> = ({ item, onSubmit,
           <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
             Barcode: {item.barcode}
           </p>
-
-          
+          <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+            Box Size: {displayBoxSize || '-'}
+          </p>
+          <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+            Packing Material: {displayPackingMaterial || '-'}
+          </p>
         </div>
 
         {/* Location Selection */}

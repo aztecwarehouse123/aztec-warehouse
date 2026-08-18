@@ -629,6 +629,14 @@ const Stock: React.FC = () => {
             changes.barcode = data.barcode;
             logChanges.push(`barcode from "${originalItem.barcode || 'none'}" to "${data.barcode || 'none'}"`);
         }
+        if (data.boxSize !== originalItem.boxSize) {
+            changes.boxSize = data.boxSize;
+            logChanges.push(`box size from "${originalItem.boxSize || 'none'}" to "${data.boxSize || 'none'}"`);
+        }
+        if (data.packingMaterial !== originalItem.packingMaterial) {
+            changes.packingMaterial = data.packingMaterial;
+            logChanges.push(`packing material from "${originalItem.packingMaterial || 'none'}" to "${data.packingMaterial || 'none'}"`);
+        }
 
         // Handle quantity update separately to ensure it's always processed
         const quantityChanged = data.quantity !== originalItem.quantity;
