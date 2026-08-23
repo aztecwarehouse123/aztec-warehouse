@@ -3,7 +3,7 @@ import { ClipboardList, ChevronUp, ChevronDown, CheckSquare, RefreshCw, Trash2, 
 import Button from '../../../components/ui/Button';
 import Input from '../../../components/ui/Input';
 import type { Job } from '../types';
-import { formatElapsedTime } from '../utils/formatters';
+import { formatElapsedTime, formatPackingClockTime } from '../utils/formatters';
 
 export type EditingJobItemState = {
   jobId: string;
@@ -127,12 +127,22 @@ const JobCard: React.FC<JobCardProps> = ({
                   )}
                 </p>
 
-                {(showCompleted || showArchived) && job.packer && (
+                {isCompleted && (job.packer || job.packingStartedAt || job.packingCompletedAt) && (
                   <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-xs leading-relaxed`}>
-                    Verified by {job.packer}
+                    {job.packer && <>Verified by {job.packer}</>}
                     {job.verifyingTime != null && job.verifyingTime > 0 && (
-                      <span className={`ml-2 ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                        • Verifying: {formatElapsedTime(job.verifyingTime)}
+                      <span className={`${job.packer ? 'ml-2' : ''} ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                        {job.packer ? '• ' : ''}Verifying: {formatElapsedTime(job.verifyingTime)}
+                      </span>
+                    )}
+                    {job.packingStartedAt && (
+                      <span className={`ml-2 ${isDarkMode ? 'text-amber-400' : 'text-amber-600'}`}>
+                        • Started: {formatPackingClockTime(job.packingStartedAt)}
+                      </span>
+                    )}
+                    {job.packingCompletedAt && (
+                      <span className={`ml-2 ${isDarkMode ? 'text-sky-400' : 'text-sky-600'}`}>
+                        • Completed: {formatPackingClockTime(job.packingCompletedAt)}
                       </span>
                     )}
                   </p>

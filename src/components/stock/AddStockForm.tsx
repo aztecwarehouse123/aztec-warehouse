@@ -124,7 +124,7 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
   const [searchTimeoutRef, setSearchTimeoutRef] = useState<NodeJS.Timeout | null>(null);
   const [multipleAsins, setMultipleAsins] = useState<string[]>([]);
   const [isAsinSelectionModalOpen, setIsAsinSelectionModalOpen] = useState(false);
-  const [pendingAsinData, setPendingAsinData] = useState<{ name: string; unit: string; asin: string } | null>(null);
+  const [pendingAsinData, setPendingAsinData] = useState<{ name: string; unit: string; asin: string; boxSize: string; packingMaterial: string } | null>(null);
   const [selectedMultipleAsins, setSelectedMultipleAsins] = useState<string[]>([]); // Add state for selected multiple ASINs
   
   // Location reminder modal state
@@ -251,7 +251,9 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
             setPendingAsinData({
               name: docData.name || '',
               unit: docData.unit || '',
-              asin: asinArray[0] // Set first ASIN as default
+              asin: asinArray[0], // Set first ASIN as default
+              boxSize: docData.boxSize ? String(docData.boxSize) : '',
+              packingMaterial: docData.packingMaterial ? String(docData.packingMaterial) : '',
             });
             setIsAsinSelectionModalOpen(true);
             setBarcodeSearchMessage('Multiple ASINs detected. Please select one or more.');
@@ -265,7 +267,9 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
           name: docData.name || prev.name,
           unit: docData.unit || prev.unit,
           asin: asinValue || prev.asin,
-          selectedAsins: asinValue ? [asinValue] : []
+          selectedAsins: asinValue ? [asinValue] : [],
+          boxSize: docData.boxSize ? String(docData.boxSize) : prev.boxSize,
+          packingMaterial: docData.packingMaterial ? String(docData.packingMaterial) : prev.packingMaterial,
         }));
         setBarcodeSearchMessage('Product name, unit, and ASIN auto-filled from scanned products.');
         
@@ -294,8 +298,10 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
               setPendingAsinData({
                 name: item.title || '',
                 unit: '',
-                asin: asinArray[0] // Set first ASIN as default
-            });
+                asin: asinArray[0], // Set first ASIN as default
+                boxSize: '',
+                packingMaterial: '',
+              });
               setIsAsinSelectionModalOpen(true);
               setBarcodeSearchMessage('Multiple ASINs detected. Please select one or more.');
               searchSuccessful = true;
@@ -385,7 +391,9 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
             setPendingAsinData({
               name: docData.name || '',
               unit: docData.unit || '',
-              asin: asinArray[0] // Set first ASIN as default
+              asin: asinArray[0], // Set first ASIN as default
+              boxSize: docData.boxSize ? String(docData.boxSize) : '',
+              packingMaterial: docData.packingMaterial ? String(docData.packingMaterial) : '',
             });
             setIsAsinSelectionModalOpen(true);
             setBarcodeSearchMessage('Multiple ASINs detected. Please select one or more.');
@@ -399,7 +407,9 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
           name: docData.name || prev.name,
           unit: docData.unit || prev.unit,
           asin: asinValue || prev.asin,
-          selectedAsins: asinValue ? [asinValue] : []
+          selectedAsins: asinValue ? [asinValue] : [],
+          boxSize: docData.boxSize ? String(docData.boxSize) : prev.boxSize,
+          packingMaterial: docData.packingMaterial ? String(docData.packingMaterial) : prev.packingMaterial,
         }));
         setBarcodeSearchMessage('Product name, unit, and ASIN auto-filled from scanned products.');
         
@@ -429,7 +439,9 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
             setPendingAsinData({
               name: item.title || '',
               unit: '',
-              asin: asinArray[0] // Set first ASIN as default
+              asin: asinArray[0], // Set first ASIN as default
+              boxSize: '',
+              packingMaterial: '',
             });
             setIsAsinSelectionModalOpen(true);
             setBarcodeSearchMessage('Multiple ASINs detected. Please select one or more.');
@@ -586,7 +598,9 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
         name: pendingAsinData.name || prev.name,
         unit: pendingAsinData.unit || prev.unit,
         asin: selectedAsins.join(', '), // Join multiple ASINs for display
-        selectedAsins: selectedAsins // Store the array of selected ASINs
+        selectedAsins: selectedAsins, // Store the array of selected ASINs
+        boxSize: pendingAsinData.boxSize || prev.boxSize,
+        packingMaterial: pendingAsinData.packingMaterial || prev.packingMaterial,
       }));
       setBarcodeSearchMessage(`Product info and ${selectedAsins.length} selected ASIN(s) auto-filled.`);
     }
@@ -707,7 +721,7 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Select
-            label="Box Size (Optional)"
+            label="Box Size"
             name="boxSize"
             value={formData.boxSize}
             onChange={handleChange}
@@ -715,7 +729,7 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
             fullWidth
           />
           <Select
-            label="Packing Material (Optional)"
+            label="Packing Material"
             name="packingMaterial"
             value={formData.packingMaterial}
             onChange={handleChange}

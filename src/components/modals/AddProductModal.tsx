@@ -2,11 +2,13 @@ import React, { useState } from 'react';
 import { Loader2, Barcode } from 'lucide-react';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
+import Select from '../ui/Select';
 import Modal from './Modal';
 import BarcodeScanModal from './BarcodeScanModal';
 import { db } from '../../config/firebase';
 import { collection, addDoc, Timestamp } from 'firebase/firestore';
 import { useAuth } from '../../contexts/AuthContext';
+import { boxSizeSelectOptions, packingMaterialSelectOptions } from '../../utils/stockOptions';
 
 interface AddProductModalProps {
   isOpen: boolean;
@@ -16,14 +18,14 @@ interface AddProductModalProps {
 
 const AddProductModal: React.FC<AddProductModalProps> = ({ isOpen, onClose, onSuccess }) => {
   const { user } = useAuth();
-  const [form, setForm] = useState({ name: '', unit: '', barcode: '' });
+  const [form, setForm] = useState({ name: '', unit: '', barcode: '', boxSize: '', packingMaterial: '' });
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isScanModalOpen, setIsScanModalOpen] = useState(false);
   const [isFetchingProductInfo, setIsFetchingProductInfo] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
@@ -69,6 +71,8 @@ const AddProductModal: React.FC<AddProductModalProps> = ({ isOpen, onClose, onSu
         name: uppercaseName,
         unit: form.unit,
         barcode: form.barcode,
+        boxSize: form.boxSize || null,
+        packingMaterial: form.packingMaterial || null,
         createdAt: Timestamp.fromDate(new Date())
       });
 
@@ -83,7 +87,7 @@ const AddProductModal: React.FC<AddProductModalProps> = ({ isOpen, onClose, onSu
       }
 
       // Reset form and close modal
-      setForm({ name: '', unit: '', barcode: '' });
+      setForm({ name: '', unit: '', barcode: '', boxSize: '', packingMaterial: '' });
       setError(null);
       setFetchError(null);
       onClose();
@@ -100,7 +104,7 @@ const AddProductModal: React.FC<AddProductModalProps> = ({ isOpen, onClose, onSu
   };
 
   const handleClose = () => {
-    setForm({ name: '', unit: '', barcode: '' });
+    setForm({ name: '', unit: '', barcode: '', boxSize: '', packingMaterial: '' });
     setError(null);
     setFetchError(null);
     onClose();
@@ -128,6 +132,24 @@ const AddProductModal: React.FC<AddProductModalProps> = ({ isOpen, onClose, onSu
             required
             fullWidth
           />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Select
+              label="Box Size"
+              name="boxSize"
+              value={form.boxSize}
+              onChange={handleChange}
+              options={boxSizeSelectOptions}
+              fullWidth
+            />
+            <Select
+              label="Packing Material"
+              name="packingMaterial"
+              value={form.packingMaterial}
+              onChange={handleChange}
+              options={packingMaterialSelectOptions}
+              fullWidth
+            />
+          </div>
           <div className="relative w-full">
             <Input
               label="Barcode"

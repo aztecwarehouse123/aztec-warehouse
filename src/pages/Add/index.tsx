@@ -1,18 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Plus, Loader2, RefreshCw, Edit2, Trash2, Barcode, Upload } from 'lucide-react';
 import { motion } from 'framer-motion';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
+import Select from '../../components/ui/Select';
 import Modal from '../../components/modals/Modal';
 import BarcodeScanModal from '../../components/modals/BarcodeScanModal';
 import { db } from '../../config/firebase';
-import { collection, addDoc, getDocs, Timestamp, orderBy, query, doc, updateDoc, deleteDoc, limit, where, getCountFromServer } from 'firebase/firestore';
+import { collection, addDoc, getDocs, Timestamp, orderBy, query, doc, updateDoc, deleteDoc, limit, getCountFromServer } from 'firebase/firestore';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { format } from 'date-fns';
 import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
 import Toast from '../../components/ui/Toast';
+import { boxSizeSelectOptions, packingMaterialSelectOptions } from '../../utils/stockOptions';
+import { productMatchesKeywordSearch } from '../../utils/productSearch';
 
 interface ScannedProduct {
   id: string;
@@ -20,6 +23,8 @@ interface ScannedProduct {
   unit: string;
   asin: string;
   barcode: string;
+  boxSize: string | null;
+  packingMaterial: string | null;
   createdAt: Date;
 }
 
@@ -29,7 +34,7 @@ const Add: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [products, setProducts] = useState<ScannedProduct[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [form, setForm] = useState({ name: '', unit: '', asin: '', barcode: '' });
+  const [form, setForm] = useState({ name: '', unit: '', asin: '', barcode: '', boxSize: '', packingMaterial: '' });
   const [error, setError] = useState<string | null>(null);
   const [editProduct, setEditProduct] = useState<ScannedProduct | null>(null);
   const [isScanModalOpen, setIsScanModalOpen] = useState(false);
@@ -38,6 +43,8 @@ const Add: React.FC = () => {
   const [deleteProductId, setDeleteProductId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [displaySearchQuery, setDisplaySearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+  const allProductsCacheRef = useRef<ScannedProduct[] | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<ScannedProduct | null>(null);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -45,60 +52,75 @@ const Add: React.FC = () => {
   const [showDuplicates, setShowDuplicates] = useState(false);
   const [duplicateProducts, setDuplicateProducts] = useState<{ name: string; products: ScannedProduct[] }[]>([]);
 
-  useEffect(() => {
-    fetchProducts();
-    fetchTotalCount();
-  }, []);
+  const mapDocToProduct = (docSnap: { id: string; data: () => Record<string, unknown> }): ScannedProduct => {
+    const data = docSnap.data();
+    return {
+      id: docSnap.id,
+      name: String(data.name || ''),
+      unit: String(data.unit || ''),
+      asin: String(data.asin || ''),
+      barcode: String(data.barcode || ''),
+      boxSize: (data.boxSize as string) || null,
+      packingMaterial: (data.packingMaterial as string) || null,
+      createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(String(data.createdAt)),
+    };
+  };
 
-  const fetchProducts = async (search?: string) => {
+  const invalidateProductsCache = () => {
+    allProductsCacheRef.current = null;
+  };
+
+  const fetchAllProducts = async (): Promise<ScannedProduct[]> => {
+    if (allProductsCacheRef.current) return allProductsCacheRef.current;
+
+    const q = query(collection(db, 'scannedProducts'), orderBy('createdAt', 'desc'));
+    const snapshot = await getDocs(q);
+    const items = snapshot.docs.map(mapDocToProduct);
+    allProductsCacheRef.current = items;
+    return items;
+  };
+
+  const fetchProducts = useCallback(async (search?: string) => {
     setIsLoading(true);
     try {
-      let q;
-      if (search && search.trim() !== '') {
-        // Search by name, barcode, or ASIN (case-insensitive)
-        // Firestore does not support OR queries directly, so do three queries and merge results
-        const nameQ = query(collection(db, 'scannedProducts'), where('name', '>=', search), where('name', '<=', search + '\uf8ff'), orderBy('name'), limit(100));
-        const barcodeQ = query(collection(db, 'scannedProducts'), where('barcode', '>=', search), where('barcode', '<=', search + '\uf8ff'), orderBy('barcode'), limit(100));
-        const asinQ = query(collection(db, 'scannedProducts'), where('asin', '>=', search), where('asin', '<=', search + '\uf8ff'), orderBy('asin'), limit(100));
-        const [nameSnap, barcodeSnap, asinSnap] = await Promise.all([getDocs(nameQ), getDocs(barcodeQ), getDocs(asinQ)]);
-        const items = [...nameSnap.docs, ...barcodeSnap.docs, ...asinSnap.docs].reduce((acc, doc) => {
-          if (!acc.some(d => d.id === doc.id)) acc.push(doc);
-          return acc;
-        }, [] as typeof nameSnap.docs);
-        setProducts(items.map(doc => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            name: data.name,
-            unit: data.unit,
-            asin: data.asin || '',
-            barcode: data.barcode,
-            createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(data.createdAt)
-          };
-        }));
-      } else {
-        // Fetch recent 100
-        q = query(collection(db, 'scannedProducts'), orderBy('createdAt', 'desc'), limit(100));
-      const snapshot = await getDocs(q);
-      const items = snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          name: data.name,
-          unit: data.unit,
-          asin: data.asin || '',
-          barcode: data.barcode,
-          createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(data.createdAt)
-        };
-      });
-      setProducts(items);
+      const normalizedSearch = search?.trim() ?? '';
+
+      if (normalizedSearch === '') {
+        const q = query(collection(db, 'scannedProducts'), orderBy('createdAt', 'desc'), limit(100));
+        const snapshot = await getDocs(q);
+        setProducts(snapshot.docs.map(mapDocToProduct));
+        return;
       }
+
+      const allProducts = await fetchAllProducts();
+      const filtered = allProducts.filter(product =>
+        productMatchesKeywordSearch(product, normalizedSearch)
+      );
+      setProducts(filtered);
     } catch {
       setError('Failed to fetch products');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  const refreshProducts = useCallback(() => {
+    invalidateProductsCache();
+    fetchProducts(debouncedSearchQuery);
+  }, [debouncedSearchQuery, fetchProducts]);
+
+  useEffect(() => {
+    fetchTotalCount();
+  }, []);
+
+  useEffect(() => {
+    const handler = setTimeout(() => setDebouncedSearchQuery(displaySearchQuery), 300);
+    return () => clearTimeout(handler);
+  }, [displaySearchQuery]);
+
+  useEffect(() => {
+    fetchProducts(debouncedSearchQuery);
+  }, [debouncedSearchQuery, fetchProducts]);
 
   const fetchTotalCount = async () => {
     try {
@@ -145,11 +167,13 @@ const Add: React.FC = () => {
         name: product.name || '',
         unit: product.unit || '',
         asin: product.asin || '',
-        barcode: product.barcode || ''
+        barcode: product.barcode || '',
+        boxSize: product.boxSize || '',
+        packingMaterial: product.packingMaterial || ''
       });
       setEditProduct(product);
     } else {
-      setForm({ name: '', unit: '', asin: '', barcode: '' });
+      setForm({ name: '', unit: '', asin: '', barcode: '', boxSize: '', packingMaterial: '' });
       setEditProduct(null);
     }
     setIsModalOpen(true);
@@ -161,7 +185,7 @@ const Add: React.FC = () => {
     setError(null);
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
@@ -210,7 +234,9 @@ const Add: React.FC = () => {
           name: uppercaseName,
           unit: form.unit,
           barcode: form.barcode,
-          asin: form.asin
+          asin: form.asin,
+          boxSize: form.boxSize || null,
+          packingMaterial: form.packingMaterial || null,
         });
         // Add activity log for edit
         if (user && editProduct) {
@@ -219,6 +245,8 @@ const Add: React.FC = () => {
           if (editProduct.unit !== form.unit) changes.push(`unit from ${editProduct.unit || 'none'} to ${form.unit || 'none'}`);
           if (editProduct.barcode !== form.barcode) changes.push(`barcode from "${editProduct.barcode || 'none'}" to "${form.barcode || 'none'}"`);
           if (editProduct.asin !== form.asin) changes.push(`asin from "${editProduct.asin || 'none'}" to "${form.asin || 'none'}"`);
+          if (editProduct.boxSize !== (form.boxSize || null)) changes.push(`box size from "${editProduct.boxSize || 'none'}" to "${form.boxSize || 'none'}"`);
+          if (editProduct.packingMaterial !== (form.packingMaterial || null)) changes.push(`packing material from "${editProduct.packingMaterial || 'none'}" to "${form.packingMaterial || 'none'}"`);
           if (changes.length > 0) {
             await addDoc(collection(db, 'activityLogs'), {
               user: user.name,
@@ -235,6 +263,8 @@ const Add: React.FC = () => {
           unit: form.unit,
           barcode: form.barcode,
           asin: form.asin,
+          boxSize: form.boxSize || null,
+          packingMaterial: form.packingMaterial || null,
           createdAt: Timestamp.fromDate(new Date())
         });
         // Add activity log for add
@@ -249,7 +279,9 @@ const Add: React.FC = () => {
       }
       setIsModalOpen(false);
       setEditProduct(null);
-      fetchProducts();
+      invalidateProductsCache();
+      fetchProducts(debouncedSearchQuery);
+      fetchTotalCount();
     } catch {
       setError('Failed to save product');
     } finally {
@@ -278,7 +310,9 @@ const Add: React.FC = () => {
       }
       
       setDeleteProductId(null);
-      fetchProducts();
+      invalidateProductsCache();
+      fetchProducts(debouncedSearchQuery);
+      fetchTotalCount();
     } catch {
       // Optionally show a toast or error
     } finally {
@@ -352,7 +386,9 @@ const Add: React.FC = () => {
       }
       
       setToast({ type: 'success', message: `Uploaded ${products.length} products successfully!` });
-      fetchProducts();
+      invalidateProductsCache();
+      fetchProducts(debouncedSearchQuery);
+      fetchTotalCount();
     } catch {
       setToast({ type: 'error', message: 'Failed to upload products.' });
     }
@@ -379,7 +415,7 @@ const Add: React.FC = () => {
           <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-2 w-full md:w-auto">
             <Button
               variant="secondary"
-              onClick={() => fetchProducts()}
+              onClick={refreshProducts}
               className={`flex items-center gap-2 w-full md:w-auto ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
               disabled={isLoading}
               icon={<RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />}
@@ -411,13 +447,9 @@ const Add: React.FC = () => {
           <div className="flex-1 relative">
             <Input
               type="text"
-              placeholder="Search by name, barcode, or ASIN"
+              placeholder="Search by keywords, name, barcode, or ASIN"
               value={displaySearchQuery}
-              onChange={e => {
-                const inputValue = e.target.value;
-                setDisplaySearchQuery(inputValue);
-                fetchProducts(inputValue.toUpperCase());
-              }}
+              onChange={e => setDisplaySearchQuery(e.target.value)}
               className="pl-10"
               fullWidth
             />
@@ -454,6 +486,24 @@ const Add: React.FC = () => {
               placeholder="Amazon Standard Identification Number"
               fullWidth
             />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Select
+                label="Box Size"
+                name="boxSize"
+                value={form.boxSize}
+                onChange={handleChange}
+                options={boxSizeSelectOptions}
+                fullWidth
+              />
+              <Select
+                label="Packing Material"
+                name="packingMaterial"
+                value={form.packingMaterial}
+                onChange={handleChange}
+                options={packingMaterialSelectOptions}
+                fullWidth
+              />
+            </div>
             <div className="relative w-full">
               <Input
                 label="Barcode"
@@ -763,6 +813,14 @@ const Add: React.FC = () => {
                 <div>
                   <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Barcode</p>
                   <p className={`font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{selectedProduct.barcode || '-'}</p>
+                </div>
+                <div>
+                  <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Box Size</p>
+                  <p className={`font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{selectedProduct.boxSize || '-'}</p>
+                </div>
+                <div>
+                  <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Packing Material</p>
+                  <p className={`font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{selectedProduct.packingMaterial || '-'}</p>
                 </div>
                 <div>
                   <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Created At</p>

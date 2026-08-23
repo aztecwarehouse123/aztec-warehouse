@@ -75,3 +75,13 @@ export function getUniqueJobCreators(jobs: Job[]): string[] {
   const users = new Set(jobs.map((job) => job.createdBy));
   return Array.from(users).sort();
 }
+
+export function getUsedTrolleyCount(jobs: Job[]): number {
+  const used = new Set<number>();
+  for (const job of jobs) {
+    if (job.trolleyNumber != null && job.trolleyNumber >= 1) {
+      used.add(job.trolleyNumber);
+    }
+  }
+  return used.size;
+}

@@ -21,7 +21,7 @@ import type {
   ProductivityDataState,
   PendingStockUpdate,
 } from './types';
-import { filterJobs, getUniqueJobCreators } from './utils/jobFilters';
+import { filterJobs, getUniqueJobCreators, getUsedTrolleyCount } from './utils/jobFilters';
 import { computeLiveJobsSummary } from './utils/liveJobs';
 import JobCard from './components/JobCard';
 import type { EditingJobItemState } from './components/JobCard';
@@ -34,6 +34,9 @@ import JobsProductivitySection from './components/JobsProductivitySection';
 import NewJobPickingModal from './components/NewJobPickingModal';
 import AddBackToStockModal from './components/AddBackToStockModal';
 import { mergePendingStockUpdates } from './utils/mergePendingStockUpdates';
+import { parseJobTimestamp } from './utils/formatters';
+import { enrichJobsWithPackingTimestamps } from './utils/packingTimestamps';
+import { TOTAL_TROLLEYS } from './constants';
 import { WMS_ALERT_PREFIX, formatLogError } from '../../utils/wmsActivityLog';
 
 const Jobs: React.FC = () => {
@@ -183,6 +186,14 @@ const Jobs: React.FC = () => {
     () => computeLiveJobsSummary(jobs, activeJobSessions),
     [jobs, activeJobSessions]
   );
+
+  const activeTrolleyUsage = useMemo(() => {
+    const activeJobs = jobs.filter((job) => job.status !== 'completed');
+    return {
+      used: getUsedTrolleyCount(activeJobs),
+      total: TOTAL_TROLLEYS,
+    };
+  }, [jobs]);
 
   // Cleanup function to remove old live job sessions
   const cleanupOldLiveJobSessions = useCallback(async () => {
@@ -589,6 +600,8 @@ const Jobs: React.FC = () => {
           trolleyNumber: data.trolleyNumber ?? null,
           verifyingTimeAccumulated: data.verifyingTimeAccumulated ?? 0,
           verifyingTime: data.verifyingTime ?? null,
+          packingStartedAt: parseJobTimestamp(data.packingStartedAt),
+          packingCompletedAt: parseJobTimestamp(data.packingCompletedAt),
         };
       });
       
@@ -614,8 +627,10 @@ const Jobs: React.FC = () => {
           name: item.name || barcodeToNameMap.get(item.barcode) || null
         }))
       }));
+
+      const enrichedList = await enrichJobsWithPackingTimestamps(enhancedList);
       
-      setJobs(enhancedList);
+      setJobs(enrichedList);
     } catch (e) {
       console.log('error', e);
       showToast('Failed to fetch jobs', 'error');
@@ -757,11 +772,31 @@ const Jobs: React.FC = () => {
     });
   };
 
-  const startVerification = (job: Job) => {
+  const startVerification = async (job: Job) => {
     setJobIdInVerificationMode(job.id);
     setVerificationSegmentStartTime(Date.now());
     setVerifyingElapsedSeconds(0);
     setExpandedJobs(new Set([job.id]));
+
+    if (!job.packingStartedAt) {
+      const startedAt = new Date();
+      try {
+        await updateDoc(doc(db, 'jobs', job.id), {
+          packingStartedAt: Timestamp.fromDate(startedAt),
+          packer: user?.name || job.packer || null,
+        });
+        await logActivity(`started packing for job ${job.jobId}`);
+        setJobs(prev =>
+          prev.map(j =>
+            j.id === job.id
+              ? { ...j, packingStartedAt: startedAt, packer: user?.name || j.packer || null }
+              : j
+          )
+        );
+      } catch (e) {
+        console.error('Failed to record packing start time:', e);
+      }
+    }
   };
 
   const stopVerification = async (job: Job) => {
@@ -1359,12 +1394,16 @@ const Jobs: React.FC = () => {
       setVerificationSegmentStartTime(null);
       setJobIdInVerificationMode(prev => (prev === job.id ? null : prev));
 
+      const completedAt = new Date();
+
       // Update the job in database with all verified items and verifying time
       await updateDoc(jobDocRef, { 
         status: 'completed', 
         packer: user?.name || job.packer || null,
         items: updatedItems,
         verifyingTime: totalVerifyingTime,
+        packingCompletedAt: Timestamp.fromDate(completedAt),
+        ...(job.packingStartedAt ? {} : { packingStartedAt: Timestamp.fromDate(completedAt) }),
       });
       
       await logActivity(  
@@ -1662,6 +1701,8 @@ const Jobs: React.FC = () => {
         viewMode={jobsViewMode}
         isLoading={isLoading}
         userRole={user?.role}
+        trolleyUsed={jobsViewMode === 'active' ? activeTrolleyUsage.used : undefined}
+        trolleyTotal={jobsViewMode === 'active' ? activeTrolleyUsage.total : undefined}
         onRefresh={fetchJobs}
         onNewJob={openNewJobModal}
         onSetView={handleSetJobsView}

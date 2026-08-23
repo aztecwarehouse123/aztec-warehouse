@@ -16,6 +16,8 @@ export type Job = {
   trolleyNumber?: number | null;
   verifyingTimeAccumulated?: number;
   verifyingTime?: number | null;
+  packingStartedAt?: Date | null;
+  packingCompletedAt?: Date | null;
 };
 
 export type FirestoreJobItem = {
@@ -43,6 +45,8 @@ export type FirestoreJob = {
   trolleyNumber?: number | null;
   verifyingTimeAccumulated?: number;
   verifyingTime?: number | null;
+  packingStartedAt?: Timestamp | Date | string | null;
+  packingCompletedAt?: Timestamp | Date | string | null;
 };
 
 export type ActiveJobSession = {

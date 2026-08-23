@@ -7,6 +7,7 @@ import Button from '../../../components/ui/Button';
 import Input from '../../../components/ui/Input';
 import type { JobItem, StockItem } from '../../../types';
 import { formatJobTimer } from '../utils/formatters';
+import { TOTAL_TROLLEYS } from '../constants';
 
 export type NewJobEditingItemState = {
   index: number;
@@ -524,7 +525,7 @@ const NewJobPickingModal: React.FC<NewJobPickingModalProps> = ({
             Select Trolley Number <span className="text-red-500">*</span>
           </label>
           <div className="grid grid-cols-5 sm:grid-cols-10 gap-2">
-            {Array.from({ length: 20 }, (_, i) => i + 1).map((num) => (
+            {Array.from({ length: TOTAL_TROLLEYS }, (_, i) => i + 1).map((num) => (
               <button
                 key={num}
                 type="button"

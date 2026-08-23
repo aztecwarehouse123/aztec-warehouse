@@ -288,7 +288,7 @@ const QuickAddStockForm: React.FC<QuickAddStockFormProps> = ({ onSubmit, onClose
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Select
-            label="Box Size (Optional)"
+            label="Box Size"
             name="boxSize"
             value={formData.boxSize}
             onChange={handleChange}
@@ -296,7 +296,7 @@ const QuickAddStockForm: React.FC<QuickAddStockFormProps> = ({ onSubmit, onClose
             fullWidth
           />
           <Select
-            label="Packing Material (Optional)"
+            label="Packing Material"
             name="packingMaterial"
             value={formData.packingMaterial}
             onChange={handleChange}

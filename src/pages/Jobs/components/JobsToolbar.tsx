@@ -15,6 +15,8 @@ export type JobsToolbarProps = {
   viewMode: JobsViewMode;
   isLoading: boolean;
   userRole?: string;
+  trolleyUsed?: number;
+  trolleyTotal?: number;
   onRefresh: () => void;
   onNewJob: () => void;
   onSetView: (mode: JobsViewMode) => void;
@@ -25,6 +27,8 @@ const JobsToolbar: React.FC<JobsToolbarProps> = ({
   viewMode,
   isLoading,
   userRole,
+  trolleyUsed,
+  trolleyTotal,
   onRefresh,
   onNewJob,
   onSetView,
@@ -46,11 +50,25 @@ const JobsToolbar: React.FC<JobsToolbarProps> = ({
     <div className="flex flex-col gap-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div className="flex flex-col gap-2">
-          <h1
-            className={`text-xl sm:text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}
-          >
-            {title} Jobs
-          </h1>
+          <div className="flex flex-col sm:flex-row sm:items-baseline gap-2 sm:gap-4">
+            <h1
+              className={`text-xl sm:text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}
+            >
+              {title} Jobs
+            </h1>
+            {viewMode === 'active' && trolleyUsed != null && trolleyTotal != null && (
+              <p className={`text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+                Trolleys:{' '}
+                <span className={isDarkMode ? 'text-white' : 'text-slate-900'}>
+                  {trolleyUsed} used
+                </span>
+                {' / '}
+                <span className={isDarkMode ? 'text-white' : 'text-slate-900'}>
+                  {trolleyTotal} total
+                </span>
+              </p>
+            )}
+          </div>
           {viewMode === 'live' && (
             <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
               Showing jobs currently being created (in progress)
