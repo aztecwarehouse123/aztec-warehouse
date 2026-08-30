@@ -211,10 +211,10 @@ const JobStockUpdateForm: React.FC<JobStockUpdateFormProps> = ({ item, onSubmit,
           <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
             Barcode: {item.barcode}
           </p>
-          <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+          <p className={`text-sm font-semibold ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>
             Box Size: {displayBoxSize || '-'}
           </p>
-          <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+          <p className={`text-sm font-semibold ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>
             Packing Material: {displayPackingMaterial || '-'}
           </p>
         </div>

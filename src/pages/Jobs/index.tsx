@@ -21,7 +21,7 @@ import type {
   ProductivityDataState,
   PendingStockUpdate,
 } from './types';
-import { filterJobs, getUniqueJobCreators, getUsedTrolleyCount } from './utils/jobFilters';
+import { filterJobs, getUniqueJobCreators, getUsedTrolleyCount, getUsedTrolleyNumbers, isTrolleyNumberInUse } from './utils/jobFilters';
 import { computeLiveJobsSummary } from './utils/liveJobs';
 import JobCard from './components/JobCard';
 import type { EditingJobItemState } from './components/JobCard';
@@ -34,9 +34,10 @@ import JobsProductivitySection from './components/JobsProductivitySection';
 import NewJobPickingModal from './components/NewJobPickingModal';
 import AddBackToStockModal from './components/AddBackToStockModal';
 import { mergePendingStockUpdates } from './utils/mergePendingStockUpdates';
+import { allRequiredNewJobItemsConfirmed } from './utils/newJobItemConfirmation';
 import { parseJobTimestamp } from './utils/formatters';
 import { enrichJobsWithPackingTimestamps } from './utils/packingTimestamps';
-import { TOTAL_TROLLEYS } from './constants';
+import { MAX_TROLLEY_NUMBER } from './constants';
 import { WMS_ALERT_PREFIX, formatLogError } from '../../utils/wmsActivityLog';
 
 const Jobs: React.FC = () => {
@@ -70,6 +71,10 @@ const Jobs: React.FC = () => {
   const [isJobCreationInProgress, setIsJobCreationInProgress] = useState(false);
   /** Synchronous guard — React state updates are async, so double-clicks could still run two finishes. */
   const jobFinishInFlightRef = useRef(false);
+  /** Tracks latest loadJobs call so stale responses don't clear loading early/late. */
+  const loadJobsRequestIdRef = useRef(0);
+  const showToastRef = useRef(showToast);
+  showToastRef.current = showToast;
   /** Same for stock update modal — prevents double Update adding quantity twice to pending job. */
   const stockUpdateInFlightRef = useRef(false);
   const [isStockUpdateSubmitting, setIsStockUpdateSubmitting] = useState(false);
@@ -98,6 +103,7 @@ const Jobs: React.FC = () => {
   
   // Trolley number state for new job
   const [selectedTrolleyNumber, setSelectedTrolleyNumber] = useState<number | null>(null);
+  const [confirmedNewJobItemKeys, setConfirmedNewJobItemKeys] = useState<Set<string>>(new Set());
   
   // Search functionality state
   const [searchQuery, setSearchQuery] = useState('');
@@ -191,9 +197,14 @@ const Jobs: React.FC = () => {
     const activeJobs = jobs.filter((job) => job.status !== 'completed');
     return {
       used: getUsedTrolleyCount(activeJobs),
-      total: TOTAL_TROLLEYS,
+      total: MAX_TROLLEY_NUMBER,
     };
   }, [jobs]);
+
+  const usedTrolleyNumbers = useMemo(
+    () => getUsedTrolleyNumbers(jobs.filter((job) => job.status !== 'completed')),
+    [jobs]
+  );
 
   // Cleanup function to remove old live job sessions
   const cleanupOldLiveJobSessions = useCallback(async () => {
@@ -557,20 +568,11 @@ const Jobs: React.FC = () => {
     }
   };
 
-  const fetchJobs = useCallback(async () => {
-    setIsLoading(true);
-    // Reset view states when refreshing - default to Active Jobs
-    setShowCompleted(false);
-    setShowArchived(false);
-    setShowLiveJobs(false);
-    setShowReports(false);
-    // Reset filters when refreshing
-    setStartDate(null);
-    setEndDate(null);
-    setSelectedUser('all');
-    // Clear local verification state when refreshing
-    setLocallyVerifiedItems(new Set());
-    // Keep expanded state when refreshing (don't clear expandedJobs)
+  const loadJobs = useCallback(async (options?: { showLoading?: boolean; enrichTimestamps?: boolean }) => {
+    const { showLoading = false, enrichTimestamps = false } = options ?? {};
+    const requestId = ++loadJobsRequestIdRef.current;
+    if (showLoading) setIsLoading(true);
+
     try {
       const q = query(collection(db, 'jobs'), orderBy('createdAt', 'desc'));
       const snapshot = await getDocs(q);
@@ -594,7 +596,7 @@ const Jobs: React.FC = () => {
             shelfNumber: it.shelfNumber,
             reason: it.reason || 'Unknown',
             storeName: it.storeName || 'Unknown',
-            stockItemId: it.stockItemId, // Include document ID if available
+            stockItemId: it.stockItemId,
           })) : [],
           pickingTime: data.pickingTime || 0,
           trolleyNumber: data.trolleyNumber ?? null,
@@ -604,22 +606,18 @@ const Jobs: React.FC = () => {
           packingCompletedAt: parseJobTimestamp(data.packingCompletedAt),
         };
       });
-      
-      // OPTIMIZED: Fetch all inventory items once and create a barcode-to-name map
-      // This replaces the N+1 query problem (hundreds of individual queries)
-      // with just 1 additional query
+
       const inventoryQuery = query(collection(db, 'inventory'));
       const inventorySnapshot = await getDocs(inventoryQuery);
       const barcodeToNameMap = new Map<string, string | null>();
-      
-      inventorySnapshot.docs.forEach(doc => {
-        const data = doc.data();
+
+      inventorySnapshot.docs.forEach(docSnap => {
+        const data = docSnap.data();
         if (data.barcode) {
           barcodeToNameMap.set(data.barcode, data.name || null);
         }
       });
-      
-      // Enhance items with product names using the map (no additional queries)
+
       const enhancedList = list.map(job => ({
         ...job,
         items: job.items.map(item => ({
@@ -628,18 +626,43 @@ const Jobs: React.FC = () => {
         }))
       }));
 
-      const enrichedList = await enrichJobsWithPackingTimestamps(enhancedList);
-      
+      const enrichedList = enrichTimestamps
+        ? await enrichJobsWithPackingTimestamps(enhancedList)
+        : enhancedList;
+
+      if (requestId !== loadJobsRequestIdRef.current) return;
+
       setJobs(enrichedList);
     } catch (e) {
       console.log('error', e);
-      showToast('Failed to fetch jobs', 'error');
+      if (requestId === loadJobsRequestIdRef.current) {
+        showToastRef.current('Failed to fetch jobs', 'error');
+      }
     } finally {
-      setIsLoading(false);
+      if (showLoading && requestId === loadJobsRequestIdRef.current) {
+        setIsLoading(false);
+      }
     }
-  }, [showToast]);
+  }, []);
 
-  useEffect(() => { fetchJobs(); }, [fetchJobs]);
+  /** Manual refresh from toolbar — preserves current view and in-progress verification. */
+  const refreshJobs = useCallback(() => {
+    loadJobs({
+      showLoading: true,
+      enrichTimestamps: showCompleted || showArchived,
+    });
+  }, [loadJobs, showCompleted, showArchived]);
+
+  useEffect(() => {
+    loadJobs({ showLoading: true });
+  }, [loadJobs]);
+
+  // Enrich packer timestamps when viewing completed/archived jobs
+  useEffect(() => {
+    if (showCompleted || showArchived) {
+      loadJobs({ enrichTimestamps: true });
+    }
+  }, [showCompleted, showArchived, loadJobs]);
 
   // Cleanup old live job sessions on component mount
   useEffect(() => {
@@ -655,13 +678,13 @@ const Jobs: React.FC = () => {
     return () => clearInterval(cleanupInterval);
   }, [cleanupOldLiveJobSessions]);
 
-  // Clear local verification state when jobs change or component unmounts
+  // Clear verification UI state only when leaving the page
   useEffect(() => {
     return () => {
       setLocallyVerifiedItems(new Set());
       setExpandedJobs(new Set());
     };
-  }, [jobs]);
+  }, []);
 
   // Automatically set date range from yesterday to today when switching to archived jobs
   useEffect(() => {
@@ -811,12 +834,15 @@ const Jobs: React.FC = () => {
       await updateDoc(doc(db, 'jobs', job.id), {
         verifyingTimeAccumulated: newAccumulated,
       });
+      setJobs(prev =>
+        prev.map(j =>
+          j.id === job.id ? { ...j, verifyingTimeAccumulated: newAccumulated } : j
+        )
+      );
       showToast('Verifying paused. You can resume by clicking Verify Items again.', 'success');
-      fetchJobs();
     } catch (e) {
       console.error('Stop verification error:', e);
       showToast('Failed to pause verifying time', 'error');
-      fetchJobs();
     }
   };
 
@@ -872,6 +898,7 @@ const Jobs: React.FC = () => {
     setShowHurryUpAlert(false); // Reset alert state
     setLastAlertTime(0); // Reset last alert time
     setSelectedTrolleyNumber(null); // Reset trolley number
+    setConfirmedNewJobItemKeys(new Set());
     setIsNewJobModalOpen(true);
     
     // Create a live job session in Firebase
@@ -1008,7 +1035,9 @@ const Jobs: React.FC = () => {
             shelfNumber: data.shelfNumber,
             reason: data.reason,
             storeName: data.storeName,
-            stockItemId: data.id
+            stockItemId: data.id,
+            boxSize: docData.boxSize ? String(docData.boxSize) : selectedStockItem.boxSize ?? null,
+            packingMaterial: docData.packingMaterial ? String(docData.packingMaterial) : selectedStockItem.packingMaterial ?? null,
           }];
         });
       }
@@ -1038,7 +1067,9 @@ const Jobs: React.FC = () => {
           shelfNumber: data.shelfNumber,
           reason: data.reason,
           storeName: data.storeName,
-          stockItemId: data.id
+          stockItemId: data.id,
+          boxSize: docData.boxSize ? String(docData.boxSize) : selectedStockItem.boxSize ?? null,
+          packingMaterial: docData.packingMaterial ? String(docData.packingMaterial) : selectedStockItem.packingMaterial ?? null,
         };
 
         await updateDoc(doc(db, 'liveJobSessions', sessionDoc.id), {
@@ -1127,7 +1158,22 @@ const Jobs: React.FC = () => {
         return;
       }
       if (selectedTrolleyNumber == null) {
-        showToast('Please select a trolley number', 'error');
+        showToast('Please enter a trolley number', 'error');
+        return;
+      }
+      if (
+        selectedTrolleyNumber < 1 ||
+        selectedTrolleyNumber > MAX_TROLLEY_NUMBER
+      ) {
+        showToast(`Trolley number must be between 1 and ${MAX_TROLLEY_NUMBER}`, 'error');
+        return;
+      }
+      if (isTrolleyNumberInUse(jobs, selectedTrolleyNumber)) {
+        showToast(`Trolley ${selectedTrolleyNumber} is already in use on another active job`, 'error');
+        return;
+      }
+      if (!allRequiredNewJobItemsConfirmed(newJobItems, confirmedNewJobItemKeys)) {
+        showToast('Please tick all products with box size or packing material before finishing picking', 'error');
         return;
       }
 
@@ -1209,6 +1255,7 @@ const Jobs: React.FC = () => {
       setShowHurryUpAlert(false);
       setLastAlertTime(0);
       setSelectedTrolleyNumber(null);
+      setConfirmedNewJobItemKeys(new Set());
 
       const sessionQuery = query(
         collection(db, 'liveJobSessions'),
@@ -1220,7 +1267,7 @@ const Jobs: React.FC = () => {
         await deleteDoc(doc(db, 'liveJobSessions', sessionSnapshot.docs[0].id));
       }
 
-      fetchJobs();
+      loadJobs();
     } catch (e) {
       console.error('finishNewJobPicking', e);
       const errStr = formatLogError(e);
@@ -1255,7 +1302,7 @@ const Jobs: React.FC = () => {
 
       showToast(`Job ${job.jobId} completed and awaiting pack`, 'success');
       
-      fetchJobs();
+      loadJobs();
     } catch (error) {
       showToast('Failed to update job', 'error');
       console.error('Error completing picking:', error);
@@ -1382,7 +1429,7 @@ const Jobs: React.FC = () => {
       const jobDoc = await getDoc(jobDocRef);
       if (!jobDoc.exists()) {
         showToast(`Job ${job.jobId} not found in database. It may have been deleted.`, 'error');
-        fetchJobs(); // Refresh to sync with database
+        loadJobs(); // Refresh to sync with database
         return;
       }
       
@@ -1420,7 +1467,7 @@ const Jobs: React.FC = () => {
       });
       
       showToast(`Job ${job.jobId} completed successfully with ${totalVerifiedCount}/${job.items.length} items verified`, 'success');
-      fetchJobs();
+      loadJobs();
     } catch (error: unknown) { 
       console.error('Error completing job:', error);
       const errorMessage = (error instanceof Error && error.message) ? error.message : 'Unknown error';
@@ -1431,7 +1478,7 @@ const Jobs: React.FC = () => {
         showToast(`Permission denied: Unable to complete job ${job.jobId}. Please check your permissions.`, 'error');
       } else if (errorCode === 'not-found') {
         showToast(`Job ${job.jobId} not found in database. It may have been deleted.`, 'error');
-        fetchJobs(); // Refresh to sync with database
+        loadJobs(); // Refresh to sync with database
       } else if (errorMessage.includes('Invalid data') || errorMessage.includes('Field value') || errorMessage.includes('undefined')) {
         showToast(`Invalid data in job ${job.jobId}: ${errorMessage}. Please check job items.`, 'error');
       } else {
@@ -1472,7 +1519,7 @@ const Jobs: React.FC = () => {
       
       showToast('Job deleted', 'success');
       setJobToDelete(null);
-      fetchJobs();
+      loadJobs();
     } catch {
       showToast('Failed to delete job', 'error');
     } finally {
@@ -1500,7 +1547,7 @@ const Jobs: React.FC = () => {
       
       showToast('Job item updated successfully', 'success');
       setEditingJobItem(null);
-      fetchJobs();
+      loadJobs();
     } catch {
       showToast('Failed to update job item', 'error');
     } finally {
@@ -1595,7 +1642,7 @@ const Jobs: React.FC = () => {
       }
       setAddBackToStockItem(null);
       setAddBackQuantity(0);
-      fetchJobs();
+      loadJobs();
     } catch (e) {
       console.error('Add back to stock error:', e);
       showToast('Failed to add item back to stock', 'error');
@@ -1703,7 +1750,7 @@ const Jobs: React.FC = () => {
         userRole={user?.role}
         trolleyUsed={jobsViewMode === 'active' ? activeTrolleyUsage.used : undefined}
         trolleyTotal={jobsViewMode === 'active' ? activeTrolleyUsage.total : undefined}
-        onRefresh={fetchJobs}
+        onRefresh={refreshJobs}
         onNewJob={openNewJobModal}
         onSetView={handleSetJobsView}
       />
@@ -1728,7 +1775,7 @@ const Jobs: React.FC = () => {
       <div className="space-y-4">
         {!showReports && !showProductivity && (
           <>
-            {isLoading || isJobsOperationInProgress ? (
+            {(isLoading || isJobsOperationInProgress) && !jobIdInVerificationMode ? (
               <div className="flex items-center justify-center py-16">
                 <div className="flex flex-col items-center gap-3">
                   <RefreshCw className="animate-spin text-blue-500" size={24} />
@@ -1751,7 +1798,7 @@ const Jobs: React.FC = () => {
                   verifyingElapsedSeconds={verifyingElapsedSeconds}
                   onStartVerification={startVerification}
                   onStopVerification={stopVerification}
-                  onRefreshJobs={fetchJobs}
+                  onRefreshJobs={refreshJobs}
                   onRequestDeleteJob={requestDeleteJob}
                   completingJobs={completingJobs}
                   onCompletePicking={completePicking}
@@ -1779,7 +1826,7 @@ const Jobs: React.FC = () => {
           uiSessions={liveSummary.uiSessions}
           totalLiveCount={liveSummary.totalCount}
           onRefresh={() => {
-            fetchJobs();
+            loadJobs();
             cleanupOldLiveJobSessions();
           }}
         />
@@ -1866,6 +1913,16 @@ const Jobs: React.FC = () => {
         userName={user?.name}
         selectedTrolleyNumber={selectedTrolleyNumber}
         setSelectedTrolleyNumber={setSelectedTrolleyNumber}
+        usedTrolleyNumbers={usedTrolleyNumbers}
+        confirmedItemKeys={confirmedNewJobItemKeys}
+        onToggleItemConfirmed={(key) => {
+          setConfirmedNewJobItemKeys(prev => {
+            const next = new Set(prev);
+            if (next.has(key)) next.delete(key);
+            else next.add(key);
+            return next;
+          });
+        }}
         finishNewJobPicking={finishNewJobPicking}
         isJobCreationInProgress={isJobCreationInProgress}
       />

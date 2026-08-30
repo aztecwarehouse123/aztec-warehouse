@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, RefreshCw, Search, ArrowLeft, Calculator, Clock, CheckSquare } from 'lucide-react';
+import { Plus, RefreshCw, Search, ArrowLeft, Calculator, Clock, CheckSquare, Square } from 'lucide-react';
 import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
 import { db } from '../../../config/firebase';
 import Modal from '../../../components/modals/Modal';
@@ -7,7 +7,12 @@ import Button from '../../../components/ui/Button';
 import Input from '../../../components/ui/Input';
 import type { JobItem, StockItem } from '../../../types';
 import { formatJobTimer } from '../utils/formatters';
-import { TOTAL_TROLLEYS } from '../constants';
+import { MAX_TROLLEY_NUMBER } from '../constants';
+import {
+  allRequiredNewJobItemsConfirmed,
+  getNewJobItemKey,
+  newJobItemRequiresConfirmation,
+} from '../utils/newJobItemConfirmation';
 
 export type NewJobEditingItemState = {
   index: number;
@@ -57,6 +62,9 @@ export type NewJobPickingModalProps = {
   userName?: string;
   selectedTrolleyNumber: number | null;
   setSelectedTrolleyNumber: React.Dispatch<React.SetStateAction<number | null>>;
+  usedTrolleyNumbers: Set<number>;
+  confirmedItemKeys: Set<string>;
+  onToggleItemConfirmed: (key: string) => void;
   finishNewJobPicking: () => void;
   isJobCreationInProgress: boolean;
 };
@@ -89,9 +97,40 @@ const NewJobPickingModal: React.FC<NewJobPickingModalProps> = ({
   userName,
   selectedTrolleyNumber,
   setSelectedTrolleyNumber,
+  usedTrolleyNumbers,
+  confirmedItemKeys,
+  onToggleItemConfirmed,
   finishNewJobPicking,
   isJobCreationInProgress,
 }) => {
+  const usedTrolleyList = Array.from(usedTrolleyNumbers).sort((a, b) => a - b);
+  const trolleyInUse =
+    selectedTrolleyNumber != null && usedTrolleyNumbers.has(selectedTrolleyNumber);
+  const trolleyOutOfRange =
+    selectedTrolleyNumber != null &&
+    (selectedTrolleyNumber < 1 || selectedTrolleyNumber > MAX_TROLLEY_NUMBER);
+  const allItemsConfirmed = allRequiredNewJobItemsConfirmed(newJobItems, confirmedItemKeys);
+  const pendingConfirmationCount = newJobItems.filter(
+    (item, index) =>
+      newJobItemRequiresConfirmation(item) &&
+      !confirmedItemKeys.has(getNewJobItemKey(item, index))
+  ).length;
+
+  const handleTrolleyChange = (raw: string) => {
+    if (raw.trim() === '') {
+      setSelectedTrolleyNumber(null);
+      return;
+    }
+
+    const num = parseInt(raw, 10);
+    if (Number.isNaN(num)) {
+      setSelectedTrolleyNumber(null);
+      return;
+    }
+
+    setSelectedTrolleyNumber(num);
+  };
+
   return (
     <>
       {/* New Job Picking Modal */}
@@ -328,9 +367,17 @@ const NewJobPickingModal: React.FC<NewJobPickingModalProps> = ({
         <h4 className={`text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
           Current Job Items:
         </h4>
-        <div className="max-h-32 overflow-auto space-y-1">
-          {newJobItems.map((item, index) => (
-            <div key={`${item.barcode}-${item.locationCode}-${item.shelfNumber}-${index}`} className={`flex items-center justify-between p-2 rounded text-sm ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
+        <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+          Tick each product after reading its box size and packing material. Items without that info do not need a tick.
+        </p>
+        <div className="max-h-40 overflow-auto space-y-1">
+          {newJobItems.map((item, index) => {
+            const itemKey = getNewJobItemKey(item, index);
+            const requiresConfirmation = newJobItemRequiresConfirmation(item);
+            const isConfirmed = confirmedItemKeys.has(itemKey);
+
+            return (
+            <div key={itemKey} className={`flex items-start justify-between gap-2 p-2 rounded text-sm ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
               {editingItem?.index === index ? (
                 // Edit mode
                 <div className="flex items-center gap-2 flex-1">
@@ -429,6 +476,34 @@ const NewJobPickingModal: React.FC<NewJobPickingModalProps> = ({
             ) : (
                 // Display mode
                 <>
+                  <div className="flex items-start gap-2 flex-1 min-w-0">
+                    <button
+                      type="button"
+                      onClick={() => requiresConfirmation && onToggleItemConfirmed(itemKey)}
+                      disabled={!requiresConfirmation}
+                      className={`flex-shrink-0 mt-0.5 p-1 rounded transition-colors ${
+                        !requiresConfirmation
+                          ? isDarkMode
+                            ? 'text-slate-600 cursor-not-allowed'
+                            : 'text-slate-300 cursor-not-allowed'
+                          : isConfirmed
+                            ? isDarkMode
+                              ? 'text-emerald-400 hover:text-emerald-300'
+                              : 'text-emerald-600 hover:text-emerald-700'
+                            : isDarkMode
+                              ? 'text-slate-400 hover:text-slate-200'
+                              : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                      title={
+                        !requiresConfirmation
+                          ? 'No box/packing info — tick not required'
+                          : isConfirmed
+                            ? 'Confirmed — click to unconfirm'
+                            : 'Tick to confirm you have read this product info'
+                      }
+                    >
+                      {isConfirmed ? <CheckSquare size={18} /> : <Square size={18} />}
+                    </button>
                   <div className="flex-1 min-w-0">
                     <span className="truncate block font-medium">{item.name || item.barcode}</span>
                     {item.name && (
@@ -451,8 +526,20 @@ const NewJobPickingModal: React.FC<NewJobPickingModalProps> = ({
                         Store: {item.storeName?.toUpperCase()}
                       </span>
                     )}
+                    <span className={`text-xs font-semibold block ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>
+                      Box Size: {item.boxSize || '-'}
+                    </span>
+                    <span className={`text-xs font-semibold block ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>
+                      Packing Material: {item.packingMaterial || '-'}
+                    </span>
+                    {!requiresConfirmation && (
+                      <span className={`text-xs block ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                        No box/packing info — tick not required
+                      </span>
+                    )}
                   </div>
-              <div className="flex items-center gap-2">
+                  </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
                     <span className="text-xs text-slate-500">Qty: {item.quantity}</span>
                 <Button 
                   variant="secondary" 
@@ -512,39 +599,54 @@ const NewJobPickingModal: React.FC<NewJobPickingModalProps> = ({
                 </>
             )}
             </div>
-          ))}
+            );
+          })}
         </div>
+        {pendingConfirmationCount > 0 && (
+          <p className={`text-xs ${isDarkMode ? 'text-amber-400' : 'text-amber-700'}`}>
+            {pendingConfirmationCount} product{pendingConfirmationCount !== 1 ? 's' : ''} still need confirming before finish picking.
+          </p>
+        )}
       </div>
     )}
 
-    {/* Trolley Number Selector - Always visible when not in search section */}
+    {/* Trolley Number Input - Always visible when not in search section */}
     {!showSearchSection && (
       <>
         <div className="pt-2 space-y-2">
           <label className={`block text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-            Select Trolley Number <span className="text-red-500">*</span>
+            Trolley Number <span className="text-red-500">*</span>
           </label>
-          <div className="grid grid-cols-5 sm:grid-cols-10 gap-2">
-            {Array.from({ length: TOTAL_TROLLEYS }, (_, i) => i + 1).map((num) => (
-              <button
-                key={num}
-                type="button"
-                onClick={() => setSelectedTrolleyNumber(num)}
-                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                  selectedTrolleyNumber === num
-                    ? 'bg-blue-500 text-white hover:bg-blue-600'
-                    : isDarkMode
-                    ? 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                    : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
-                }`}
-              >
-                {num}
-              </button>
-            ))}
-          </div>
-          {!selectedTrolleyNumber && (
+          <Input
+            type="number"
+            min={1}
+            max={MAX_TROLLEY_NUMBER}
+            value={selectedTrolleyNumber ?? ''}
+            onChange={(e) => handleTrolleyChange(e.target.value)}
+            placeholder={`Enter trolley number (1–${MAX_TROLLEY_NUMBER})`}
+            fullWidth
+          />
+          <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+            Enter one trolley number. Trolleys already in use on active jobs cannot be selected.
+          </p>
+          {usedTrolleyList.length > 0 && (
+            <p className={`text-xs ${isDarkMode ? 'text-amber-400' : 'text-amber-700'}`}>
+              In use: {usedTrolleyList.join(', ')}
+            </p>
+          )}
+          {trolleyInUse && (
             <p className={`text-xs ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>
-              Please select a trolley number before finishing picking
+              Trolley {selectedTrolleyNumber} is already in use. Choose a different number.
+            </p>
+          )}
+          {trolleyOutOfRange && (
+            <p className={`text-xs ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>
+              Trolley number must be between 1 and {MAX_TROLLEY_NUMBER}.
+            </p>
+          )}
+          {selectedTrolleyNumber == null && (
+            <p className={`text-xs ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>
+              Please enter a trolley number before finishing picking
             </p>
           )}
         </div>
@@ -553,7 +655,14 @@ const NewJobPickingModal: React.FC<NewJobPickingModalProps> = ({
         <div className="pt-2">
             <Button 
             onClick={finishNewJobPicking}
-            disabled={newJobItems.length === 0 || isJobCreationInProgress || !selectedTrolleyNumber}
+            disabled={
+              newJobItems.length === 0 ||
+              isJobCreationInProgress ||
+              selectedTrolleyNumber == null ||
+              trolleyInUse ||
+              trolleyOutOfRange ||
+              !allItemsConfirmed
+            }
             isLoading={isJobCreationInProgress}
             className="w-full flex items-center justify-center gap-2"
               size="sm" 

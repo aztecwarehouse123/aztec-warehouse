@@ -76,12 +76,20 @@ export function getUniqueJobCreators(jobs: Job[]): string[] {
   return Array.from(users).sort();
 }
 
-export function getUsedTrolleyCount(jobs: Job[]): number {
+export function getUsedTrolleyNumbers(jobs: Job[]): Set<number> {
   const used = new Set<number>();
   for (const job of jobs) {
-    if (job.trolleyNumber != null && job.trolleyNumber >= 1) {
+    if (job.status !== 'completed' && job.trolleyNumber != null && job.trolleyNumber >= 1) {
       used.add(job.trolleyNumber);
     }
   }
-  return used.size;
+  return used;
+}
+
+export function getUsedTrolleyCount(jobs: Job[]): number {
+  return getUsedTrolleyNumbers(jobs).size;
+}
+
+export function isTrolleyNumberInUse(jobs: Job[], trolleyNumber: number): boolean {
+  return getUsedTrolleyNumbers(jobs).has(trolleyNumber);
 }
