@@ -1,14 +1,22 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import {
+  signInWithEmailAndPassword,
+  signOut as firebaseSignOut,
+  onAuthStateChanged,
+} from 'firebase/auth';
 import { User } from '../types';
+import { auth } from '../config/firebase';
 import { db } from '../config/firebase';
-import { collection, addDoc, getDocs } from 'firebase/firestore';
+import { collection, addDoc } from 'firebase/firestore';
+import { loadUserProfile } from '../utils/userProfile';
 
 type AuthContextType = {
   user: User | null;
   isAuthenticated: boolean;
-  login: (username: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
   isLoading: boolean;
+  authReady: boolean;
   setUser: (user: User | null) => void;
 };
 
@@ -27,56 +35,39 @@ type AuthProviderProps = {
 };
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(() => {
-    // Initialize user from localStorage on app start
-    const savedUser = localStorage.getItem('user');
-    return savedUser ? JSON.parse(savedUser) : null;
-  });
+  const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [authReady, setAuthReady] = useState(false);
 
-  const login = async (username: string, password: string): Promise<boolean> => {
-    setIsLoading(true);
-    
-    try {
-      // Get all users from the collection
-      const usersSnapshot = await getDocs(collection(db, 'users'));
-  
-      // Find the user with matching username and password
-      for (const doc of usersSnapshot.docs) {
-        const userData = doc.data();
-  
-          if (userData.username === username && userData.password === password) {
-            const user = {
-            id: doc.id,
-              username: userData.username,
-              email: userData.email,
-              name: userData.name,
-              role: userData.role,
-              password: userData.password
-            };
-            setUser(user);
-            // Save user to localStorage for persistence
-            localStorage.setItem('user', JSON.stringify(user));
-
-            // Add activity log
-            try {
-              await addDoc(collection(db, 'activityLogs'), {
-                user: user.name,
-                role: user.role,
-                detail: 'logged in',
-                time: new Date().toISOString()
-              });
-            } catch (logError) {
-              console.error('Error logging activity:', logError);
-              // Don't fail the login if activity logging fails
-            }
-
-            return true;
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        const profile = await loadUserProfile(firebaseUser.uid, firebaseUser.email);
+        setUser(profile);
+        if (profile) {
+          localStorage.setItem('user', JSON.stringify(profile));
         }
+      } else {
+        setUser(null);
+        localStorage.removeItem('user');
       }
-  
-      // If none matched
+      setAuthReady(true);
+    });
+
+    return unsubscribe;
+  }, []);
+
+  const login = async (email: string, password: string): Promise<boolean> => {
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail.includes('@')) {
       return false;
+    }
+
+    setIsLoading(true);
+
+    try {
+      await signInWithEmailAndPassword(auth, normalizedEmail, password);
+      return true;
     } catch (error) {
       console.error('Login error:', error);
       return false;
@@ -86,34 +77,45 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const logout = () => {
-    if (user) {
-      // Store user data for logging before clearing
-      const userData = { ...user };
-      // Clear user immediately
-      setUser(null);
-      // Clear user from localStorage
-      localStorage.removeItem('user');
-      
-      // Handle activity logging in the background
+    const userData = user ? { ...user } : null;
+    firebaseSignOut(auth).catch(console.error);
+
+    if (userData) {
       addDoc(collection(db, 'activityLogs'), {
         user: userData.name,
         role: userData.role,
         detail: 'logged out',
-        time: new Date().toISOString()
+        time: new Date().toISOString(),
       }).catch(logError => {
         console.error('Error logging activity:', logError);
-        // Don't fail the logout if activity logging fails
       });
     }
   };
 
+  // Log login after profile is loaded
+  useEffect(() => {
+    if (!user || !auth.currentUser) return;
+
+    const loginKey = `loginLogged_${auth.currentUser.uid}_${auth.currentUser.metadata.lastSignInTime}`;
+    if (sessionStorage.getItem(loginKey)) return;
+
+    sessionStorage.setItem(loginKey, '1');
+    addDoc(collection(db, 'activityLogs'), {
+      user: user.name,
+      role: user.role,
+      detail: 'logged in',
+      time: new Date().toISOString(),
+    }).catch(console.error);
+  }, [user]);
+
   const value = {
     user,
-    isAuthenticated: !!user,
+    isAuthenticated: !!user && !!auth.currentUser,
     login,
     logout,
     isLoading,
-    setUser
+    authReady,
+    setUser,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

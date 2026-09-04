@@ -1,0 +1,63 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && userProfile().role in ['admin', 'amazon_admin'];
+    }
+
+    function isManagerOrAdmin() {
+      return isSignedIn()
+        && userProfile().role in ['admin', 'manager', 'amazon_admin'];
+    }
+
+    // User profiles — NEVER store passwords here. Auth is handled by Firebase Authentication.
+    match /users/{userId} {
+      allow read: if isSignedIn()
+        && (request.auth.uid == userId || isManagerOrAdmin());
+      allow create: if isAdmin();
+      allow update: if isSignedIn()
+        && (request.auth.uid == userId || isAdmin())
+        && !request.resource.data.keys().hasAny(['password']);
+      allow delete: if isAdmin();
+    }
+
+    match /inventory/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /scannedProducts/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /jobs/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /activityLogs/{docId} {
+      allow read, create: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+
+    match /liveJobSessions/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /orders/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

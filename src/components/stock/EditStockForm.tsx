@@ -10,6 +10,7 @@ import BarcodeScanModal from '../modals/BarcodeScanModal';
 import { generateShelfOptions } from '../../utils/shelfUtils';
 import { getWarehouseLocationOptions } from '../../utils/locationUtils';
 import { boxSizeSelectOptions, packingMaterialSelectOptions } from '../../utils/stockOptions';
+import { PREDEFINED_STORES, storeNameSelectOptions } from '../../utils/storeOptions';
 
 interface FormData {
   name: string;
@@ -43,7 +44,7 @@ const generateShelfOptionsForLocation = (locationCode: string) => {
   return generateShelfOptions(locationCode);
 };
 
-  const predefinedStores = ['supply & serve', 'APHY', 'AZTEC', 'ZK', 'Fahiz'];
+  const predefinedStores = [...PREDEFINED_STORES];
 
 const supplierOptions = [
   { value: 'Rayburns Trading', label: 'RAYBURNS TRADING' },
@@ -426,14 +427,7 @@ const EditStockForm: React.FC<EditStockFormProps> = ({
                   setOtherStoreName('');
                 }
               }}
-              options={[
-                { value: 'supply & serve', label: 'SUPPLY & SERVE' },
-                { value: 'APHY', label: 'APHY' },
-                { value: 'AZTEC', label: 'AZTEC' },
-                { value: 'ZK', label: 'ZK' },
-                { value: 'Fahiz', label: 'FAHIZ' },
-                { value: 'other', label: 'OTHER' }
-              ]}
+              options={storeNameSelectOptions}
             />
             
           </div>

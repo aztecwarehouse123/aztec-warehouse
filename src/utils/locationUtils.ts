@@ -1,4 +1,4 @@
-export const AWAITING_LOCATION_CODES = [
+ export const AWAITING_LOCATION_CODES = [
   'Awaiting Location',
   'Awaiting Locations Sparklin',
   'Awaiting Locations Aztec',

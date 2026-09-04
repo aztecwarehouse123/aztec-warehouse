@@ -5,18 +5,17 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 
 const AppLayout: React.FC = () => {
-  const { isAuthenticated} = useAuth();
+  const { isAuthenticated, authReady } = useAuth();
   const navigate = useNavigate();
   const { isDarkMode } = useTheme();
 
-  // Redirect to login if not authenticated
   React.useEffect(() => {
-    if (!isAuthenticated) {
+    if (authReady && !isAuthenticated) {
       navigate('/login');
     }
-  }, [isAuthenticated, navigate]);
+  }, [authReady, isAuthenticated, navigate]);
 
-  if (!isAuthenticated) {
+  if (!authReady || !isAuthenticated) {
     return null;
   }
 

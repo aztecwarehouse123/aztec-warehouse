@@ -7,13 +7,16 @@ import { useTheme } from '../../contexts/ThemeContext';
 import Input from '../../components/ui/Input';
 import PasswordInput from '../../components/ui/PasswordInput';
 import Button from '../../components/ui/Button';
-import { db } from '../../config/firebase';
-import { doc, updateDoc, collection, addDoc, getDocs, query, where, deleteDoc } from 'firebase/firestore';
+import { db, auth } from '../../config/firebase';
+import { doc, updateDoc, collection, addDoc, getDocs, query, where, deleteDoc, setDoc } from 'firebase/firestore';
+import { EmailAuthProvider, reauthenticateWithCredential, updatePassword, sendPasswordResetEmail } from 'firebase/auth';
 import { User as UserType } from '../../types';
 import Modal from '../../components/modals/Modal';
 import Select from '../../components/ui/Select';
 import AmazonNotificationSettings from '../../components/amazon/AmazonNotificationSettings';
 import { filterUsersForManagementList, canAssignAmazonAdminRole } from '../../utils/userVisibility';
+import { createAuthUserAccount } from '../../utils/authAdmin';
+import { mapFirestoreUser } from '../../utils/userProfile';
 
 const Settings: React.FC = () => {
   const { user, setUser } = useAuth();
@@ -58,10 +61,9 @@ const Settings: React.FC = () => {
       setIsLoading(true);
       try {
         const usersSnapshot = await getDocs(collection(db, 'users'));
-        const usersData = usersSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as UserType[];
+        const usersData = usersSnapshot.docs.map(docSnap =>
+          mapFirestoreUser(docSnap.id, docSnap.data() as Record<string, unknown>)
+        );
         setUsers(usersData);
       } catch (error) {
         console.error('Error fetching users:', error);
@@ -120,8 +122,6 @@ const Settings: React.FC = () => {
     if (formData.currentPassword || formData.newPassword || formData.confirmPassword) {
       if (!formData.currentPassword) {
         newErrors.currentPassword = 'Current password is required';
-      } else if (formData.currentPassword !== user?.password) {
-        newErrors.currentPassword = 'Current password is incorrect';
       }
       if (!formData.newPassword) {
         newErrors.newPassword = 'New password is required';
@@ -151,13 +151,20 @@ const Settings: React.FC = () => {
           username: string;
           email: string;
           name: string;
-          password?: string;
         } = {
           username: formData.username,
           email: formData.email,
           name: formData.name,
-          password: (formData.currentPassword!= '' && formData.confirmPassword!='' && formData.newPassword!='')? formData.newPassword : user.password,
         };
+
+        if (formData.currentPassword && formData.newPassword && auth.currentUser) {
+          const credential = EmailAuthProvider.credential(
+            auth.currentUser.email || formData.email,
+            formData.currentPassword
+          );
+          await reauthenticateWithCredential(auth.currentUser, credential);
+          await updatePassword(auth.currentUser, formData.newPassword);
+        }
 
         // Track changes for activity log
         const changes = [];
@@ -196,7 +203,6 @@ const Settings: React.FC = () => {
           username: formData.username,
           email: formData.email,
           name: formData.name,
-          password: formData.newPassword || user.password
         });
         
         // Clear password fields
@@ -290,7 +296,12 @@ const Settings: React.FC = () => {
       };
 
       if (userEditForm.newPassword) {
-        updateData.password = userEditForm.newPassword;
+        if (userEditForm.email.trim()) {
+          await sendPasswordResetEmail(auth, userEditForm.email.trim());
+        } else {
+          setUserEditErrors({ email: 'Email is required to send a password reset link' });
+          return;
+        }
       }
 
       console.log('Attempting to update document with data:', updateData);
@@ -376,7 +387,9 @@ const Settings: React.FC = () => {
       newErrors.username = 'Username is required';
     }
     
-    if (addUserFormData.email.trim() && !/\S+@\S+\.\S+/.test(addUserFormData.email)) {
+    if (!addUserFormData.email.trim()) {
+      newErrors.email = 'Email is required for secure login';
+    } else if (!/\S+@\S+\.\S+/.test(addUserFormData.email)) {
       newErrors.email = 'Invalid email format';
     }
     
@@ -426,12 +439,15 @@ const Settings: React.FC = () => {
         return;
       }
 
-      // Add new user to Firestore
-      const newUserRef = await addDoc(collection(db, 'users'), {
+      const authUid = await createAuthUserAccount(
+        addUserFormData.email.trim(),
+        addUserFormData.password
+      );
+
+      await setDoc(doc(db, 'users', authUid), {
         username: addUserFormData.username,
-        email: addUserFormData.email,
+        email: addUserFormData.email.trim(),
         name: addUserFormData.name,
-        password: addUserFormData.password,
         role: addUserFormData.role,
       });
 
@@ -445,12 +461,11 @@ const Settings: React.FC = () => {
 
       // Update local state
       setUsers(prev => [...prev, {
-        id: newUserRef.id,
+        id: authUid,
         username: addUserFormData.username,
-        email: addUserFormData.email,
+        email: addUserFormData.email.trim(),
         name: addUserFormData.name,
         role: addUserFormData.role as UserType['role'],
-        password: addUserFormData.password
       }]);
 
       // Reset form and close modal

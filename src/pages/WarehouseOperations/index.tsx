@@ -15,6 +15,7 @@ import { User } from '../../types';
 import Input from '../../components/ui/Input';
 import { useAuth } from '../../contexts/AuthContext';
 import { isWmsAlertDetail, WMS_ALERT_PREFIX } from '../../utils/wmsActivityLog';
+import { mapFirestoreUser } from '../../utils/userProfile';
 
 interface ActivityLog {
   id: string;
@@ -64,10 +65,9 @@ const WarehouseOperations: React.FC = () => {
   const fetchUsers = async () => {
     try {
       const usersSnapshot = await getDocs(collection(db, 'users'));
-      const usersData = usersSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as User[];
+      const usersData = usersSnapshot.docs.map(docSnap =>
+        mapFirestoreUser(docSnap.id, docSnap.data() as Record<string, unknown>)
+      );
       setUsers(usersData);
     } catch (error) {
       console.error('Error fetching users:', error);

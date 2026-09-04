@@ -21,6 +21,7 @@ import { db } from '../../config/firebase';
 import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, Timestamp, getCountFromServer, where } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { canSeePrices } from '../../utils/roleUtils';
+import { PREDEFINED_STORES, STORE_FILTER_OPTIONS } from '../../utils/storeOptions';
 
 const Stock: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState(''); // Unified search query
@@ -264,7 +265,7 @@ const Stock: React.FC = () => {
     return options;
   }, [user]);
 
-  const predefinedStores = useMemo(() => ['supply & serve', 'APHY', 'AZTEC', 'ZK', 'Fahiz'], []);
+  const predefinedStores = useMemo(() => [...PREDEFINED_STORES], []);
 
   // Function to get store badge color based on store name
   const getStoreBadgeColor = useCallback((storeName: string) => {
@@ -274,6 +275,7 @@ const Stock: React.FC = () => {
       'AZTEC': 'bg-purple-100 text-purple-700',
       'ZK': 'bg-orange-100 text-orange-700',
       'Fahiz': 'bg-pink-100 text-pink-700',
+      'shopulence': 'bg-teal-100 text-teal-700',
     };
     
     return storeColors[storeName] || 'bg-gray-100 text-gray-700';
@@ -1274,7 +1276,7 @@ const handleConfirmQuantityUpdate = useCallback( async () => {
             <div className={`absolute top-full left-0 mt-1 w-64 z-50 rounded-lg border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-lg`}>
               <div className="p-2">
                 <div className={`text-sm font-medium mb-2 ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>Filter by Store</div>
-                {['supply & serve', 'APHY', 'AZTEC', 'ZK', 'Fahiz', 'other'].map((storeName) => (
+                {STORE_FILTER_OPTIONS.map((storeName) => (
                   <div key={storeName}>
                     <div 
                       className={`px-3 py-2 text-sm cursor-pointer rounded transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-700' : 'text-slate-700 hover:bg-slate-100'} ${storeFilter?.storeName === storeName ? (isDarkMode ? 'bg-slate-700' : 'bg-slate-100') : ''}`}

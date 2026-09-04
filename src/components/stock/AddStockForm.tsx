@@ -17,6 +17,7 @@ import Modal from '../modals/Modal';
 import { generateShelfOptions } from '../../utils/shelfUtils';
 import { getWarehouseLocationOptions } from '../../utils/locationUtils';
 import { boxSizeSelectOptions, packingMaterialSelectOptions } from '../../utils/stockOptions';
+import { storeNameSelectOptions } from '../../utils/storeOptions';
 
 
 interface AddStockFormProps {
@@ -890,14 +891,7 @@ const AddStockForm: React.FC<AddStockFormProps> = ({ onSubmit, isLoading = false
                     setOtherStoreName('');
                   }
                 }}
-                options={[
-                  { value: 'supply & serve', label: 'SUPPLY & SERVE' },
-                  { value: 'APHY', label: 'APHY' },
-                  { value: 'AZTEC', label: 'AZTEC' },
-                  { value: 'ZK', label: 'ZK' },
-                  { value: 'Fahiz', label: 'FAHIZ' },
-                  { value: 'other', label: 'OTHER' }
-                ]}
+                options={storeNameSelectOptions}
               />
             </div>
                 

@@ -5,6 +5,7 @@ import Input from '../ui/Input';
 import Select from '../ui/Select';
 import { StockItem } from '../../types';
 import { useTheme } from '../../contexts/ThemeContext';
+import { PREDEFINED_STORES } from '../../utils/storeOptions';
 
 interface OutboundEditFormProps {
   item: StockItem;
@@ -12,7 +13,7 @@ interface OutboundEditFormProps {
   isLoading: boolean;
 }
 
-  const predefinedStores = ['supply & serve', 'APHY', 'AZTEC', 'ZK', 'Fahiz'];
+const predefinedStores = [...PREDEFINED_STORES];
 
 const OutboundEditForm: React.FC<OutboundEditFormProps> = ({ item, onSubmit, isLoading }) => {
   const [deductQuantity, setDeductQuantity] = useState<string>('');

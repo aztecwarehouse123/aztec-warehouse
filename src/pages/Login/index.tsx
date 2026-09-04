@@ -10,10 +10,10 @@ import Button from '../../components/ui/Button';
 import { motion } from 'framer-motion';
 
 const Login: React.FC = () => {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const { login, isAuthenticated, isLoading, user } = useAuth();
+  const { login, isAuthenticated, isLoading, user, authReady } = useAuth();
   const { showToast } = useToast();
   const { isDarkMode, toggleDarkMode } = useTheme();
   const navigate = useNavigate();
@@ -37,15 +37,20 @@ const Login: React.FC = () => {
     e.preventDefault();
     setError('');
     
-    if (!username || !password) {
-      setError('Please enter both username and password');
+    if (!email || !password) {
+      setError('Please enter both email and password');
+      return;
+    }
+
+    if (!email.includes('@')) {
+      setError('Please sign in with your email address');
       return;
     }
     
-    const success = await login(username, password);
+    const success = await login(email, password);
     if (!success) {
-      setError('Invalid username or password');
-      showToast('Invalid username or password', 'error');
+      setError('Invalid email or password');
+      showToast('Invalid email or password', 'error');
     }
   };
 
@@ -111,14 +116,14 @@ const Login: React.FC = () => {
             
             <form onSubmit={handleSubmit} className="space-y-6">
               <Input
-                label="Username"
-                type="text"
-                id="username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                label="Email"
+                type="email"
+                id="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 icon={<User size={20} />}
-                placeholder="Enter your username"
-                autoComplete="username"
+                placeholder="Enter your email address"
+                autoComplete="email"
                 fullWidth
                 darkMode={isDarkMode}
               />

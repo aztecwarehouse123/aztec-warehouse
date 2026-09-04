@@ -12,6 +12,7 @@ import { useToast } from '../../contexts/ToastContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../config/firebase';
+import { PREDEFINED_STORES, STORE_FILTER_OPTIONS } from '../../utils/storeOptions';
 import { collection, addDoc, getDocs, doc, updateDoc, query, orderBy, Timestamp, getDoc, where } from 'firebase/firestore';
 import { format, subDays } from 'date-fns';
 import { canSeePrices } from '../../utils/roleUtils';
@@ -48,7 +49,7 @@ const OutboundStock: React.FC = () => {
   }, [user]);
 
   // Predefined stores for filtering
-  const predefinedStores = ['supply & serve', 'APHY', 'AZTEC', 'ZK', 'Fahiz'];
+  const predefinedStores = [...PREDEFINED_STORES];
 
   // Fetch stock items from Firestore
   const fetchStockItems = async () => {
@@ -422,7 +423,7 @@ const OutboundStock: React.FC = () => {
             <div className={`absolute top-full left-0 mt-1 w-64 z-50 rounded-lg border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-lg`}>
               <div className="p-2">
                 <div className={`text-sm font-medium mb-2 ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>Filter by Store & Type</div>
-                {['supply & serve', 'APHY', 'AZTEC', 'ZK', 'Fahiz', 'other'].map((storeName) => (
+                {STORE_FILTER_OPTIONS.map((storeName) => (
                   <div key={storeName} className="group relative">
                     <div className={`px-3 py-2 text-sm cursor-pointer rounded transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-700' : 'text-slate-700 hover:bg-slate-100'} ${storeFilter?.storeName === storeName ? (isDarkMode ? 'bg-slate-700' : 'bg-slate-100') : ''}`}>
                       {storeName?.toUpperCase()}

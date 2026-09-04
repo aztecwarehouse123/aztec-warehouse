@@ -10,10 +10,10 @@ export const BOX_SIZE_OPTIONS = [
   'Water box',
   'Monster box',
   'FBA250',
+  'POLYBAG',
 ];
 
 export const PACKING_MATERIAL_OPTIONS = [
-  'POLYBAG',
   'BUBBLE WRAP',
   'SHRINK WRAP',
   'PAPER',

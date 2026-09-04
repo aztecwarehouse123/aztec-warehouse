@@ -1,6 +1,7 @@
 import React from 'react';
 import { StockItem } from '../../types';
 import { format } from 'date-fns';
+import { getStoreBadgeColor } from '../../utils/storeOptions';
 
 interface StockListProps {
   items: StockItem[];
@@ -48,14 +49,7 @@ const StockList: React.FC<StockListProps> = ({ items, onItemClick }) => {
               </td>
               <td className="px-6 py-4 whitespace-nowrap">
                 {item.storeName && item.storeName !== 'not set' ? (
-                  <span className={`px-2 py-1 text-xs font-medium rounded-full whitespace-nowrap ${
-                    item.storeName === 'supply & serve' ? 'bg-blue-100 text-blue-700' :
-                    item.storeName === 'APHY' ? 'bg-green-100 text-green-700' :
-                    item.storeName === 'AZTEC' ? 'bg-purple-100 text-purple-700' :
-                    item.storeName === 'ZK' ? 'bg-orange-100 text-orange-700' :
-                    item.storeName === 'Fahiz' ? 'bg-pink-100 text-pink-700' :
-                    'bg-gray-100 text-gray-700'
-                  }`}>
+                  <span className={`px-2 py-1 text-xs font-medium rounded-full whitespace-nowrap ${getStoreBadgeColor(item.storeName)}`}>
                     {item.storeName?.toUpperCase()}
                   </span>
                 ) : (
