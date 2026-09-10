@@ -12,8 +12,22 @@ import { db } from '../../../config/firebase';
 import type { FirestoreJob, FirestoreJobItem, Job, JobStatus } from '../types';
 import { parseJobTimestamp } from './formatters';
 import { enrichJobsWithPackingTimestamps } from './packingTimestamps';
+import { filterJobs } from './jobFilters';
 
 export type JobsFetchView = 'active' | 'completed' | 'archived' | 'live';
+
+export function isFirestoreMissingIndexError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const code = 'code' in error ? String(error.code) : '';
+  const message = 'message' in error ? String(error.message) : '';
+  return code === 'failed-precondition' && message.toLowerCase().includes('index');
+}
+
+export function extractFirestoreIndexUrl(error: unknown): string | null {
+  if (!error || typeof error !== 'object' || !('message' in error)) return null;
+  const match = String(error.message).match(/https:\/\/console\.firebase\.google\.com[^\s)]+/);
+  return match ? match[0] : null;
+}
 
 export function getTodayStart(): Date {
   const now = new Date();
@@ -163,23 +177,71 @@ export async function enrichJobItemNames(jobs: Job[]): Promise<Job[]> {
   }));
 }
 
+async function fetchAllJobsOrdered(): Promise<Job[]> {
+  const jobsQuery = query(collection(db, 'jobs'), orderBy('createdAt', 'desc'));
+  const snapshot = await getDocs(jobsQuery);
+  return snapshot.docs.map(mapFirestoreJobDoc);
+}
+
+function filterJobsForView(
+  jobs: Job[],
+  view: JobsFetchView,
+  options?: { startDate?: Date | null; endDate?: Date | null }
+): Job[] {
+  return filterJobs(jobs, {
+    showArchived: view === 'archived',
+    showCompleted: view === 'completed',
+    showLiveJobs: view === 'live',
+    startDate: view === 'archived' ? (options?.startDate ?? null) : null,
+    endDate: view === 'archived' ? (options?.endDate ?? null) : null,
+    selectedUser: 'all',
+    archivedJobsSearchQuery: '',
+  });
+}
+
+function filterJobsInDateRange(
+  jobs: Job[],
+  start: Date,
+  end: Date,
+  status?: JobStatus
+): Job[] {
+  return jobs.filter((job) => {
+    if (status && job.status !== status) return false;
+    return job.createdAt >= start && job.createdAt <= end;
+  });
+}
+
+async function finalizeJobs(
+  jobs: Job[],
+  options?: { enrichTimestamps?: boolean; enrichItemNames?: boolean }
+): Promise<Job[]> {
+  let result = jobs;
+
+  if (options?.enrichItemNames !== false) {
+    result = await enrichJobItemNames(result);
+  }
+
+  if (options?.enrichTimestamps) {
+    result = await enrichJobsWithPackingTimestamps(result);
+  }
+
+  return result;
+}
+
 export async function fetchJobsFromQuery(
   jobsQuery: Query,
   options?: { enrichTimestamps?: boolean; enrichItemNames?: boolean }
 ): Promise<Job[]> {
   const snapshot = await getDocs(jobsQuery);
-  let jobs = snapshot.docs.map(mapFirestoreJobDoc);
-
-  if (options?.enrichItemNames !== false) {
-    jobs = await enrichJobItemNames(jobs);
-  }
-
-  if (options?.enrichTimestamps) {
-    jobs = await enrichJobsWithPackingTimestamps(jobs);
-  }
-
-  return jobs;
+  const jobs = snapshot.docs.map(mapFirestoreJobDoc);
+  return finalizeJobs(jobs, options);
 }
+
+export type FetchJobsResult = {
+  jobs: Job[];
+  usedIndexFallback: boolean;
+  missingIndexUrl: string | null;
+};
 
 export async function fetchJobsForView(
   view: JobsFetchView,
@@ -189,25 +251,76 @@ export async function fetchJobsForView(
     enrichTimestamps?: boolean;
     enrichItemNames?: boolean;
   }
-): Promise<Job[]> {
+): Promise<FetchJobsResult> {
   const jobsQuery = buildJobsQuery(view, {
     startDate: options?.startDate,
     endDate: options?.endDate,
   });
-  return fetchJobsFromQuery(jobsQuery, {
-    enrichTimestamps: options?.enrichTimestamps,
-    enrichItemNames: options?.enrichItemNames,
-  });
+
+  try {
+    const jobs = await fetchJobsFromQuery(jobsQuery, {
+      enrichTimestamps: options?.enrichTimestamps,
+      enrichItemNames: options?.enrichItemNames,
+    });
+    return { jobs, usedIndexFallback: false, missingIndexUrl: null };
+  } catch (error) {
+    if (!isFirestoreMissingIndexError(error)) throw error;
+
+    console.warn(
+      'Firestore composite index not ready — loading all jobs and filtering in the browser.',
+      error
+    );
+
+    const allJobs = await fetchAllJobsOrdered();
+    const filtered = filterJobsForView(allJobs, view, {
+      startDate: options?.startDate,
+      endDate: options?.endDate,
+    });
+    const jobs = await finalizeJobs(filtered, {
+      enrichTimestamps: options?.enrichTimestamps,
+      enrichItemNames: options?.enrichItemNames,
+    });
+
+    return {
+      jobs,
+      usedIndexFallback: true,
+      missingIndexUrl: extractFirestoreIndexUrl(error),
+    };
+  }
 }
 
 export async function fetchJobsInDateRange(
   start: Date,
   end: Date,
   options?: { status?: JobStatus; enrichTimestamps?: boolean; enrichItemNames?: boolean }
-): Promise<Job[]> {
+): Promise<FetchJobsResult> {
   const jobsQuery = buildJobsDateRangeQuery(start, end, options?.status);
-  return fetchJobsFromQuery(jobsQuery, {
-    enrichTimestamps: options?.enrichTimestamps,
-    enrichItemNames: options?.enrichItemNames,
-  });
+
+  try {
+    const jobs = await fetchJobsFromQuery(jobsQuery, {
+      enrichTimestamps: options?.enrichTimestamps,
+      enrichItemNames: options?.enrichItemNames,
+    });
+    return { jobs, usedIndexFallback: false, missingIndexUrl: null };
+  } catch (error) {
+    if (!isFirestoreMissingIndexError(error)) throw error;
+
+    console.warn(
+      'Firestore composite index not ready — loading all jobs and filtering in the browser.',
+      error
+    );
+
+    const allJobs = await fetchAllJobsOrdered();
+    const filtered = filterJobsInDateRange(allJobs, start, end, options?.status);
+    const jobs = await finalizeJobs(filtered, {
+      enrichTimestamps: options?.enrichTimestamps,
+      enrichItemNames: options?.enrichItemNames,
+    });
+
+    return {
+      jobs,
+      usedIndexFallback: true,
+      missingIndexUrl: extractFirestoreIndexUrl(error),
+    };
+  }
 }

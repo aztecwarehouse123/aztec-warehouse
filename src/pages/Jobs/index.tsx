@@ -75,6 +75,7 @@ const Jobs: React.FC = () => {
   const jobFinishInFlightRef = useRef(false);
   /** Tracks latest loadJobs call so stale responses don't clear loading early/late. */
   const loadJobsRequestIdRef = useRef(0);
+  const indexFallbackWarningShownRef = useRef(false);
   const showToastRef = useRef(showToast);
   showToastRef.current = showToast;
   /** Same for stock update modal — prevents double Update adding quantity twice to pending job. */
@@ -284,7 +285,7 @@ const Jobs: React.FC = () => {
       
       console.log('Date range:', { start: start.toISOString(), end: end.toISOString() });
       
-      const jobsInRange = await fetchJobsInDateRange(start, end, {
+      const { jobs: jobsInRange } = await fetchJobsInDateRange(start, end, {
         status: 'completed',
         enrichItemNames: false,
       });
@@ -421,7 +422,7 @@ const Jobs: React.FC = () => {
       const fetchStart = new Date(Math.min(chartRangeStart.getTime(), weekStart.getTime()));
       const fetchEnd = new Date(Math.max(chartRangeEnd.getTime(), endOfDay.getTime()));
 
-      const jobsForReports = await fetchJobsInDateRange(fetchStart, fetchEnd, {
+      const { jobs: jobsForReports } = await fetchJobsInDateRange(fetchStart, fetchEnd, {
         enrichItemNames: false,
       });
       setReportJobs(jobsForReports);
@@ -621,7 +622,7 @@ const Jobs: React.FC = () => {
       const { startDate: archivedStart, endDate: archivedEnd } = archivedDatesRef.current;
       const enrichTimestamps = view === 'completed' || view === 'archived';
 
-      const list = await fetchJobsForView(view, {
+      const { jobs: list, usedIndexFallback, missingIndexUrl } = await fetchJobsForView(view, {
         startDate: view === 'archived' ? archivedStart : undefined,
         endDate: view === 'archived' ? archivedEnd : undefined,
         enrichTimestamps,
@@ -630,8 +631,21 @@ const Jobs: React.FC = () => {
       if (requestId !== loadJobsRequestIdRef.current) return;
 
       setJobs(list);
+
+      if (usedIndexFallback && !indexFallbackWarningShownRef.current) {
+        indexFallbackWarningShownRef.current = true;
+        showToastRef.current(
+          missingIndexUrl
+            ? 'Jobs loaded slowly: create the Firestore index in Firebase Console (see browser console for link).'
+            : 'Jobs loaded slowly: create the Firestore index (status + createdAt) in Firebase Console.',
+          'warning'
+        );
+        if (missingIndexUrl) {
+          console.warn('Create this Firestore index:', missingIndexUrl);
+        }
+      }
     } catch (e) {
-      console.log('error', e);
+      console.error('Failed to fetch jobs', e);
       if (requestId === loadJobsRequestIdRef.current) {
         showToastRef.current('Failed to fetch jobs', 'error');
       }
