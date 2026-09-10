@@ -5,6 +5,10 @@
     <link rel="icon" type="image/png" href="./src/images/ficon2.PNG" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AZTEC - Inventory Management System</title>
+    <!-- Optional: first-input-delay polyfill for Firebase Performance (Step 2 in Firebase docs) -->
+    <script>
+      !function(n,e){var t,o,i,c=[],f={passive:!0,capture:!0},r=new Date,a="pointerup",u="pointerdown";function s(n,c){t||(t=c,o=n,i=new Date,l())}function l(){o>=0&&o<i-r&&(c.forEach(function(n){n(o,t)}),c=[])}function p(t){if(t.cancelable){var o=(t.timeStamp>1e12?new Date:performance.now())-t.timeStamp;"pointerdown"==t.type?function(t,o){function i(){s(t,o),r()}function c(){r()}function r(){e.removeEventListener(a,i,f),e.removeEventListener(u,c,f)}e.addEventListener(a,i,f),e.addEventListener(u,c,f)}(o,t):s(o,t)}}n.addEventListener("pointerdown",p,f),n.addEventListener("pointerup",p,f),n.addEventListener("click",p,f)}(window,document);
+    </script>
     <script type="text/javascript">
       // Single Page Apps for GitHub Pages
       // MIT License

@@ -39,6 +39,7 @@ import {
   fetchJobsInDateRange,
   type JobsFetchView,
 } from './utils/jobDataLoader';
+import { runWithPerfTrace } from '../../config/performance';
 import { MAX_TROLLEY_NUMBER } from './constants';
 import { WMS_ALERT_PREFIX, formatLogError } from '../../utils/wmsActivityLog';
 
@@ -622,11 +623,15 @@ const Jobs: React.FC = () => {
       const { startDate: archivedStart, endDate: archivedEnd } = archivedDatesRef.current;
       const enrichTimestamps = view === 'completed' || view === 'archived';
 
-      const { jobs: list, usedIndexFallback, missingIndexUrl } = await fetchJobsForView(view, {
-        startDate: view === 'archived' ? archivedStart : undefined,
-        endDate: view === 'archived' ? archivedEnd : undefined,
-        enrichTimestamps,
-      });
+      const { jobs: list, usedIndexFallback, missingIndexUrl } = await runWithPerfTrace(
+        `jobs_load_${view}`,
+        () =>
+          fetchJobsForView(view, {
+            startDate: view === 'archived' ? archivedStart : undefined,
+            endDate: view === 'archived' ? archivedEnd : undefined,
+            enrichTimestamps,
+          })
+      );
 
       if (requestId !== loadJobsRequestIdRef.current) return;
 
