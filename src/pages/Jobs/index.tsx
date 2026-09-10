@@ -14,7 +14,6 @@ import { StockItem, JobItem } from '../../types';
 import type {
   Job,
   JobStatus,
-  FirestoreJob,
   FirestoreJobItem,
   ActiveJobSession,
   ReportDataState,
@@ -35,8 +34,11 @@ import NewJobPickingModal from './components/NewJobPickingModal';
 import AddBackToStockModal from './components/AddBackToStockModal';
 import { mergePendingStockUpdates } from './utils/mergePendingStockUpdates';
 import { allRequiredNewJobItemsConfirmed } from './utils/newJobItemConfirmation';
-import { parseJobTimestamp } from './utils/formatters';
-import { enrichJobsWithPackingTimestamps } from './utils/packingTimestamps';
+import {
+  fetchJobsForView,
+  fetchJobsInDateRange,
+  type JobsFetchView,
+} from './utils/jobDataLoader';
 import { MAX_TROLLEY_NUMBER } from './constants';
 import { WMS_ALERT_PREFIX, formatLogError } from '../../utils/wmsActivityLog';
 
@@ -164,6 +166,28 @@ const Jobs: React.FC = () => {
     const date = today.getDate();
     return new Date(year, month, date);
   });
+  const [reportJobs, setReportJobs] = useState<Job[]>([]);
+
+  const jobsViewMode: JobsViewMode = useMemo(
+    () =>
+      showArchived
+        ? 'archived'
+        : showCompleted
+          ? 'completed'
+          : showLiveJobs
+            ? 'live'
+            : showReports
+              ? 'reports'
+              : showProductivity
+                ? 'productivity'
+                : 'active',
+    [showArchived, showCompleted, showLiveJobs, showReports, showProductivity]
+  );
+
+  const jobsViewModeRef = useRef(jobsViewMode);
+  jobsViewModeRef.current = jobsViewMode;
+  const archivedDatesRef = useRef({ startDate, endDate });
+  archivedDatesRef.current = { startDate, endDate };
 
   const filteredJobs = useMemo(
     () =>
@@ -260,10 +284,9 @@ const Jobs: React.FC = () => {
       
       console.log('Date range:', { start: start.toISOString(), end: end.toISOString() });
       
-      // Filter jobs within date range
-      const jobsInRange = jobs.filter(job => {
-        const jobDate = job.createdAt;
-        return jobDate >= start && jobDate <= end && job.status === 'completed';
+      const jobsInRange = await fetchJobsInDateRange(start, end, {
+        status: 'completed',
+        enrichItemNames: false,
       });
       
       console.log('Jobs in range:', jobsInRange.length);
@@ -370,18 +393,13 @@ const Jobs: React.FC = () => {
         workerStats,
         hourlyProductivity
       });
-      
-      // Add a small delay to make loading more visible
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      console.log('Productivity data generation completed');
     } catch (error) {
       console.error('Error generating productivity data:', error);
       showToast('Failed to generate productivity data', 'error');
     } finally {
       setIsLoadingProductivity(false);
     }
-  }, [jobs, productivityDate, showToast]);
+  }, [productivityDate, showToast]);
 
   // Generate reports data
   const generateReports = useCallback(async (date: Date) => {
@@ -393,13 +411,26 @@ const Jobs: React.FC = () => {
       const endOfDay = new Date(date);
       endOfDay.setHours(23, 59, 59, 999);
 
-      // Get jobs for the selected date
-      const jobsForDate = jobs.filter(job => {
+      const chartRangeStart = new Date(dateRange.start);
+      chartRangeStart.setHours(0, 0, 0, 0);
+      const chartRangeEnd = new Date(dateRange.end);
+      chartRangeEnd.setHours(23, 59, 59, 999);
+      const weekStart = new Date(date);
+      weekStart.setDate(weekStart.getDate() - 6);
+      weekStart.setHours(0, 0, 0, 0);
+      const fetchStart = new Date(Math.min(chartRangeStart.getTime(), weekStart.getTime()));
+      const fetchEnd = new Date(Math.max(chartRangeEnd.getTime(), endOfDay.getTime()));
+
+      const jobsForReports = await fetchJobsInDateRange(fetchStart, fetchEnd, {
+        enrichItemNames: false,
+      });
+      setReportJobs(jobsForReports);
+
+      const jobsForDate = jobsForReports.filter(job => {
         const jobDate = job.createdAt;
         return jobDate >= startOfDay && jobDate <= endOfDay;
       });
 
-      // Generate daily stats for the last 7 days
       const dailyStats = [];
       for (let i = 6; i >= 0; i--) {
         const checkDate = new Date(date);
@@ -409,7 +440,7 @@ const Jobs: React.FC = () => {
         const checkEnd = new Date(checkDate);
         checkEnd.setHours(23, 59, 59, 999);
 
-        const dayJobs = jobs.filter(job => {
+        const dayJobs = jobsForReports.filter(job => {
           const jobDate = job.createdAt;
           return jobDate >= checkStart && jobDate <= checkEnd;
         });
@@ -526,18 +557,13 @@ const Jobs: React.FC = () => {
       verifierStats.sort((a, b) => b.jobsVerified - a.jobsVerified);
 
       setReportData({ dailyStats, userStats, verifierStats });
-      
-      // Add a small delay to make loading more visible
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      console.log('Reports generation completed');
     } catch (error) {
       console.log('error', error);
       showToast('Failed to generate reports', 'error');
     } finally {
       setIsLoadingReports(false);
     }
-  }, [jobs, showToast, user?.role]);
+  }, [dateRange, showToast, user?.role]);
 
   const logActivity = async ( details: string) => {
     if (!user) return;
@@ -568,71 +594,42 @@ const Jobs: React.FC = () => {
     }
   };
 
-  const loadJobs = useCallback(async (options?: { showLoading?: boolean; enrichTimestamps?: boolean }) => {
-    const { showLoading = false, enrichTimestamps = false } = options ?? {};
+  const resolveFetchView = (mode: JobsViewMode): JobsFetchView | null => {
+    switch (mode) {
+      case 'active':
+        return 'active';
+      case 'completed':
+        return 'completed';
+      case 'archived':
+        return 'archived';
+      case 'live':
+        return 'live';
+      default:
+        return null;
+    }
+  };
+
+  const loadJobs = useCallback(async (options?: { showLoading?: boolean; view?: JobsFetchView }) => {
+    const view = options?.view ?? resolveFetchView(jobsViewModeRef.current);
+    if (!view) return;
+
+    const { showLoading = false } = options ?? {};
     const requestId = ++loadJobsRequestIdRef.current;
     if (showLoading) setIsLoading(true);
 
     try {
-      const q = query(collection(db, 'jobs'), orderBy('createdAt', 'desc'));
-      const snapshot = await getDocs(q);
-      const list: Job[] = snapshot.docs.map(d => {
-        const data = d.data() as FirestoreJob;
-        return {
-          id: d.id,
-          jobId: data.jobId || '',
-          createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(),
-          createdBy: data.createdBy || 'Unknown',
-          status: (data.status as JobStatus) || 'picking',
-          picker: data.picker ?? null,
-          packer: data.packer ?? null,
-          items: Array.isArray(data.items) ? data.items.map((it: FirestoreJobItem) => ({
-            barcode: String(it.barcode || ''),
-            name: it.name ?? null,
-            asin: it.asin ?? null,
-            quantity: Number(it.quantity || 1),
-            verified: Boolean(it.verified),
-            locationCode: it.locationCode,
-            shelfNumber: it.shelfNumber,
-            reason: it.reason || 'Unknown',
-            storeName: it.storeName || 'Unknown',
-            stockItemId: it.stockItemId,
-          })) : [],
-          pickingTime: data.pickingTime || 0,
-          trolleyNumber: data.trolleyNumber ?? null,
-          verifyingTimeAccumulated: data.verifyingTimeAccumulated ?? 0,
-          verifyingTime: data.verifyingTime ?? null,
-          packingStartedAt: parseJobTimestamp(data.packingStartedAt),
-          packingCompletedAt: parseJobTimestamp(data.packingCompletedAt),
-        };
+      const { startDate: archivedStart, endDate: archivedEnd } = archivedDatesRef.current;
+      const enrichTimestamps = view === 'completed' || view === 'archived';
+
+      const list = await fetchJobsForView(view, {
+        startDate: view === 'archived' ? archivedStart : undefined,
+        endDate: view === 'archived' ? archivedEnd : undefined,
+        enrichTimestamps,
       });
-
-      const inventoryQuery = query(collection(db, 'inventory'));
-      const inventorySnapshot = await getDocs(inventoryQuery);
-      const barcodeToNameMap = new Map<string, string | null>();
-
-      inventorySnapshot.docs.forEach(docSnap => {
-        const data = docSnap.data();
-        if (data.barcode) {
-          barcodeToNameMap.set(data.barcode, data.name || null);
-        }
-      });
-
-      const enhancedList = list.map(job => ({
-        ...job,
-        items: job.items.map(item => ({
-          ...item,
-          name: item.name || barcodeToNameMap.get(item.barcode) || null
-        }))
-      }));
-
-      const enrichedList = enrichTimestamps
-        ? await enrichJobsWithPackingTimestamps(enhancedList)
-        : enhancedList;
 
       if (requestId !== loadJobsRequestIdRef.current) return;
 
-      setJobs(enrichedList);
+      setJobs(list);
     } catch (e) {
       console.log('error', e);
       if (requestId === loadJobsRequestIdRef.current) {
@@ -647,22 +644,14 @@ const Jobs: React.FC = () => {
 
   /** Manual refresh from toolbar — preserves current view and in-progress verification. */
   const refreshJobs = useCallback(() => {
-    loadJobs({
-      showLoading: true,
-      enrichTimestamps: showCompleted || showArchived,
-    });
-  }, [loadJobs, showCompleted, showArchived]);
-
-  useEffect(() => {
     loadJobs({ showLoading: true });
   }, [loadJobs]);
 
-  // Enrich packer timestamps when viewing completed/archived jobs
   useEffect(() => {
-    if (showCompleted || showArchived) {
-      loadJobs({ enrichTimestamps: true });
-    }
-  }, [showCompleted, showArchived, loadJobs]);
+    if (jobsViewMode === 'reports' || jobsViewMode === 'productivity') return;
+    if (jobsViewMode === 'archived' && !startDate && !endDate) return;
+    loadJobs({ showLoading: true });
+  }, [jobsViewMode, startDate, endDate, loadJobs]);
 
   // Cleanup old live job sessions on component mount
   useEffect(() => {
@@ -760,13 +749,13 @@ const Jobs: React.FC = () => {
 
   // Initialize selected user for chart when reports are shown
   useEffect(() => {
-    if (showReports && jobs.length > 0) {
-      const uniqueUsers = Array.from(new Set(jobs.map(job => job.createdBy)));
+    if (showReports && reportJobs.length > 0) {
+      const uniqueUsers = Array.from(new Set(reportJobs.map(job => job.createdBy)));
       if (uniqueUsers.length > 0 && !selectedUserForChart) {
         setSelectedUserForChart(uniqueUsers[0]);
       }
     }
-  }, [showReports, jobs, selectedUserForChart]);
+  }, [showReports, reportJobs, selectedUserForChart]);
 
   // Debug: Log when reportDate changes
   useEffect(() => {
@@ -1709,18 +1698,6 @@ const Jobs: React.FC = () => {
     }
   };
 
-  const jobsViewMode: JobsViewMode = showArchived
-    ? 'archived'
-    : showCompleted
-      ? 'completed'
-      : showLiveJobs
-        ? 'live'
-        : showReports
-          ? 'reports'
-          : showProductivity
-            ? 'productivity'
-            : 'active';
-
   const handleSetJobsView = (mode: JobsViewMode) => {
     setShowCompleted(false);
     setShowArchived(false);
@@ -1839,7 +1816,7 @@ const Jobs: React.FC = () => {
             generateReports={generateReports}
             isLoadingReports={isLoadingReports}
             reportData={reportData}
-            jobs={jobs}
+            jobs={reportJobs}
             dateRange={dateRange}
             setDateRange={setDateRange}
             selectedUserForChart={selectedUserForChart}
