@@ -11,7 +11,6 @@ import { MAX_TROLLEY_NUMBER } from '../constants';
 import {
   allRequiredNewJobItemsConfirmed,
   getNewJobItemKey,
-  newJobItemRequiresConfirmation,
 } from '../utils/newJobItemConfirmation';
 
 export type NewJobEditingItemState = {
@@ -111,9 +110,7 @@ const NewJobPickingModal: React.FC<NewJobPickingModalProps> = ({
     (selectedTrolleyNumber < 1 || selectedTrolleyNumber > MAX_TROLLEY_NUMBER);
   const allItemsConfirmed = allRequiredNewJobItemsConfirmed(newJobItems, confirmedItemKeys);
   const pendingConfirmationCount = newJobItems.filter(
-    (item, index) =>
-      newJobItemRequiresConfirmation(item) &&
-      !confirmedItemKeys.has(getNewJobItemKey(item, index))
+    (item, index) => !confirmedItemKeys.has(getNewJobItemKey(item, index))
   ).length;
 
   const handleTrolleyChange = (raw: string) => {
@@ -368,12 +365,11 @@ const NewJobPickingModal: React.FC<NewJobPickingModalProps> = ({
           Current Job Items:
         </h4>
         <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-          Tick each product after reading its box size and packing material. Items without that info do not need a tick.
+          Tick every product before finishing picking. Check box size and packing material where shown.
         </p>
         <div className="max-h-40 overflow-auto space-y-1">
           {newJobItems.map((item, index) => {
             const itemKey = getNewJobItemKey(item, index);
-            const requiresConfirmation = newJobItemRequiresConfirmation(item);
             const isConfirmed = confirmedItemKeys.has(itemKey);
 
             return (
@@ -479,27 +475,20 @@ const NewJobPickingModal: React.FC<NewJobPickingModalProps> = ({
                   <div className="flex items-start gap-2 flex-1 min-w-0">
                     <button
                       type="button"
-                      onClick={() => requiresConfirmation && onToggleItemConfirmed(itemKey)}
-                      disabled={!requiresConfirmation}
+                      onClick={() => onToggleItemConfirmed(itemKey)}
                       className={`flex-shrink-0 mt-0.5 p-1 rounded transition-colors ${
-                        !requiresConfirmation
+                        isConfirmed
                           ? isDarkMode
-                            ? 'text-slate-600 cursor-not-allowed'
-                            : 'text-slate-300 cursor-not-allowed'
-                          : isConfirmed
-                            ? isDarkMode
-                              ? 'text-emerald-400 hover:text-emerald-300'
-                              : 'text-emerald-600 hover:text-emerald-700'
-                            : isDarkMode
-                              ? 'text-slate-400 hover:text-slate-200'
-                              : 'text-slate-500 hover:text-slate-700'
+                            ? 'text-emerald-400 hover:text-emerald-300'
+                            : 'text-emerald-600 hover:text-emerald-700'
+                          : isDarkMode
+                            ? 'text-slate-400 hover:text-slate-200'
+                            : 'text-slate-500 hover:text-slate-700'
                       }`}
                       title={
-                        !requiresConfirmation
-                          ? 'No box/packing info — tick not required'
-                          : isConfirmed
-                            ? 'Confirmed — click to unconfirm'
-                            : 'Tick to confirm you have read this product info'
+                        isConfirmed
+                          ? 'Confirmed — click to unconfirm'
+                          : 'Tick to confirm this product'
                       }
                     >
                       {isConfirmed ? <CheckSquare size={18} /> : <Square size={18} />}
@@ -532,11 +521,6 @@ const NewJobPickingModal: React.FC<NewJobPickingModalProps> = ({
                     <span className={`text-xs font-semibold block ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>
                       Packing Material: {item.packingMaterial || '-'}
                     </span>
-                    {!requiresConfirmation && (
-                      <span className={`text-xs block ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
-                        No box/packing info — tick not required
-                      </span>
-                    )}
                   </div>
                   </div>
               <div className="flex items-center gap-2 flex-shrink-0">

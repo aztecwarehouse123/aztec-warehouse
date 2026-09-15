@@ -1,9 +1,15 @@
 import React from 'react';
-import { ClipboardList, ChevronUp, ChevronDown, CheckSquare, RefreshCw, Trash2, Undo2 } from 'lucide-react';
+import { ClipboardList, ChevronUp, ChevronDown, CheckSquare, RefreshCw, Trash2, Undo2, Package } from 'lucide-react';
 import Button from '../../../components/ui/Button';
 import Input from '../../../components/ui/Input';
 import type { Job } from '../types';
-import { formatElapsedTime, formatPackingClockTime } from '../utils/formatters';
+import { formatElapsedTime } from '../utils/formatters';
+import {
+  areAllItemsVerified,
+  countVerifiedItems,
+  getJobStatusLabel,
+  getJobWorkflowPhase,
+} from '../utils/jobWorkflow';
 
 export type EditingJobItemState = {
   jobId: string;
@@ -24,14 +30,17 @@ export type JobCardProps = {
   isExpanded: boolean;
   onToggleExpand: (jobId: string) => void;
   jobIdInVerificationMode: string | null;
+  jobIdInPackingMode: string | null;
   verifyingElapsedSeconds: number;
-  onStartVerification: (job: Job) => void;
+  packingElapsedSeconds: number;
   onStopVerification: (job: Job) => void;
   onRefreshJobs: () => void;
   onRequestDeleteJob: (job: Job) => void;
   completingJobs: Set<string>;
   onCompletePicking: (job: Job) => void;
-  onCompletePacking: (job: Job) => void;
+  onCompleteVerification: (job: Job) => void;
+  onStartPacking: (job: Job) => void;
+  onStopPacking: (job: Job) => void;
   onOpenStockUpdateModal: () => void;
   locallyVerifiedItems: Set<string>;
   editingJobItem: EditingJobItemState;
@@ -45,19 +54,20 @@ export type JobCardProps = {
 const JobCard: React.FC<JobCardProps> = ({
   job,
   isDarkMode,
-  showCompleted,
-  showArchived,
   isExpanded,
   onToggleExpand,
   jobIdInVerificationMode,
+  jobIdInPackingMode,
   verifyingElapsedSeconds,
-  onStartVerification,
+  packingElapsedSeconds,
   onStopVerification,
   onRefreshJobs,
   onRequestDeleteJob,
   completingJobs,
   onCompletePicking,
-  onCompletePacking,
+  onCompleteVerification,
+  onStartPacking,
+  onStopPacking,
   onOpenStockUpdateModal,
   locallyVerifiedItems,
   editingJobItem,
@@ -67,9 +77,32 @@ const JobCard: React.FC<JobCardProps> = ({
   verifyingItems,
   onOpenAddBackToStock,
 }) => {
-  const isAwaitingPack = job.status === 'awaiting_pack';
-  const isPicking = job.status === 'picking';
-  const isCompleted = job.status === 'completed';
+  const phase = getJobWorkflowPhase(job);
+  const allItemsVerified = areAllItemsVerified(job, locallyVerifiedItems);
+  const isPicking = phase === 'picking';
+  const isAwaitingVerification = phase === 'awaiting_verification';
+  const isAwaitingPack = phase === 'awaiting_pack';
+  const isPacking = phase === 'packing';
+  const isCompleted = phase === 'completed';
+  const isVerifyingThisJob = jobIdInVerificationMode === job.id;
+  const isPackingThisJob = jobIdInPackingMode === job.id || isPacking;
+  const verifiedCount = countVerifiedItems(job, locallyVerifiedItems);
+  const verifierName =
+    job.verifier ||
+    (isCompleted && job.verifyingTime && !job.packingTime ? job.packer : null);
+  const showVerificationSummary =
+    (isAwaitingPack || isPacking || isCompleted) &&
+    (verifierName || (job.verifyingTime != null && job.verifyingTime > 0));
+
+  const statusBadgeClass = isCompleted
+    ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+    : isPacking
+      ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300'
+      : isAwaitingPack
+        ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+        : isAwaitingVerification
+          ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300'
+          : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300';
 
   return (
     <div
@@ -114,8 +147,11 @@ const JobCard: React.FC<JobCardProps> = ({
                 </div>
 
                 <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-xs leading-relaxed`}>
-                  Created by {job.createdBy} • {job.createdAt.toLocaleString()}
-                  {job.pickingTime && job.pickingTime > 0 && (
+                  {job.picker && <>Picked by {job.picker}</>}
+                  {!job.picker && <>Created by {job.createdBy}</>}
+                  {' • '}
+                  {job.createdAt.toLocaleString()}
+                  {job.pickingTime != null && job.pickingTime > 0 && (
                     <span className={`ml-2 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
                       • Picking: {formatElapsedTime(job.pickingTime)}
                     </span>
@@ -127,22 +163,23 @@ const JobCard: React.FC<JobCardProps> = ({
                   )}
                 </p>
 
-                {isCompleted && (job.packer || job.packingStartedAt || job.packingCompletedAt) && (
-                  <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-xs leading-relaxed`}>
-                    {job.packer && <>Verified by {job.packer}</>}
+                {showVerificationSummary && (
+                  <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-xs leading-relaxed mt-1`}>
+                    {verifierName && <>Verified by {verifierName}</>}
                     {job.verifyingTime != null && job.verifyingTime > 0 && (
-                      <span className={`${job.packer ? 'ml-2' : ''} ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                        {job.packer ? '• ' : ''}Verifying: {formatElapsedTime(job.verifyingTime)}
+                      <span className={`${verifierName ? 'ml-2' : ''} ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                        {verifierName ? '• ' : ''}Verifying: {formatElapsedTime(job.verifyingTime)}
                       </span>
                     )}
-                    {job.packingStartedAt && (
-                      <span className={`ml-2 ${isDarkMode ? 'text-amber-400' : 'text-amber-600'}`}>
-                        • Started: {formatPackingClockTime(job.packingStartedAt)}
-                      </span>
-                    )}
-                    {job.packingCompletedAt && (
-                      <span className={`ml-2 ${isDarkMode ? 'text-sky-400' : 'text-sky-600'}`}>
-                        • Completed: {formatPackingClockTime(job.packingCompletedAt)}
+                  </p>
+                )}
+
+                {(isPacking || isCompleted) && (job.packer || (job.packingTime != null && job.packingTime > 0)) && (
+                  <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-xs leading-relaxed mt-1`}>
+                    {job.packer && <>Packed by {job.packer}</>}
+                    {job.packingTime != null && job.packingTime > 0 && (
+                      <span className={`${job.packer ? 'ml-2' : ''} ${isDarkMode ? 'text-sky-400' : 'text-sky-600'}`}>
+                        {job.packer ? '• ' : ''}Packing: {formatElapsedTime(job.packingTime)}
                       </span>
                     )}
                   </p>
@@ -152,16 +189,9 @@ const JobCard: React.FC<JobCardProps> = ({
                   <div className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-xs mt-2`}>
                     {job.items.length} item{job.items.length !== 1 ? 's' : ''} • Total Qty:{' '}
                     {job.items.reduce((sum, item) => sum + item.quantity, 0)}
-                    {isAwaitingPack && (
+                    {isAwaitingVerification && (
                       <span className="ml-2">
-                        • Verified:{' '}
-                        {
-                          job.items.filter(
-                            (item) =>
-                              item.verified || locallyVerifiedItems.has(`${job.id}-${item.barcode}`)
-                          ).length
-                        }
-                        /{job.items.length}
+                        • Verified: {verifiedCount}/{job.items.length}
                       </span>
                     )}
                   </div>
@@ -170,45 +200,37 @@ const JobCard: React.FC<JobCardProps> = ({
             </div>
 
             <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
-              <span
-                className={`px-2 py-1 rounded-full text-xs font-medium ${
-                  isCompleted
-                    ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
-                    : isAwaitingPack
-                      ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300'
-                      : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
-                }`}
-              >
-                {isCompleted ? 'Completed' : isAwaitingPack ? 'Awaiting Pack' : 'Picking'}
+              <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusBadgeClass}`}>
+                {getJobStatusLabel(phase)}
               </span>
-              {isAwaitingPack &&
-                (jobIdInVerificationMode === job.id ? (
-                  <>
-                    <span
-                      className={`text-xs font-medium px-2 py-1 rounded ${
-                        isDarkMode ? 'text-slate-300 bg-slate-700' : 'text-slate-700 bg-slate-200'
-                      }`}
-                    >
-                      Verifying: {formatElapsedTime(verifyingElapsedSeconds)}
-                    </span>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => onStopVerification(job)}
-                      className="h-8 px-2 text-xs"
-                    >
-                      Stop Verifying
-                    </Button>
-                  </>
-                ) : (
-                  <Button
-                    size="sm"
-                    onClick={() => onStartVerification(job)}
-                    className="h-8 px-2 text-xs bg-blue-500 hover:bg-blue-600 text-white"
+              {isAwaitingVerification && isVerifyingThisJob && (
+                <>
+                  <span
+                    className={`text-xs font-medium px-2 py-1 rounded ${
+                      isDarkMode ? 'text-slate-300 bg-slate-700' : 'text-slate-700 bg-slate-200'
+                    }`}
                   >
-                    Verify Items
+                    Verifying: {formatElapsedTime(verifyingElapsedSeconds)}
+                  </span>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => onStopVerification(job)}
+                    className="h-8 px-2 text-xs"
+                  >
+                    Stop Verifying
                   </Button>
-                ))}
+                </>
+              )}
+              {isPackingThisJob && !isCompleted && (
+                <span
+                  className={`text-xs font-medium px-2 py-1 rounded ${
+                    isDarkMode ? 'text-orange-300 bg-slate-700' : 'text-orange-700 bg-orange-50'
+                  }`}
+                >
+                  Packing: {formatElapsedTime(packingElapsedSeconds)}
+                </span>
+              )}
               <Button variant="secondary" onClick={onRefreshJobs} size="sm" className="h-8 w-8 p-0">
                 <RefreshCw size={14} />
               </Button>
@@ -228,18 +250,16 @@ const JobCard: React.FC<JobCardProps> = ({
                 <ClipboardList size={14} /> <span className="hidden sm:inline">Scan</span>
               </Button>
             )}
-            {isAwaitingPack && jobIdInVerificationMode === job.id && (
+            {isAwaitingVerification && isVerifyingThisJob && (
               <div
                 className={`text-sm ${isDarkMode ? 'text-slate-300' : 'text-slate-600'} bg-slate-100 dark:bg-slate-700 px-3 py-2 rounded-lg`}
               >
-                Verification Status:{' '}
-                {
-                  job.items.filter(
-                    (item) =>
-                      item.verified || locallyVerifiedItems.has(`${job.id}-${item.barcode}`)
-                  ).length
-                }
-                /{job.items.length} items verified
+                Verification Status: {verifiedCount}/{job.items.length} items verified
+                {allItemsVerified && (
+                  <span className={`block mt-1 ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                    All items verified — press Complete Verification to continue.
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -305,7 +325,7 @@ const JobCard: React.FC<JobCardProps> = ({
                       </div>
 
                       <div className="flex items-center gap-2 flex-shrink-0">
-                        {isAwaitingPack && jobIdInVerificationMode === job.id && (
+                        {isAwaitingVerification && (
                           <Button
                             variant={
                               it.verified || locallyVerifiedItems.has(`${job.id}-${it.barcode}`)
@@ -338,7 +358,7 @@ const JobCard: React.FC<JobCardProps> = ({
                             )}
                           </Button>
                         )}
-                        {isAwaitingPack && jobIdInVerificationMode === job.id && !editingJobItem && (
+                        {isAwaitingVerification && !editingJobItem && (
                           <Button
                             variant="secondary"
                             size="sm"
@@ -386,15 +406,37 @@ const JobCard: React.FC<JobCardProps> = ({
                 <CheckSquare size={14} /> <span className="hidden sm:inline">Finish Picking</span>
               </Button>
             )}
-            {isAwaitingPack && jobIdInVerificationMode === job.id && (
+            {isAwaitingVerification && isVerifyingThisJob && (
               <Button
-                onClick={() => onCompletePacking(job)}
+                onClick={() => onCompleteVerification(job)}
                 size="sm"
                 className="flex items-center gap-1 w-full sm:w-auto"
                 isLoading={completingJobs.has(job.id)}
+                disabled={completingJobs.has(job.id) || !allItemsVerified}
+              >
+                <CheckSquare size={14} /> <span className="hidden sm:inline">Complete Verification</span>
+              </Button>
+            )}
+            {isAwaitingPack && (
+              <Button
+                onClick={() => onStartPacking(job)}
+                size="sm"
+                className="flex items-center gap-1 w-full sm:w-auto bg-orange-500 hover:bg-orange-600 text-white"
+                isLoading={completingJobs.has(job.id)}
                 disabled={completingJobs.has(job.id)}
               >
-                <CheckSquare size={14} /> <span className="hidden sm:inline">Complete Job</span>
+                <Package size={14} /> <span className="hidden sm:inline">Start Packing</span>
+              </Button>
+            )}
+            {isPackingThisJob && !isCompleted && (
+              <Button
+                onClick={() => onStopPacking(job)}
+                size="sm"
+                className="flex items-center gap-1 w-full sm:w-auto bg-orange-600 hover:bg-orange-700 text-white"
+                isLoading={completingJobs.has(job.id)}
+                disabled={completingJobs.has(job.id)}
+              >
+                <CheckSquare size={14} /> <span className="hidden sm:inline">Stop Packing</span>
               </Button>
             )}
           </div>

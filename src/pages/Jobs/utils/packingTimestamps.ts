@@ -54,10 +54,6 @@ export async function enrichJobsWithPackingTimestamps(jobs: Job[]): Promise<Job[
     let packingStartedAt =
       job.packingStartedAt ?? startedAtByJobId.get(job.jobId) ?? null;
 
-    if (!packingStartedAt && packingCompletedAt && job.verifyingTime && job.verifyingTime > 0) {
-      packingStartedAt = new Date(packingCompletedAt.getTime() - job.verifyingTime * 1000);
-    }
-
     if (
       packingCompletedAt === job.packingCompletedAt &&
       packingStartedAt === job.packingStartedAt

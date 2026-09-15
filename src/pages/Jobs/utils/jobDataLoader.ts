@@ -13,6 +13,7 @@ import type { FirestoreJob, FirestoreJobItem, Job, JobStatus } from '../types';
 import { parseJobTimestamp } from './formatters';
 import { enrichJobsWithPackingTimestamps } from './packingTimestamps';
 import { filterJobs } from './jobFilters';
+import { ACTIVE_JOB_STATUSES } from './jobWorkflow';
 
 export type JobsFetchView = 'active' | 'completed' | 'archived' | 'live';
 
@@ -60,8 +61,12 @@ export function mapFirestoreJobDoc(docSnap: QueryDocumentSnapshot): Job {
       : [],
     pickingTime: data.pickingTime || 0,
     trolleyNumber: data.trolleyNumber ?? null,
+    verifier: data.verifier ?? null,
     verifyingTimeAccumulated: data.verifyingTimeAccumulated ?? 0,
     verifyingTime: data.verifyingTime ?? null,
+    verificationCompletedAt: parseJobTimestamp(data.verificationCompletedAt),
+    packingTimeAccumulated: data.packingTimeAccumulated ?? 0,
+    packingTime: data.packingTime ?? null,
     packingStartedAt: parseJobTimestamp(data.packingStartedAt),
     packingCompletedAt: parseJobTimestamp(data.packingCompletedAt),
   };
@@ -77,7 +82,7 @@ export function buildJobsQuery(
     case 'active':
       return query(
         jobsCol,
-        where('status', 'in', ['picking', 'awaiting_pack']),
+        where('status', 'in', ACTIVE_JOB_STATUSES),
         orderBy('createdAt', 'desc')
       );
     case 'live':

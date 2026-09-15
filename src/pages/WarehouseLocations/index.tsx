@@ -14,7 +14,11 @@ import { useAuth } from '../../contexts/AuthContext';
 import { StockItem } from '../../types';
 import Button from '../../components/ui/Button';
 import { generateShelfOptions } from '../../utils/shelfUtils';
-import { compareWarehouseLocationCodes, getAllWarehouseLocationCodes } from '../../utils/locationUtils';
+import {
+  compareWarehouseLocationCodes,
+  getAllWarehouseLocationCodes,
+  getLocationDisplayLabel,
+} from '../../utils/locationUtils';
 
 interface LocationSummary {
   locationCode: string;
@@ -482,11 +486,7 @@ const WarehouseLocations: React.FC = () => {
                         <Package className={`w-5 h-5 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`} />
                       </div>
                       <h3 className={`text-lg font-medium ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
-                        {summary.locationCode === 'Awaiting Location' ? 'Awaiting Location' : 
-                         summary.locationCode === 'Awaiting Locations Sparklin' ? 'Awaiting Locations Sparklin' :
-                         summary.locationCode === 'Awaiting Locations Aztec' ? 'Awaiting Locations Aztec' :
-                         summary.locationCode.startsWith('TENT-') ? summary.locationCode :
-                         `Location ${summary.locationCode}`}
+                        {getLocationDisplayLabel(summary.locationCode)}
                       </h3>
                     </div>
                     <div className="flex items-center gap-2 ml-2">

@@ -1,7 +1,12 @@
 import type { JobItem, StockItem } from '../../types';
 import type { Timestamp } from 'firebase/firestore';
 
-export type JobStatus = 'picking' | 'awaiting_pack' | 'completed';
+export type JobStatus =
+  | 'picking'
+  | 'awaiting_verification'
+  | 'awaiting_pack'
+  | 'packing'
+  | 'completed';
 
 export type Job = {
   id: string;
@@ -10,12 +15,16 @@ export type Job = {
   createdBy: string;
   status: JobStatus;
   picker?: string | null;
+  verifier?: string | null;
   packer?: string | null;
   items: JobItem[];
   pickingTime?: number;
   trolleyNumber?: number | null;
   verifyingTimeAccumulated?: number;
   verifyingTime?: number | null;
+  verificationCompletedAt?: Date | null;
+  packingTimeAccumulated?: number;
+  packingTime?: number | null;
   packingStartedAt?: Date | null;
   packingCompletedAt?: Date | null;
 };
@@ -39,12 +48,16 @@ export type FirestoreJob = {
   createdBy?: string;
   status?: JobStatus;
   picker?: string | null;
+  verifier?: string | null;
   packer?: string | null;
   items?: FirestoreJobItem[];
   pickingTime?: number;
   trolleyNumber?: number | null;
   verifyingTimeAccumulated?: number;
   verifyingTime?: number | null;
+  verificationCompletedAt?: Timestamp | Date | string | null;
+  packingTimeAccumulated?: number;
+  packingTime?: number | null;
   packingStartedAt?: Timestamp | Date | string | null;
   packingCompletedAt?: Timestamp | Date | string | null;
 };
