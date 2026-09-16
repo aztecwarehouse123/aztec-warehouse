@@ -41,6 +41,12 @@ import {
 } from './utils/jobDataLoader';
 import { runWithPerfTrace } from '../../config/performance';
 import { getJobWorkflowPhase } from './utils/jobWorkflow';
+import {
+  type JobWorkSession,
+  getActiveSegmentSeconds,
+  hasAnyWorkSession,
+  removeJobSession,
+} from './utils/jobWorkSessions';
 import { MAX_TROLLEY_NUMBER } from './constants';
 import { WMS_ALERT_PREFIX, formatLogError } from '../../utils/wmsActivityLog';
 
@@ -96,14 +102,11 @@ const Jobs: React.FC = () => {
   
   // State to track expanded jobs to prevent collapse on re-render
   const [expandedJobs, setExpandedJobs] = useState<Set<string>>(new Set());
-  // Verification mode: only one job at a time; timer starts on first Verify click
-  const [jobIdInVerificationMode, setJobIdInVerificationMode] = useState<string | null>(null);
-  const [verificationSegmentStartTime, setVerificationSegmentStartTime] = useState<number | null>(null);
-  const [verifyingElapsedSeconds, setVerifyingElapsedSeconds] = useState<number>(0);
-  // Packing mode: one job at a time after verification is complete
-  const [jobIdInPackingMode, setJobIdInPackingMode] = useState<string | null>(null);
-  const [packingSegmentStartTime, setPackingSegmentStartTime] = useState<number | null>(null);
-  const [packingElapsedSeconds, setPackingElapsedSeconds] = useState<number>(0);
+  // Per-job work sessions so multiple workers can verify/pack different jobs at once
+  const [verificationSessions, setVerificationSessions] = useState<Record<string, JobWorkSession>>({});
+  const [packingSessions, setPackingSessions] = useState<Record<string, JobWorkSession>>({});
+  const jobsRef = useRef(jobs);
+  jobsRef.current = jobs;
   
   // Calculator modal state
   const [isCalculatorModalOpen, setIsCalculatorModalOpen] = useState(false);
@@ -789,54 +792,40 @@ const Jobs: React.FC = () => {
     }
   }, [reportDate, showReports]);
 
-  // Function to toggle job expansion (only one job open at a time). Lock collapse only while actively verifying/packing.
+  // Toggle job expansion; lock collapse only while this user is actively verifying/packing that job.
   const toggleJobExpansion = (jobId: string) => {
     const job = jobs.find(j => j.id === jobId);
     const phase = job ? getJobWorkflowPhase(job) : null;
 
-    if (jobIdInVerificationMode !== null && jobIdInVerificationMode !== jobId) {
-      showToast('Finish or stop verifying the current job first.', 'warning');
-      return;
-    }
-    if (jobIdInPackingMode !== null && jobIdInPackingMode !== jobId) {
-      showToast('Stop packing the current job first.', 'warning');
-      return;
-    }
-    if (jobIdInVerificationMode === jobId && phase === 'awaiting_verification') {
+    if (verificationSessions[jobId] && phase === 'awaiting_verification') {
       showToast('Stop verifying or complete verification to close.', 'info');
       return;
     }
-    if (jobIdInPackingMode === jobId && phase === 'packing') {
+    if (packingSessions[jobId] && phase === 'packing') {
       showToast('Stop packing to close this job.', 'info');
       return;
     }
     setExpandedJobs(prev => {
-      if (prev.has(jobId)) {
-        const newSet = new Set(prev);
-        newSet.delete(jobId);
-        return newSet;
-      }
-      return new Set([jobId]);
+      const next = new Set(prev);
+      if (next.has(jobId)) next.delete(jobId);
+      else next.add(jobId);
+      return next;
     });
   };
 
   const beginVerificationSession = async (job: Job): Promise<boolean> => {
-    if (jobIdInVerificationMode !== null && jobIdInVerificationMode !== job.id) {
-      showToast('Finish or stop verifying the current job first.', 'warning');
-      return false;
-    }
-    if (jobIdInPackingMode !== null) {
-      showToast('Stop packing the current job first.', 'warning');
-      return false;
-    }
-    if (jobIdInVerificationMode === job.id && verificationSegmentStartTime !== null) {
+    if (verificationSessions[job.id]) {
       return true;
     }
 
-    setJobIdInVerificationMode(job.id);
-    setVerificationSegmentStartTime(Date.now());
-    setVerifyingElapsedSeconds(job.verifyingTimeAccumulated ?? 0);
-    setExpandedJobs(new Set([job.id]));
+    setVerificationSessions(prev => ({
+      ...prev,
+      [job.id]: {
+        segmentStartMs: Date.now(),
+        elapsedSeconds: job.verifyingTimeAccumulated ?? 0,
+      },
+    }));
+    setExpandedJobs(prev => new Set(prev).add(job.id));
 
     const isFirstVerificationSession = (job.verifyingTimeAccumulated ?? 0) === 0;
 
@@ -871,12 +860,8 @@ const Jobs: React.FC = () => {
   };
 
   const stopVerification = async (job: Job) => {
-    const segmentSeconds = verificationSegmentStartTime
-      ? Math.floor((Date.now() - verificationSegmentStartTime) / 1000)
-      : 0;
-    setVerificationSegmentStartTime(null);
-    setJobIdInVerificationMode(null);
-    setVerifyingElapsedSeconds(0);
+    const segmentSeconds = getActiveSegmentSeconds(verificationSessions[job.id]);
+    setVerificationSessions(prev => removeJobSession(prev, job.id));
     try {
       const newAccumulated = (job.verifyingTimeAccumulated ?? 0) + segmentSeconds;
       await updateDoc(doc(db, 'jobs', job.id), {
@@ -894,61 +879,93 @@ const Jobs: React.FC = () => {
     }
   };
 
-  // Live verifying timer: update every second when in verification mode
-  useEffect(() => {
-    if (!jobIdInVerificationMode || verificationSegmentStartTime === null) return;
-    const interval = setInterval(() => {
-      const job = jobs.find(j => j.id === jobIdInVerificationMode);
-      const accumulated = job?.verifyingTimeAccumulated ?? 0;
-      const currentSegment = Math.floor((Date.now() - verificationSegmentStartTime) / 1000);
-      setVerifyingElapsedSeconds(accumulated + currentSegment);
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [jobIdInVerificationMode, verificationSegmentStartTime, jobs]);
+  const verificationSessionKeys = Object.keys(verificationSessions).join(',');
+  const packingSessionKeys = Object.keys(packingSessions).join(',');
 
   useEffect(() => {
-    if (!jobIdInPackingMode || packingSegmentStartTime === null) return;
+    if (!verificationSessionKeys) return;
     const interval = setInterval(() => {
-      const job = jobs.find(j => j.id === jobIdInPackingMode);
-      const accumulated = job?.packingTimeAccumulated ?? 0;
-      const currentSegment = Math.floor((Date.now() - packingSegmentStartTime) / 1000);
-      setPackingElapsedSeconds(accumulated + currentSegment);
+      setVerificationSessions(prev => {
+        const next: Record<string, JobWorkSession> = {};
+        for (const [jobId, session] of Object.entries(prev)) {
+          const job = jobsRef.current.find(j => j.id === jobId);
+          const accumulated = job?.verifyingTimeAccumulated ?? 0;
+          const currentSegment = Math.floor((Date.now() - session.segmentStartMs) / 1000);
+          next[jobId] = { ...session, elapsedSeconds: accumulated + currentSegment };
+        }
+        return next;
+      });
     }, 1000);
     return () => clearInterval(interval);
-  }, [jobIdInPackingMode, packingSegmentStartTime, jobs]);
+  }, [verificationSessionKeys]);
 
   useEffect(() => {
-    const packingJob = jobs.find(j => j.status === 'packing');
-    if (!packingJob || jobIdInPackingMode) return;
-    const segmentStart = packingJob.packingStartedAt?.getTime() ?? Date.now();
-    setJobIdInPackingMode(packingJob.id);
-    setPackingSegmentStartTime(segmentStart);
-    setPackingElapsedSeconds(
-      (packingJob.packingTimeAccumulated ?? 0) +
-        Math.floor((Date.now() - segmentStart) / 1000)
-    );
-    setExpandedJobs(prev => (prev.has(packingJob.id) ? prev : new Set([packingJob.id])));
-  }, [jobs, jobIdInPackingMode]);
+    if (!packingSessionKeys) return;
+    const interval = setInterval(() => {
+      setPackingSessions(prev => {
+        const next: Record<string, JobWorkSession> = {};
+        for (const [jobId, session] of Object.entries(prev)) {
+          const job = jobsRef.current.find(j => j.id === jobId);
+          const accumulated = job?.packingTimeAccumulated ?? 0;
+          const currentSegment = Math.floor((Date.now() - session.segmentStartMs) / 1000);
+          next[jobId] = { ...session, elapsedSeconds: accumulated + currentSegment };
+        }
+        return next;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [packingSessionKeys]);
+
+  // Restore packing sessions only for jobs this user is actively packing (not other workers' jobs).
+  useEffect(() => {
+    if (!user?.name) return;
+
+    setPackingSessions(prev => {
+      const next = { ...prev };
+      let changed = false;
+
+      for (const job of jobs) {
+        if (job.status === 'packing' && job.packer === user.name) {
+          if (!next[job.id]) {
+            const segmentStart = job.packingStartedAt?.getTime() ?? Date.now();
+            next[job.id] = {
+              segmentStartMs: segmentStart,
+              elapsedSeconds:
+                (job.packingTimeAccumulated ?? 0) +
+                Math.floor((Date.now() - segmentStart) / 1000),
+            };
+            changed = true;
+          }
+        }
+      }
+
+      for (const jobId of Object.keys(next)) {
+        const job = jobs.find(j => j.id === jobId);
+        if (!job || job.status !== 'packing' || job.packer !== user.name) {
+          delete next[jobId];
+          changed = true;
+        }
+      }
+
+      return changed ? next : prev;
+    });
+  }, [jobs, user?.name]);
 
   // Clear stale in-progress UI locks when the job has moved on (e.g. after stop packing → completed).
   useEffect(() => {
-    if (jobIdInPackingMode) {
-      const packingJob = jobs.find(j => j.id === jobIdInPackingMode);
-      if (!packingJob || packingJob.status !== 'packing') {
-        setJobIdInPackingMode(null);
-        setPackingSegmentStartTime(null);
-        setPackingElapsedSeconds(0);
+    setVerificationSessions(prev => {
+      let changed = false;
+      const next = { ...prev };
+      for (const jobId of Object.keys(next)) {
+        const job = jobs.find(j => j.id === jobId);
+        if (!job || getJobWorkflowPhase(job) !== 'awaiting_verification') {
+          delete next[jobId];
+          changed = true;
+        }
       }
-    }
-    if (jobIdInVerificationMode) {
-      const verifyingJob = jobs.find(j => j.id === jobIdInVerificationMode);
-      if (!verifyingJob || getJobWorkflowPhase(verifyingJob) !== 'awaiting_verification') {
-        setJobIdInVerificationMode(null);
-        setVerificationSegmentStartTime(null);
-        setVerifyingElapsedSeconds(0);
-      }
-    }
-  }, [jobs, jobIdInPackingMode, jobIdInVerificationMode]);
+      return changed ? next : prev;
+    });
+  }, [jobs]);
 
   // Timer for job creation
   useEffect(() => {
@@ -1526,13 +1543,9 @@ const Jobs: React.FC = () => {
       }
       
       // Compute final verifying time (current segment + accumulated)
-      const segmentSeconds = verificationSegmentStartTime && jobIdInVerificationMode === job.id
-        ? Math.floor((Date.now() - verificationSegmentStartTime) / 1000)
-        : 0;
+      const segmentSeconds = getActiveSegmentSeconds(verificationSessions[job.id]);
       const totalVerifyingTime = (job.verifyingTimeAccumulated ?? 0) + segmentSeconds;
-      setVerificationSegmentStartTime(null);
-      setJobIdInVerificationMode(prev => (prev === job.id ? null : prev));
-      setVerifyingElapsedSeconds(0);
+      setVerificationSessions(prev => removeJobSession(prev, job.id));
 
       const verificationCompletedAt = new Date();
 
@@ -1586,14 +1599,7 @@ const Jobs: React.FC = () => {
 
   const startPacking = async (job: Job) => {
     if (completingJobs.has(job.id)) return;
-    if (jobIdInPackingMode !== null && jobIdInPackingMode !== job.id) {
-      showToast('Stop packing the current job first.', 'warning');
-      return;
-    }
-    if (jobIdInVerificationMode !== null) {
-      showToast('Finish or stop verifying the current job first.', 'warning');
-      return;
-    }
+    if (packingSessions[job.id]) return;
 
     setCompletingJobs(prev => new Set(prev).add(job.id));
     try {
@@ -1604,10 +1610,14 @@ const Jobs: React.FC = () => {
         packingStartedAt: Timestamp.fromDate(startedAt),
       });
       await logActivity(`started packing for job ${job.jobId} at ${startedAt.toLocaleString()}`);
-      setJobIdInPackingMode(job.id);
-      setPackingSegmentStartTime(startedAt.getTime());
-      setPackingElapsedSeconds(job.packingTimeAccumulated ?? 0);
-      setExpandedJobs(new Set([job.id]));
+      setPackingSessions(prev => ({
+        ...prev,
+        [job.id]: {
+          segmentStartMs: startedAt.getTime(),
+          elapsedSeconds: job.packingTimeAccumulated ?? 0,
+        },
+      }));
+      setExpandedJobs(prev => new Set(prev).add(job.id));
       setJobs(prev =>
         prev.map(j =>
           j.id === job.id
@@ -1636,11 +1646,10 @@ const Jobs: React.FC = () => {
 
     try {
       const segmentSeconds =
-        packingSegmentStartTime && jobIdInPackingMode === job.id
-          ? Math.floor((Date.now() - packingSegmentStartTime) / 1000)
-          : job.packingStartedAt
-            ? Math.floor((Date.now() - job.packingStartedAt.getTime()) / 1000)
-            : 0;
+        getActiveSegmentSeconds(packingSessions[job.id]) ||
+        (job.packingStartedAt
+          ? Math.floor((Date.now() - job.packingStartedAt.getTime()) / 1000)
+          : 0);
       const totalPackingTime = (job.packingTimeAccumulated ?? 0) + segmentSeconds;
       const completedAt = new Date();
 
@@ -1654,9 +1663,7 @@ const Jobs: React.FC = () => {
         `completed packing for job ${job.jobId} at ${completedAt.toLocaleString()} - packing time: ${totalPackingTime}s`
       );
 
-      setJobIdInPackingMode(null);
-      setPackingSegmentStartTime(null);
-      setPackingElapsedSeconds(0);
+      setPackingSessions(prev => removeJobSession(prev, job.id));
       setExpandedJobs(prev => {
         const next = new Set(prev);
         next.delete(job.id);
@@ -1809,10 +1816,7 @@ const Jobs: React.FC = () => {
           job.items.forEach(i => next.delete(`${job.id}-${i.barcode}`));
           return next;
         });
-        if (jobIdInVerificationMode === job.id) {
-          setJobIdInVerificationMode(null);
-          setVerificationSegmentStartTime(null);
-        }
+        setVerificationSessions(prev => removeJobSession(prev, job.id));
         showToast(`${qtyToReturn} unit(s) added back to stock. Job ${job.jobId} deleted (no items left).`, 'success');
       } else {
         await updateDoc(doc(db, 'jobs', job.id), { items: updatedItems });
@@ -1949,7 +1953,8 @@ const Jobs: React.FC = () => {
       <div className="space-y-4">
         {!showReports && !showProductivity && (
           <>
-            {(isLoading || isJobsOperationInProgress) && !jobIdInVerificationMode && !jobIdInPackingMode ? (
+            {(isLoading || isJobsOperationInProgress) &&
+            !hasAnyWorkSession(verificationSessions, packingSessions) ? (
               <div className="flex items-center justify-center py-16">
                 <div className="flex flex-col items-center gap-3">
                   <RefreshCw className="animate-spin text-blue-500" size={24} />
@@ -1968,10 +1973,13 @@ const Jobs: React.FC = () => {
                   showArchived={showArchived}
                   isExpanded={expandedJobs.has(job.id)}
                   onToggleExpand={toggleJobExpansion}
-                  jobIdInVerificationMode={jobIdInVerificationMode}
-                  jobIdInPackingMode={jobIdInPackingMode}
-                  verifyingElapsedSeconds={verifyingElapsedSeconds}
-                  packingElapsedSeconds={packingElapsedSeconds}
+                  isVerifyingThisJob={Boolean(verificationSessions[job.id])}
+                  isPackingThisJob={
+                    Boolean(packingSessions[job.id]) ||
+                    (job.status === 'packing' && job.packer === user?.name)
+                  }
+                  verifyingElapsedSeconds={verificationSessions[job.id]?.elapsedSeconds ?? 0}
+                  packingElapsedSeconds={packingSessions[job.id]?.elapsedSeconds ?? 0}
                   onStopVerification={stopVerification}
                   onRefreshJobs={refreshJobs}
                   onRequestDeleteJob={requestDeleteJob}
@@ -2039,7 +2047,7 @@ const Jobs: React.FC = () => {
           !showProductivity &&
           !isLoading &&
           !isJobsOperationInProgress &&
-          !jobIdInPackingMode &&
+          !hasAnyWorkSession(verificationSessions, packingSessions) &&
           filteredJobs.length === 0 &&
           liveSummary.uiSessions.length === 0 && (
             <div className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-center py-8`}>

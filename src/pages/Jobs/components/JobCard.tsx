@@ -33,8 +33,8 @@ export type JobCardProps = {
   showArchived: boolean;
   isExpanded: boolean;
   onToggleExpand: (jobId: string) => void;
-  jobIdInVerificationMode: string | null;
-  jobIdInPackingMode: string | null;
+  isVerifyingThisJob: boolean;
+  isPackingThisJob: boolean;
   verifyingElapsedSeconds: number;
   packingElapsedSeconds: number;
   onStopVerification: (job: Job) => void;
@@ -60,8 +60,8 @@ const JobCard: React.FC<JobCardProps> = ({
   isDarkMode,
   isExpanded,
   onToggleExpand,
-  jobIdInVerificationMode,
-  jobIdInPackingMode,
+  isVerifyingThisJob,
+  isPackingThisJob,
   verifyingElapsedSeconds,
   packingElapsedSeconds,
   onStopVerification,
@@ -88,8 +88,6 @@ const JobCard: React.FC<JobCardProps> = ({
   const isAwaitingPack = phase === 'awaiting_pack';
   const isPacking = phase === 'packing';
   const isCompleted = phase === 'completed';
-  const isVerifyingThisJob = jobIdInVerificationMode === job.id;
-  const isPackingThisJob = jobIdInPackingMode === job.id || isPacking;
   const verifiedCount = countVerifiedItems(job, locallyVerifiedItems);
   const verifierName =
     job.verifier ||
