@@ -30,13 +30,47 @@ export function formatElapsedTime(seconds: number): string {
   return `${hours}h ${minutes}m ${remainingSeconds}s`;
 }
 
-/** HH:mm for packer start / complete timestamps on job cards. */
-export function formatPackingClockTime(date: Date): string {
+/** HH:mm:ss for stage start / end on job cards. */
+export function formatStageClockTime(date: Date): string {
   return date.toLocaleTimeString('en-GB', {
     hour: '2-digit',
     minute: '2-digit',
+    second: '2-digit',
     hour12: false,
   });
+}
+
+export type JobStageTiming = {
+  endAt: Date;
+  startedAt: Date;
+  durationLabel: string | null;
+};
+
+export function getJobStageTiming(
+  endAt: Date | null | undefined,
+  startedAt: Date | null | undefined,
+  durationSeconds: number | null | undefined
+): JobStageTiming | null {
+  if (!endAt) return null;
+
+  const started =
+    startedAt ??
+    (durationSeconds != null && durationSeconds > 0
+      ? new Date(endAt.getTime() - durationSeconds * 1000)
+      : endAt);
+
+  return {
+    endAt,
+    startedAt: started,
+    durationLabel:
+      durationSeconds != null && durationSeconds > 0
+        ? formatElapsedTime(durationSeconds)
+        : null,
+  };
+}
+
+export function formatStageClockRange(startedAt: Date, endAt: Date): string {
+  return `${formatStageClockTime(startedAt)} – ${formatStageClockTime(endAt)}`;
 }
 
 /** MM:SS timer for job creation modal. */

@@ -3,7 +3,11 @@ import { ClipboardList, ChevronUp, ChevronDown, CheckSquare, RefreshCw, Trash2, 
 import Button from '../../../components/ui/Button';
 import Input from '../../../components/ui/Input';
 import type { Job } from '../types';
-import { formatElapsedTime } from '../utils/formatters';
+import {
+  formatElapsedTime,
+  formatStageClockRange,
+  getJobStageTiming,
+} from '../utils/formatters';
 import {
   areAllItemsVerified,
   countVerifiedItems,
@@ -94,6 +98,21 @@ const JobCard: React.FC<JobCardProps> = ({
     (isAwaitingPack || isPacking || isCompleted) &&
     (verifierName || (job.verifyingTime != null && job.verifyingTime > 0));
 
+  const pickingTiming =
+    isCompleted && job.pickingTime != null && job.pickingTime > 0
+      ? getJobStageTiming(job.createdAt, null, job.pickingTime)
+      : null;
+  const verificationTiming = getJobStageTiming(
+    job.verificationCompletedAt,
+    job.verificationStartedAt,
+    job.verifyingTime
+  );
+  const packingTiming = getJobStageTiming(
+    job.packingCompletedAt,
+    job.packingStartedAt,
+    job.packingTime
+  );
+
   const statusBadgeClass = isCompleted
     ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
     : isPacking
@@ -150,10 +169,15 @@ const JobCard: React.FC<JobCardProps> = ({
                   {job.picker && <>Picked by {job.picker}</>}
                   {!job.picker && <>Created by {job.createdBy}</>}
                   {' • '}
-                  {job.createdAt.toLocaleString()}
+                  {(pickingTiming?.endAt ?? job.createdAt).toLocaleString()}
                   {job.pickingTime != null && job.pickingTime > 0 && (
                     <span className={`ml-2 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
                       • Picking: {formatElapsedTime(job.pickingTime)}
+                      {pickingTiming && (
+                        <span className="ml-1">
+                          ({formatStageClockRange(pickingTiming.startedAt, pickingTiming.endAt)})
+                        </span>
+                      )}
                     </span>
                   )}
                   {job.trolleyNumber && (
@@ -163,23 +187,42 @@ const JobCard: React.FC<JobCardProps> = ({
                   )}
                 </p>
 
-                {showVerificationSummary && (
+                {showVerificationSummary && verificationTiming && (
                   <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-xs leading-relaxed mt-1`}>
                     {verifierName && <>Verified by {verifierName}</>}
-                    {job.verifyingTime != null && job.verifyingTime > 0 && (
-                      <span className={`${verifierName ? 'ml-2' : ''} ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                        {verifierName ? '• ' : ''}Verifying: {formatElapsedTime(job.verifyingTime)}
+                    {' • '}
+                    {verificationTiming.endAt.toLocaleString()}
+                    {verificationTiming.durationLabel && (
+                      <span className={`ml-2 ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                        • Verifying: {verificationTiming.durationLabel}
+                        <span className="ml-1">
+                          ({formatStageClockRange(verificationTiming.startedAt, verificationTiming.endAt)})
+                        </span>
                       </span>
                     )}
                   </p>
                 )}
 
-                {(isPacking || isCompleted) && (job.packer || (job.packingTime != null && job.packingTime > 0)) && (
+                {showVerificationSummary && !verificationTiming && job.verifyingTime != null && job.verifyingTime > 0 && (
+                  <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-xs leading-relaxed mt-1`}>
+                    {verifierName && <>Verified by {verifierName}</>}
+                    <span className={`${verifierName ? 'ml-2' : ''} ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                      {verifierName ? '• ' : ''}Verifying: {formatElapsedTime(job.verifyingTime)}
+                    </span>
+                  </p>
+                )}
+
+                {(isPacking || isCompleted) && packingTiming && (
                   <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-xs leading-relaxed mt-1`}>
                     {job.packer && <>Packed by {job.packer}</>}
-                    {job.packingTime != null && job.packingTime > 0 && (
-                      <span className={`${job.packer ? 'ml-2' : ''} ${isDarkMode ? 'text-sky-400' : 'text-sky-600'}`}>
-                        {job.packer ? '• ' : ''}Packing: {formatElapsedTime(job.packingTime)}
+                    {' • '}
+                    {packingTiming.endAt.toLocaleString()}
+                    {packingTiming.durationLabel && (
+                      <span className={`ml-2 ${isDarkMode ? 'text-sky-400' : 'text-sky-600'}`}>
+                        • Packing: {packingTiming.durationLabel}
+                        <span className="ml-1">
+                          ({formatStageClockRange(packingTiming.startedAt, packingTiming.endAt)})
+                        </span>
                       </span>
                     )}
                   </p>

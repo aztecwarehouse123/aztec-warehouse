@@ -840,20 +840,31 @@ const Jobs: React.FC = () => {
 
     const isFirstVerificationSession = (job.verifyingTimeAccumulated ?? 0) === 0;
 
-    if (!job.verifier) {
+    if (isFirstVerificationSession || !job.verifier) {
       try {
-        const verifierName = user?.name || null;
-        await updateDoc(doc(db, 'jobs', job.id), { verifier: verifierName });
+        const verifierName = user?.name || job.verifier || null;
+        const startedAt = isFirstVerificationSession ? new Date() : null;
+        await updateDoc(doc(db, 'jobs', job.id), {
+          verifier: verifierName,
+          ...(startedAt ? { verificationStartedAt: Timestamp.fromDate(startedAt) } : {}),
+        });
         setJobs(prev =>
-          prev.map(j => (j.id === job.id ? { ...j, verifier: verifierName } : j))
+          prev.map(j =>
+            j.id === job.id
+              ? {
+                  ...j,
+                  verifier: verifierName,
+                  ...(startedAt ? { verificationStartedAt: startedAt } : {}),
+                }
+              : j
+          )
         );
+        if (isFirstVerificationSession && startedAt) {
+          await logActivity(`started verification for job ${job.jobId} at ${startedAt.toLocaleString()}`);
+        }
       } catch (e) {
         console.error('Failed to record verifier:', e);
       }
-    }
-
-    if (isFirstVerificationSession) {
-      await logActivity(`started verification for job ${job.jobId} at ${new Date().toLocaleString()}`);
     }
 
     return true;

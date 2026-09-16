@@ -64,6 +64,7 @@ export function mapFirestoreJobDoc(docSnap: QueryDocumentSnapshot): Job {
     verifier: data.verifier ?? null,
     verifyingTimeAccumulated: data.verifyingTimeAccumulated ?? 0,
     verifyingTime: data.verifyingTime ?? null,
+    verificationStartedAt: parseJobTimestamp(data.verificationStartedAt),
     verificationCompletedAt: parseJobTimestamp(data.verificationCompletedAt),
     packingTimeAccumulated: data.packingTimeAccumulated ?? 0,
     packingTime: data.packingTime ?? null,
