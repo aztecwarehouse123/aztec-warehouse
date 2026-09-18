@@ -73,6 +73,48 @@ export function formatStageClockRange(startedAt: Date, endAt: Date): string {
   return `${formatStageClockTime(startedAt)} – ${formatStageClockTime(endAt)}`;
 }
 
+/** Elapsed packing seconds from DB timestamps when there is no local session. */
+export function getPackingElapsedFromJob(job: {
+  status: string;
+  packingStartedAt?: Date | null;
+  packingTimeAccumulated?: number;
+}): number {
+  if (job.status !== 'packing' || !job.packingStartedAt) return 0;
+  const accumulated = job.packingTimeAccumulated ?? 0;
+  const segment = Math.floor((Date.now() - job.packingStartedAt.getTime()) / 1000);
+  return accumulated + Math.max(0, segment);
+}
+
+/** Combined verify + pack line for completed jobs (wall clock uses packing start/end). */
+export function getCombinedVerifyPackTiming(job: {
+  packingCompletedAt?: Date | null;
+  packingStartedAt?: Date | null;
+  verificationStartedAt?: Date | null;
+  packingTime?: number | null;
+  verifyingTime?: number | null;
+}): JobStageTiming | null {
+  const endAt = job.packingCompletedAt;
+  if (!endAt) return null;
+
+  const startedAt =
+    job.packingStartedAt ??
+    job.verificationStartedAt ??
+    (job.packingTime != null && job.packingTime > 0
+      ? new Date(endAt.getTime() - job.packingTime * 1000)
+      : endAt);
+
+  const durationSeconds = job.packingTime ?? job.verifyingTime ?? null;
+
+  return {
+    endAt,
+    startedAt,
+    durationLabel:
+      durationSeconds != null && durationSeconds > 0
+        ? formatElapsedTime(durationSeconds)
+        : null,
+  };
+}
+
 /** MM:SS timer for job creation modal. */
 export function formatJobTimer(seconds: number): string {
   const minutes = Math.floor(seconds / 60);

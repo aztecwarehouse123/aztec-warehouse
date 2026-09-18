@@ -29,20 +29,21 @@ export function isVerificationCompleteInDb(job: Job): boolean {
   return Boolean(job.verificationCompletedAt) || job.verifyingTime != null;
 }
 
-/** Maps stored status to workflow phase. Verification must be saved in DB before packer step. */
+/** Maps stored status to workflow phase. Verify items during packing (after Start Packing). */
 export function getJobWorkflowPhase(job: Job): JobWorkflowPhase {
   if (job.status === 'completed') return 'completed';
   if (job.status === 'packing') return 'packing';
   if (job.status === 'picking') return 'picking';
 
-  if (job.status === 'awaiting_verification') return 'awaiting_verification';
-
-  // Legacy jobs were created with awaiting_pack before verification was a separate step.
-  if (job.status === 'awaiting_pack') {
-    return isVerificationCompleteInDb(job) ? 'awaiting_pack' : 'awaiting_verification';
+  if (job.status === 'awaiting_pack' || job.status === 'awaiting_verification') {
+    return 'awaiting_pack';
   }
 
   return 'picking';
+}
+
+export function isPackVerifySessionActive(job: Job): boolean {
+  return job.status === 'packing';
 }
 
 export function getJobStatusLabel(phase: JobWorkflowPhase): string {

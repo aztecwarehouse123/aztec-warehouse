@@ -41,6 +41,8 @@ import {
 } from './utils/jobDataLoader';
 import { runWithPerfTrace } from '../../config/performance';
 import { getJobWorkflowPhase } from './utils/jobWorkflow';
+import { buildVerifiedJobItems, getLocallyVerifiedBarcodesForJob } from './utils/jobItemValidation';
+import { getPackingElapsedFromJob } from './utils/formatters';
 import {
   type JobWorkSession,
   getActiveSegmentSeconds,
@@ -792,28 +794,31 @@ const Jobs: React.FC = () => {
     }
   }, [reportDate, showReports]);
 
-  // Toggle job expansion; lock collapse only while this user is actively verifying/packing that job.
+  // Toggle job expansion; while packing, allow opening items but not collapsing (Stop Packing lives in expanded area).
   const toggleJobExpansion = (jobId: string) => {
     const job = jobs.find(j => j.id === jobId);
     const phase = job ? getJobWorkflowPhase(job) : null;
 
-    if (verificationSessions[jobId] && phase === 'awaiting_verification') {
-      showToast('Stop verifying or complete verification to close.', 'info');
-      return;
-    }
-    if (packingSessions[jobId] && phase === 'packing') {
-      showToast('Stop packing to close this job.', 'info');
-      return;
-    }
     setExpandedJobs(prev => {
       const next = new Set(prev);
-      if (next.has(jobId)) next.delete(jobId);
-      else next.add(jobId);
+      if (next.has(jobId)) {
+        if (phase === 'packing') {
+          showToast('Stop packing to close this job.', 'info');
+          return prev;
+        }
+        next.delete(jobId);
+      } else {
+        next.add(jobId);
+      }
       return next;
     });
   };
 
   const beginVerificationSession = async (job: Job): Promise<boolean> => {
+    if (job.status !== 'packing') {
+      showToast('Start packing before verifying items.', 'warning');
+      return false;
+    }
     if (verificationSessions[job.id]) {
       return true;
     }
@@ -849,7 +854,9 @@ const Jobs: React.FC = () => {
           )
         );
         if (isFirstVerificationSession && startedAt) {
-          await logActivity(`started verification for job ${job.jobId} at ${startedAt.toLocaleString()}`);
+          await logActivity(
+            `started verifying items during packing for job ${job.jobId} at ${startedAt.toLocaleString()}`
+          );
         }
       } catch (e) {
         console.error('Failed to record verifier:', e);
@@ -860,16 +867,24 @@ const Jobs: React.FC = () => {
   };
 
   const stopVerification = async (job: Job) => {
-    const segmentSeconds = getActiveSegmentSeconds(verificationSessions[job.id]);
+    if (job.status !== 'packing') return;
+
+    let segmentSeconds = getActiveSegmentSeconds(verificationSessions[job.id]);
+    if (!verificationSessions[job.id] && job.verificationStartedAt) {
+      segmentSeconds = Math.floor((Date.now() - job.verificationStartedAt.getTime()) / 1000);
+    }
     setVerificationSessions(prev => removeJobSession(prev, job.id));
     try {
       const newAccumulated = (job.verifyingTimeAccumulated ?? 0) + segmentSeconds;
       await updateDoc(doc(db, 'jobs', job.id), {
         verifyingTimeAccumulated: newAccumulated,
+        verificationStartedAt: null,
       });
       setJobs(prev =>
         prev.map(j =>
-          j.id === job.id ? { ...j, verifyingTimeAccumulated: newAccumulated } : j
+          j.id === job.id
+            ? { ...j, verifyingTimeAccumulated: newAccumulated, verificationStartedAt: null }
+            : j
         )
       );
       showToast('Verifying paused. You can resume by clicking Verify Items again.', 'success');
@@ -916,23 +931,19 @@ const Jobs: React.FC = () => {
     return () => clearInterval(interval);
   }, [packingSessionKeys]);
 
-  // Restore packing sessions only for jobs this user is actively packing (not other workers' jobs).
+  // Restore packing timers for any in-progress packing job (e.g. after refresh or re-login).
   useEffect(() => {
-    if (!user?.name) return;
-
     setPackingSessions(prev => {
       const next = { ...prev };
       let changed = false;
 
       for (const job of jobs) {
-        if (job.status === 'packing' && job.packer === user.name) {
+        if (job.status === 'packing') {
           if (!next[job.id]) {
             const segmentStart = job.packingStartedAt?.getTime() ?? Date.now();
             next[job.id] = {
               segmentStartMs: segmentStart,
-              elapsedSeconds:
-                (job.packingTimeAccumulated ?? 0) +
-                Math.floor((Date.now() - segmentStart) / 1000),
+              elapsedSeconds: getPackingElapsedFromJob(job),
             };
             changed = true;
           }
@@ -941,7 +952,7 @@ const Jobs: React.FC = () => {
 
       for (const jobId of Object.keys(next)) {
         const job = jobs.find(j => j.id === jobId);
-        if (!job || job.status !== 'packing' || job.packer !== user.name) {
+        if (!job || job.status !== 'packing') {
           delete next[jobId];
           changed = true;
         }
@@ -949,7 +960,22 @@ const Jobs: React.FC = () => {
 
       return changed ? next : prev;
     });
-  }, [jobs, user?.name]);
+
+    const packingJobIds = jobs.filter(j => j.status === 'packing').map(j => j.id);
+    if (packingJobIds.length > 0) {
+      setExpandedJobs(prev => {
+        const next = new Set(prev);
+        let expanded = false;
+        for (const id of packingJobIds) {
+          if (!next.has(id)) {
+            next.add(id);
+            expanded = true;
+          }
+        }
+        return expanded ? next : prev;
+      });
+    }
+  }, [jobs]);
 
   // Clear stale in-progress UI locks when the job has moved on (e.g. after stop packing → completed).
   useEffect(() => {
@@ -958,7 +984,7 @@ const Jobs: React.FC = () => {
       const next = { ...prev };
       for (const jobId of Object.keys(next)) {
         const job = jobs.find(j => j.id === jobId);
-        if (!job || getJobWorkflowPhase(job) !== 'awaiting_verification') {
+        if (!job || job.status !== 'packing') {
           delete next[jobId];
           changed = true;
         }
@@ -1323,7 +1349,7 @@ const Jobs: React.FC = () => {
           jobId: numericId,
           createdAt: serverTimestamp(),
           createdBy: user?.name || 'Unknown',
-          status: 'awaiting_verification' as JobStatus,
+          status: 'awaiting_pack' as JobStatus,
           picker: user?.name || null,
           verifier: null,
           packer: null,
@@ -1406,7 +1432,7 @@ const Jobs: React.FC = () => {
 
     try {
       await updateDoc(doc(db, 'jobs', job.id), {
-        status: 'awaiting_verification',
+        status: 'awaiting_pack',
         picker: user?.name || job.picker || null,
       });
 
@@ -1414,7 +1440,7 @@ const Jobs: React.FC = () => {
         `completed picking for job ${job.jobId} at ${new Date().toLocaleString()} with ${job.items.length} items (${job.items.reduce((sum, item) => sum + item.quantity, 0)} total units) - picking time: ${job.pickingTime ?? 0}s`
       );
 
-      showToast(`Job ${job.jobId} picking finished — ready for verification`, 'success');
+      showToast(`Job ${job.jobId} picking finished — ready to start packing`, 'success');
       
       loadJobs();
     } catch (error) {
@@ -1469,137 +1495,9 @@ const Jobs: React.FC = () => {
     }
   };
 
-  const completeVerification = async (job: Job) => {
-    if (completingJobs.has(job.id)) {
-      return;
-    }
-
-    setCompletingJobs(prev => new Set(prev).add(job.id));
-    setIsJobsOperationInProgress(true);
-
-    try {
-      const jobVerifiedItems = Array.from(locallyVerifiedItems)
-        .filter(itemKey => itemKey.startsWith(`${job.id}-`))
-        .map(itemKey => itemKey.slice(job.id.length + 1));
-
-      const totalVerifiedCount = job.items.filter(item =>
-        item.verified || jobVerifiedItems.includes(item.barcode)
-      ).length;
-
-      if (totalVerifiedCount < job.items.length) {
-        showToast(`Please verify all items first. (${totalVerifiedCount}/${job.items.length} verified)`, 'error');
-        setCompletingJobs(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(job.id);
-          return newSet;
-        });
-        setIsJobsOperationInProgress(false);
-        return;
-      }
-      
-      // Validate and fix items before updating - ensure all required fields are present
-      // Firestore doesn't accept undefined values, so we need to use null or omit fields
-      const updatedItems: FirestoreJobItem[] = job.items.map(item => {
-        // Ensure all required fields have valid values
-        const validatedItem: FirestoreJobItem = {
-          barcode: item.barcode || '',
-          name: item.name ?? null,
-          asin: item.asin ?? null,
-          quantity: Number(item.quantity) || 1,
-          verified: jobVerifiedItems.includes(item.barcode) || item.verified,
-          reason: item.reason || 'Unknown',
-          storeName: item.storeName || 'Unknown'
-        };
-        
-        // Only include optional fields if they have values (Firestore doesn't accept undefined)
-        if (item.locationCode) {
-          validatedItem.locationCode = item.locationCode;
-        }
-        if (item.shelfNumber) {
-          validatedItem.shelfNumber = item.shelfNumber;
-        }
-        if (item.stockItemId) {
-          validatedItem.stockItemId = item.stockItemId;
-        }
-        
-        return validatedItem;
-      });
-      
-      // Check for items with missing critical data
-      const invalidItems = updatedItems.filter(item => !item.barcode || !item.reason || !item.storeName);
-      if (invalidItems.length > 0) {
-        console.error('Invalid items found:', invalidItems);
-        showToast(`Job ${job.jobId} has ${invalidItems.length} item(s) with missing required data (barcode, reason, or storeName). Please check the job items.`, 'error');
-        return;
-      }
-      
-      // Verify the job document exists before updating
-      const jobDocRef = doc(db, 'jobs', job.id);
-      const jobDoc = await getDoc(jobDocRef);
-      if (!jobDoc.exists()) {
-        showToast(`Job ${job.jobId} not found in database. It may have been deleted.`, 'error');
-        loadJobs(); // Refresh to sync with database
-        return;
-      }
-      
-      // Compute final verifying time (current segment + accumulated)
-      const segmentSeconds = getActiveSegmentSeconds(verificationSessions[job.id]);
-      const totalVerifyingTime = (job.verifyingTimeAccumulated ?? 0) + segmentSeconds;
-      setVerificationSessions(prev => removeJobSession(prev, job.id));
-
-      const verificationCompletedAt = new Date();
-
-      await updateDoc(jobDocRef, {
-        status: 'awaiting_pack',
-        verifier: user?.name || job.verifier || null,
-        items: updatedItems,
-        verifyingTime: totalVerifyingTime,
-        verificationCompletedAt: Timestamp.fromDate(verificationCompletedAt),
-      });
-
-      await logActivity(
-        `completed verification for job ${job.jobId} at ${verificationCompletedAt.toLocaleString()} with ${job.items.length} items (${job.items.reduce((sum, item) => sum + item.quantity, 0)} total units) - ${totalVerifiedCount} items verified (verifying time: ${totalVerifyingTime}s)`
-      );
-
-      setLocallyVerifiedItems(prev => {
-        const newSet = new Set(prev);
-        jobVerifiedItems.forEach(barcode => {
-          newSet.delete(`${job.id}-${barcode}`);
-        });
-        return newSet;
-      });
-
-      showToast(`Job ${job.jobId} verification complete — ready for packing`, 'success');
-      loadJobs();
-    } catch (error: unknown) {
-      console.error('Error completing verification:', error);
-      const errorMessage = (error instanceof Error && error.message) ? error.message : 'Unknown error';
-      const errorCode = (error && typeof error === 'object' && 'code' in error && typeof error.code === 'string') ? error.code : '';
-      
-      // Provide more specific error messages
-      if (errorCode === 'permission-denied') {
-        showToast(`Permission denied: Unable to complete verification for job ${job.jobId}.`, 'error');
-      } else if (errorCode === 'not-found') {
-        showToast(`Job ${job.jobId} not found in database. It may have been deleted.`, 'error');
-        loadJobs();
-      } else if (errorMessage.includes('Invalid data') || errorMessage.includes('Field value') || errorMessage.includes('undefined')) {
-        showToast(`Invalid data in job ${job.jobId}: ${errorMessage}. Please check job items.`, 'error');
-      } else {
-        showToast(`Failed to complete verification for job ${job.jobId}: ${errorMessage}`, 'error');
-      }
-    } finally {
-      setCompletingJobs(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(job.id);
-        return newSet;
-      });
-      setIsJobsOperationInProgress(false);
-    }
-  };
-
   const startPacking = async (job: Job) => {
     if (completingJobs.has(job.id)) return;
-    if (packingSessions[job.id]) return;
+    if (job.status === 'packing') return;
 
     setCompletingJobs(prev => new Set(prev).add(job.id));
     try {
@@ -1640,30 +1538,72 @@ const Jobs: React.FC = () => {
 
   const stopPacking = async (job: Job) => {
     if (completingJobs.has(job.id)) return;
+    if (job.status !== 'packing') return;
+
+    const jobVerifiedBarcodes = getLocallyVerifiedBarcodesForJob(job.id, locallyVerifiedItems);
+    const totalVerifiedCount = job.items.filter(
+      item => item.verified || jobVerifiedBarcodes.includes(item.barcode)
+    ).length;
+
+    if (totalVerifiedCount < job.items.length) {
+      showToast(
+        `Verify all items before stopping packing. (${totalVerifiedCount}/${job.items.length} verified)`,
+        'error'
+      );
+      return;
+    }
+
+    const { updatedItems, invalidCount } = buildVerifiedJobItems(job, jobVerifiedBarcodes);
+    if (invalidCount > 0) {
+      showToast(
+        `Job ${job.jobId} has ${invalidCount} item(s) with missing required data. Please check the job items.`,
+        'error'
+      );
+      return;
+    }
 
     setCompletingJobs(prev => new Set(prev).add(job.id));
     setIsJobsOperationInProgress(true);
 
     try {
-      const segmentSeconds =
-        getActiveSegmentSeconds(packingSessions[job.id]) ||
-        (job.packingStartedAt
+      let verifySegmentSeconds = getActiveSegmentSeconds(verificationSessions[job.id]);
+      if (!verificationSessions[job.id] && job.verificationStartedAt) {
+        verifySegmentSeconds = Math.floor((Date.now() - job.verificationStartedAt.getTime()) / 1000);
+      }
+      const totalVerifyingTime = (job.verifyingTimeAccumulated ?? 0) + verifySegmentSeconds;
+
+      const packSegmentSeconds = packingSessions[job.id]
+        ? getActiveSegmentSeconds(packingSessions[job.id])
+        : job.packingStartedAt
           ? Math.floor((Date.now() - job.packingStartedAt.getTime()) / 1000)
-          : 0);
-      const totalPackingTime = (job.packingTimeAccumulated ?? 0) + segmentSeconds;
+          : 0;
+      const totalPackingTime = (job.packingTimeAccumulated ?? 0) + packSegmentSeconds;
       const completedAt = new Date();
+
+      setVerificationSessions(prev => removeJobSession(prev, job.id));
 
       await updateDoc(doc(db, 'jobs', job.id), {
         status: 'completed',
+        items: updatedItems,
+        verifier: job.verifier || user?.name || null,
+        verifyingTime: totalVerifyingTime,
+        verificationCompletedAt: Timestamp.fromDate(completedAt),
         packingTime: totalPackingTime,
         packingCompletedAt: Timestamp.fromDate(completedAt),
       });
 
       await logActivity(
-        `completed packing for job ${job.jobId} at ${completedAt.toLocaleString()} - packing time: ${totalPackingTime}s`
+        `completed packing for job ${job.jobId} at ${completedAt.toLocaleString()} with ${job.items.length} items (${job.items.reduce((sum, item) => sum + item.quantity, 0)} total units) - ${totalVerifiedCount} items verified - verifying and packing time: ${totalPackingTime}s (verify segment: ${totalVerifyingTime}s)`
       );
 
       setPackingSessions(prev => removeJobSession(prev, job.id));
+      setLocallyVerifiedItems(prev => {
+        const newSet = new Set(prev);
+        jobVerifiedBarcodes.forEach(barcode => {
+          newSet.delete(`${job.id}-${barcode}`);
+        });
+        return newSet;
+      });
       setExpandedJobs(prev => {
         const next = new Set(prev);
         next.delete(job.id);
@@ -1671,7 +1611,7 @@ const Jobs: React.FC = () => {
       });
 
       showToast(
-        `Packing stopped — Job ${job.jobId} completed (packing time: ${totalPackingTime}s)`,
+        `Job ${job.jobId} completed (verifying & packing: ${totalPackingTime}s)`,
         'success'
       );
       loadJobs();
@@ -1974,18 +1914,20 @@ const Jobs: React.FC = () => {
                   isExpanded={expandedJobs.has(job.id)}
                   onToggleExpand={toggleJobExpansion}
                   isVerifyingThisJob={Boolean(verificationSessions[job.id])}
-                  isPackingThisJob={
-                    Boolean(packingSessions[job.id]) ||
-                    (job.status === 'packing' && job.packer === user?.name)
+                  isPackingActive={job.status === 'packing'}
+                  canPauseVerification={
+                    job.status === 'packing' &&
+                    (Boolean(verificationSessions[job.id]) || Boolean(job.verificationStartedAt))
                   }
                   verifyingElapsedSeconds={verificationSessions[job.id]?.elapsedSeconds ?? 0}
-                  packingElapsedSeconds={packingSessions[job.id]?.elapsedSeconds ?? 0}
+                  packingElapsedSeconds={
+                    packingSessions[job.id]?.elapsedSeconds ?? getPackingElapsedFromJob(job)
+                  }
                   onStopVerification={stopVerification}
                   onRefreshJobs={refreshJobs}
                   onRequestDeleteJob={requestDeleteJob}
                   completingJobs={completingJobs}
                   onCompletePicking={completePicking}
-                  onCompleteVerification={completeVerification}
                   onStartPacking={startPacking}
                   onStopPacking={stopPacking}
                   onOpenStockUpdateModal={() => setIsStockUpdateModalOpen(true)}
