@@ -7,6 +7,8 @@ export const BOX_SIZE_OPTIONS = [
   'LOGO XL',
   '005',
   '007',
+  '5L Small',
+  '5L Long',
   'Water box',
   'Monster box',
   'FBA250',
